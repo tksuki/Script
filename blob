@@ -1,0 +1,3 @@
+workspace.yajusaiko4545SpawnedInToys.CreatureBlobman.BlobmanSeatAndOwnerScript.CreatureDrop:FireServer(workspace.yajusaiko4545SpawnedInToys.CreatureBlobman.RightDetector.RightWeld)
+
+workspace.yajusaiko4545SpawnedInToys.CreatureBlobman.BlobmanSeatAndOwnerScript.CreatureDrop:FireServer(workspace.yajusaiko4545SpawnedInToys.CreatureBlobman.LeftDetector.LeftWeld)
