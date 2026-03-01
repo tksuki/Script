@@ -1,6 +1,6 @@
 local OrionLib = loadstring(game:HttpGet(('https://raw.githubusercontent.com/jadpy/suki/refs/heads/main/orion')))()
 local Window = OrionLib:MakeWindow({
-    Name = "Extracted Features",
+    Name = "Sex Sexxxxxxxxxxx",
     HidePremium = false,
     SaveConfig = true,
     ConfigFolder = "ExtractedConfig"
