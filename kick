@@ -1,0 +1,286 @@
+local OrionLib = loadstring(game:HttpGet(('https://raw.githubusercontent.com/BlizTBr/scripts/main/Orion%20X')))()
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local LocalPlayer = Players.LocalPlayer
+
+-- ウィンドウを作成
+local Window = OrionLib:MakeWindow({
+	Name = "キック",
+	HidePremium = false,
+	SaveConfig = true,
+	ConfigFolder = "CreatureGrabConfig"
+})
+
+-- メインタブを作成
+local MainTab = Window:MakeTab({
+	Name = "メイン",
+	Icon = "rbxassetid://4483345998",
+	PremiumOnly = false
+})
+
+-- 設定用の変数
+local Settings = {
+	TargetHeight = 100,
+	RiseTime = 0.3,
+	GrabCount = 3,
+	SelectedPlayer = nil
+}
+
+-- プレイヤーリストを取得する関数
+local function getPlayerList()
+	local playerNames = {}
+	for _, player in ipairs(Players:GetPlayers()) do
+		if player ~= LocalPlayer then
+			table.insert(playerNames, player.Name)
+		end
+	end
+	return playerNames
+end
+
+-- プレイヤー名からプレイヤーを取得する関数
+local function getPlayerByName(name)
+	return Players:FindFirstChild(name)
+end
+
+-- メイン実行関数
+local function executeGrab()
+	local myUsername = LocalPlayer.Name
+	
+	-- 選択されたプレイヤーを取得
+	if not Settings.SelectedPlayer then
+		warn("プレイヤーが選択されていません")
+		return
+	end
+	
+	local targetPlayer = getPlayerByName(Settings.SelectedPlayer)
+	if not targetPlayer then
+		warn("選択されたプレイヤーが見つかりません")
+		return
+	end
+	
+	local targetUsername = targetPlayer.Name
+	print("ターゲット: " .. targetUsername)
+	
+	-- 必要なオブジェクトを取得
+	local mySpawnedToys = workspace:FindFirstChild(myUsername .. "SpawnedInToys")
+	if not mySpawnedToys then
+		warn(myUsername .. "SpawnedInToys が見つかりません")
+		return
+	end
+	
+	local creatureBlobman = mySpawnedToys:FindFirstChild("CreatureBlobman")
+	if not creatureBlobman then
+		warn("CreatureBlobman が見つかりません")
+		return
+	end
+	
+	local blobmanScript = creatureBlobman:FindFirstChild("BlobmanSeatAndOwnerScript")
+	if not blobmanScript then
+		warn("BlobmanSeatAndOwnerScript が見つかりません")
+		return
+	end
+	
+	local creatureGrab = blobmanScript:FindFirstChild("CreatureGrab")
+	if not creatureGrab then
+		warn("CreatureGrab イベントが見つかりません")
+		return
+	end
+	
+	local rightDetector = creatureBlobman:FindFirstChild("RightDetector")
+	if not rightDetector then
+		warn("RightDetector が見つかりません")
+		return
+	end
+	
+	local rightWeld = rightDetector:FindFirstChild("RightWeld")
+	if not rightWeld then
+		warn("RightWeld が見つかりません")
+		return
+	end
+	
+	-- ターゲットのHumanoidRootPartを取得
+	local targetCharacter = workspace:FindFirstChild(targetUsername)
+	if not targetCharacter then
+		warn(targetUsername .. " が Workspace に見つかりません")
+		return
+	end
+	
+	local targetRoot = targetCharacter:FindFirstChild("HumanoidRootPart")
+	if not targetRoot then
+		warn(targetUsername .. " の HumanoidRootPart が見つかりません")
+		return
+	end
+	
+	-- 自分のキャラクターのHumanoidRootPartを取得
+	local myCharacter = LocalPlayer.Character
+	local myRoot = myCharacter and myCharacter:FindFirstChild("HumanoidRootPart")
+	if not myRoot then
+		warn("自分のHumanoidRootPartが見つかりません")
+		return
+	end
+	
+	-- SetNetworkOwnerイベントを取得
+	local grabEvents = ReplicatedStorage:FindFirstChild("GrabEvents")
+	if not grabEvents then
+		warn("ReplicatedStorage.GrabEvents が見つかりません")
+		return
+	end
+	
+	local setNetworkOwner = grabEvents:FindFirstChild("SetNetworkOwner")
+	if not setNetworkOwner then
+		warn("SetNetworkOwner イベントが見つかりません")
+		return
+	end
+	
+	-- 0. ターゲットプレイヤーの位置にTPする
+	print("[0/5] ターゲットプレイヤーにTP中...")
+	local targetPos = targetRoot.Position
+	myRoot.CFrame = CFrame.new(targetPos.X + 5, targetPos.Y, targetPos.Z + 5)  -- ターゲットの少し横にTP
+	task.wait(0.1)  -- TP後に少し待機
+	
+	-- ターゲットの現在位置を再取得
+	targetPos = targetRoot.Position
+	
+	-- CFrameの回転部分
+	local rotationCFrame = CFrame.new(
+		0, 0, 0,
+		0.62931931, -0.479560107, 0.611538529,
+		0, 0.786902189, 0.617077887,
+		-0.777146816, -0.388339043, 0.495212734
+	)
+	
+	print("[1/5] CreatureGrab を送信中...")
+	-- 1. 最初に掴む
+	creatureGrab:FireServer(
+		rightDetector,
+		targetRoot,
+		rightWeld
+	)
+	
+	-- 2. 0.05秒待機
+	print("0.05秒待機中...")
+	task.wait(0.05)
+	
+	-- 3. SetNetworkOwner を送信（現在位置）
+	print("[2/5] SetNetworkOwner を送信中...")
+	local currentCFrame = CFrame.new(
+		targetPos.X,
+		targetPos.Y,
+		targetPos.Z
+	) * rotationCFrame
+	setNetworkOwner:FireServer(targetRoot, currentCFrame)
+	
+	-- 4. 0.05秒待機
+	print("0.05秒待機中...")
+	task.wait(0.05)
+	
+	-- 5. 設定された時間で設定された高さまで上げる
+	print(string.format("[3/5] %.2f秒かけて%dm上げ中...", Settings.RiseTime, Settings.TargetHeight))
+	local startTime = os.clock()
+	local startPos = targetRoot.Position
+	while os.clock() - startTime < Settings.RiseTime do
+		local progress = (os.clock() - startTime) / Settings.RiseTime
+		local currentHeight = startPos.Y + (Settings.TargetHeight * progress)
+		myRoot.CFrame = CFrame.new(startPos.X + 2, currentHeight, startPos.Z)
+		targetRoot.CFrame = CFrame.new(startPos.X, currentHeight, startPos.Z)
+		task.wait()
+	end
+	
+	-- 最終位置に確実に設定
+	targetRoot.CFrame = CFrame.new(startPos.X, startPos.Y + Settings.TargetHeight, startPos.Z)
+	myRoot.CFrame = CFrame.new(startPos.X + 2, startPos.Y + Settings.TargetHeight, startPos.Z)
+	print(string.format("最終座標: X=%.2f, Y=%.2f (%dm上), Z=%.2f", startPos.X, startPos.Y + Settings.TargetHeight, Settings.TargetHeight, startPos.Z))
+	
+	-- 6. 0.1秒固定しながら設定回数掴む
+	print(string.format("[4/5] 0.1秒固定しながら%d回掴む...", Settings.GrabCount))
+	for i = 1, Settings.GrabCount do
+		print(string.format("  掴む %d/%d回目", i, Settings.GrabCount))
+		creatureGrab:FireServer(
+			rightDetector,
+			targetRoot,
+			rightWeld
+		)
+		
+		-- 位置を固定
+		local fixedStartTime = os.clock()
+		while os.clock() - fixedStartTime < 0.1 do
+			targetRoot.CFrame = CFrame.new(startPos.X, startPos.Y + Settings.TargetHeight, startPos.Z)
+			myRoot.CFrame = CFrame.new(startPos.X + 2, startPos.Y + Settings.TargetHeight, startPos.Z)
+			task.wait()
+		end
+	end
+	
+	print(string.format("[5/5] ✓ 完了: %s が %s を掴んで%dm上に移動させました", myUsername, targetUsername, Settings.TargetHeight))
+end
+
+-- UIの作成
+MainTab:AddDropdown({
+	Name = "ターゲットプレイヤーを選択",
+	Default = "",
+	Options = getPlayerList(),
+	Callback = function(Value)
+		Settings.SelectedPlayer = Value
+		print("選択されたプレイヤー: " .. Value)
+	end    
+})
+
+MainTab:AddButton({
+	Name = "プレイヤーリストを更新",
+	Callback = function()
+		print("プレイヤーリストを更新しました")
+		-- ドロップダウンを再作成するために画面を更新
+		OrionLib:MakeNotification({
+			Name = "更新",
+			Content = "画面を再読み込みしてプレイヤーリストを更新してください",
+			Time = 3
+		})
+	end    
+})
+
+MainTab:AddButton({
+	Name = "選択したプレイヤーをキック",
+	Callback = function()
+		executeGrab()
+	end    
+})
+
+MainTab:AddSlider({
+	Name = "m",
+	Min = 10,
+	Max = 200,
+	Default = 100,
+	Color = Color3.fromRGB(255,255,255),
+	Increment = 10,
+	ValueName = "m",
+	Callback = function(Value)
+		Settings.TargetHeight = Value
+	end    
+})
+
+MainTab:AddSlider({
+	Name = "sec",
+	Min = 0.1,
+	Max = 1,
+	Default = 0.3,
+	Color = Color3.fromRGB(255,255,255),
+	Increment = 0.05,
+	ValueName = "秒",
+	Callback = function(Value)
+		Settings.RiseTime = Value
+	end    
+})
+
+MainTab:AddSlider({
+	Name = "1",
+	Min = 1,
+	Max = 10,
+	Default = 3,
+	Color = Color3.fromRGB(255,255,255),
+	Increment = 1,
+	ValueName = "回",
+	Callback = function(Value)
+		Settings.GrabCount = Value
+	end    
+})
+
+MainTab:AddParagraph("現在の設定", string.format("高さ: %dm | 時間: %.2f秒 | 掴む回数: %d回", Settings.TargetHeight, Settings.RiseTime, Settings.GrabCount))
