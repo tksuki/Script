@@ -1,4 +1,4 @@
-local OrionLib = loadstring(game:HttpGet(('https://raw.githubusercontent.com/Polinorsik/Orion-Z-Library/refs/heads/main/README.md')))()
+local OrionLib = loadstring(game:HttpGet(('https://raw.githubusercontent.com/jadpy/suki/refs/heads/main/orion')))()
 local Window = OrionLib:MakeWindow({Name="野獣ハブ", HidePremium=false, SaveConfig=true, ConfigFolder="YaJuHub", IntroEnabled=true, IntroText="野獣ハブ", IntroIcon="rbxassetid://4483345998", Icon="rbxassetid://4483345998"})
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
