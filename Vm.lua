@@ -11,7 +11,7 @@
     ░                           ░  ░         
 --]]
 
-OrionLib = loadstring(game:HttpGet("https://raw.githubusercontent.com/BlizTBr/scripts/main/Orion%20X", true))()
+OrionLib = loadstring(game:HttpGet("https://raw.githubusercontent.com/jadpy/suki/refs/heads/main/orion", true))()
 Window = OrionLib:MakeWindow({
     Name = "Verbal Hub Sigma Advance Ftap ",
     HidePremium = false,
