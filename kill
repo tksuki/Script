@@ -1,0 +1,72 @@
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Players = game:GetService("Players")
+
+local localPlayer = Players.LocalPlayer
+local localCharacter = localPlayer.Character or localPlayer.CharacterAdded:Wait()
+local localRoot = localCharacter:WaitForChild("HumanoidRootPart")
+
+-- 最寄りのプレイヤーを取得
+local function getNearestPlayer()
+    local nearest = nil
+    local nearestDist = math.huge
+
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= localPlayer then
+            local character = player.Character
+            if character then
+                local root = character:FindFirstChild("HumanoidRootPart")
+                if root then
+                    local dist = (root.Position - localRoot.Position).Magnitude
+                    if dist < nearestDist then
+                        nearestDist = dist
+                        nearest = player
+                    end
+                end
+            end
+        end
+    end
+
+    return nearest
+end
+
+local targetPlayer = getNearestPlayer()
+
+if targetPlayer and targetPlayer.Character then
+    local targetCharacter = targetPlayer.Character
+    local targetRoot = targetCharacter:FindFirstChild("HumanoidRootPart")
+
+    if targetRoot then
+        local targetCFrame = targetRoot.CFrame
+
+        -- SetNetworkOwnerイベントを送信
+        ReplicatedStorage.GrabEvents.SetNetworkOwner:FireServer(table.unpack({
+            [1] = targetRoot,
+            [2] = targetCFrame,
+        }))
+
+        -- 0.05秒待つ
+        task.wait(0.05)
+
+        -- 体力を0にする & 真下に吹き飛ばす
+        local humanoid = targetCharacter:FindFirstChildOfClass("Humanoid")
+        if humanoid then
+            humanoid.Health = 0
+        end
+
+        -- VectorForceまたはAssemblyLinearVelocityで真下に吹き飛ばす
+        local attachment = Instance.new("Attachment", targetRoot)
+        local vectorForce = Instance.new("VectorForce")
+        vectorForce.Attachment0 = attachment
+        vectorForce.Force = Vector3.new(0, -10000000000, 0)
+        vectorForce.Parent = targetRoot
+
+        -- AssemblyLinearVelocityでも同時に適用
+        targetRoot.AssemblyLinearVelocity = Vector3.new(0, -10000000000, 0)
+
+        -- 少し後にVectorForceを削除
+        task.delay(0.1, function()
+            vectorForce:Destroy()
+            attachment:Destroy()
+        end)
+    end
+end
