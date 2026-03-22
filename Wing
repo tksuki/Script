@@ -1,0 +1,53 @@
+local v1 = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
+loadstring(game:HttpGet("https://raw.githubusercontent.com/EdgeIY/infiniteyield/master/source"))()
+local v2 = v1:CreateWindow({
+    Name = "Scripture Wings",
+    Icon = 0,
+    LoadingTitle = "Scripture Hub V8",
+    LoadingSubtitle = "by Flashh",
+    Theme = "Amethyst",
+    DisableRayfieldPrompts = false,
+    DisableBuildWarnings = false,
+    ConfigurationSaving = {
+        Enabled = true,
+        FolderName = nil,
+        FileName = "Big Hub"
+    },
+    Discord = {
+        Enabled = false,
+        Invite = "noinvitelink",
+        RememberJoins = true
+    },
+    KeySystem = false,
+    KeySettings = {
+        Title = "Untitled",
+        Subtitle = "Key System",
+        Note = "No method of obtaining the key is provided",
+        FileName = "Key",
+        SaveKey = true,
+        GrabKeyFromSite = false,
+        Key = {
+            "Hello"
+        }
+    }
+})
+local v3 = v2:CreateTab("Wing Controls", 4483362458)
+v3:CreateSection("Wings Section")
+v3:CreateButton({
+    Name = "Execute Wings",
+    Callback = function()
+        loadstring(game:HttpGet("https://pastefy.app/lpHVLa8Q/raw", true))()
+    end
+})
+v3:CreateLabel("Go to the 2nd Tab, before executing this!", 4483362458, darkPurple, false)
+local function vu4()
+    game:GetService("Players").LocalPlayer.CameraMaxZoomDistance = 99999
+    game:GetService("Players").LocalPlayer.CameraMode = Enum.CameraMode.Classic
+end
+v3:CreateSection("More Stuff")
+v3:CreateButton({
+    Name = "Enable 3rd Person",
+    Callback = function()
+        vu4()
+    end
+})
