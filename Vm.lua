@@ -1,2 +1,2 @@
-script_key = "new-discord.gg.projectxhub"
+script_key="PK-dd341c21-da95-4a69-8a8d-627f17628b41"
 loadstring(game:HttpGet("https://api.kodamo.net/loader/fxbpontv5v9fy82ycrd9"))()
