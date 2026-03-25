@@ -1,5 +1,9 @@
-BxaOyMeKVsJTIkLRK19: BxaOyUzjlZYqmBXqefnRxkdee134: Attribute
-name is missing
+UIKHTvyYtIYVTSkaudpMXTUCT:90: attempt to call a nil value
 Stack Begin
-Script 'LocalScript', Line 19
+Script 'LocalScript, Line 90
+Script 'LocalScript, Line 131
+Script 'LocalScript', Line 133
+Script 'LocalScript, Line 134
+Script 'LocalScript, Line 19
+Script 'LocalScript, Line 1
 Stack End
