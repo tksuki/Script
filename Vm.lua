@@ -1,7 +1,7 @@
 --[[
 	==== SUISEI HUB ====
 		Made by Luna!!
-		(https://luna0322.onrender.com)
+		(https://luna0322.onrecom)
 ]]
 
 local wind
