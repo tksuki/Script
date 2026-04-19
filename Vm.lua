@@ -7,7 +7,7 @@
 -- ============================================
 -- UIライブラリの読み込み
 -- ============================================
-local OrionLib = loadstring(game:HttpGet(('https://raw.githubusercontent.com/nooblol2/SolarisHub.gg/refs/heads/main/good.orion')))()
+local OrionLib = loadstring(game:HttpGet(('https://raw.githubusercontent.com/jadpy/suki/refs/heads/main/orion')))()
 
 -- ============================================
 -- サービスの取得
