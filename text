@@ -1,45 +1,31 @@
--- Anti Gucci (Blobman) の核心部分
-function AntiFeature.startAntiGucci()
-    local character = LocalPlayer.Character
-    local humanoid = character:WaitForChild("Humanoid")
-    local rootPart = character:WaitForChild("HumanoidRootPart")
-    
-    -- 1. 現在位置のバックアップ
-    State.antiGucci.safePosition = rootPart.Position
-    
-    -- 2. Blobmanを召喚（リモートイベント使用）
-    local args = {
-        [1] = "CreatureBlobman",
-        [2] = CFrame.new(0, 5000000, 0), -- 最初から遥か彼方に生成
-        [3] = Vector3.new(0, 60, 0)
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+
+-- 設定用テーブル（もし既存のスクリプトに入れるならここは不要）
+local Settings = {
+    Anti = {
+        AntiBurn = true -- ここをtrueにすると機能が有効になります
     }
-    pcall(function()
-        ReplicatedStorage.MenuToys.SpawnToyRemoteFunction:InvokeServer(unpack(args))
-    end)
+}
 
-    -- 3. 座席を特定して座る
-    task.wait(1)
-    local folder = Workspace:FindFirstChild(LocalPlayer.Name .. "SpawnedInToys")
-    local blob = folder and folder:FindFirstChild("CreatureBlobman")
-    local seat = blob and blob:FindFirstChild("VehicleSeat")
-
-    if seat then
-        -- 自分の頭上を固定して動かなくする
-        if blob:FindFirstChild("Head") then
-            blob.Head.CFrame = CFrame.new(0, 50000, 0)
-            blob.Head.Anchored = true
+task.spawn(function()
+    while true do
+        -- Settingsが存在し、AntiBurnが有効な場合のみ実行
+        if Settings and Settings.Anti and Settings.Anti.AntiBurn then
+            pcall(function()
+                local char = LocalPlayer.Character
+                if char then
+                    -- キャラクターの中にある「火」のエフェクトをすべて探す
+                    for _, v in ipairs(char:GetDescendants()) do
+                        -- 1. クラスが「Fire（火）」であるか
+                        -- 2. 名前が「Fire」「Burning」「OnFire」などであるか
+                        if v:IsA("Fire") or v.Name == "Fire" or v.Name == "Burning" or v.Name == "OnFire" then
+                            v:Destroy() -- 見つけ次第削除
+                        end
+                    end
+                end
+            end)
         end
-        -- 座席に座ることで物理判定を「乗り物優先」にする
-        seat:Sit(humanoid)
+        task.wait(0.1) -- 0.1秒ごとに監視（負荷を抑えつつ高速に消去）
     end
-
-    -- 4. 継続的な保護ループ
-    State.antiGucci.connection = RunService.Heartbeat:Connect(function()
-        -- 常にラグドール化を無効化する信号を送信
-        local beingHeld = LocalPlayer:FindFirstChild("IsHeld")
-        if not beingHeld or not beingHeld.Value then
-            -- 第2引数 0 は「転倒時間 0秒」を意味する
-            ReplicatedStorage.CharacterEvents.RagdollRemote:FireServer(rootPart, 0)
-        end
-    end)
-end
+end)
