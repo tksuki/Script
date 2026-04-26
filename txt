@@ -1,1 +1,534 @@
-https://xgf.nu/5GiCA
+-- ============================================================
+-- Creature Tool Complete Version
+-- 判定方法: Vm.lua 2 準拠 (高度チェック)
+-- 掴むロジック: 3回実行 / リスポーンリセット / 巡回方式
+-- ============================================================
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local LocalPlayer = Players.LocalPlayer
+
+-- Rayfield UI Library の読み込み
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+
+local Window = Rayfield:CreateWindow({
+    Name = "Creature Tool (Full)",
+    LoadingTitle = "Creature Tool",
+    LoadingSubtitle = "by Script",
+    Theme = "Default",
+    ConfigurationSaving = { Enabled = false },
+    KeySystem = false,
+})
+
+local MainTab = Window:CreateTab("メイン", 4483362458)
+
+-- 状態管理変数
+local isGrabbing = false
+local isGrabbingAll = false
+local skipInPlot = false
+local excludeFriends = false
+local isGrabAura = false
+local isAutoSit = false
+
+local grabAuraLoop = nil
+local autoSitLoop = nil
+local selectedPlayers = {}
+local grabLoop = nil
+local grabAllLoop = nil
+local playerDropdownRef = nil
+local savedPosition = nil
+
+
+-- Vm.lua 2 に基づく判定設定
+local AURA_RADIUS = 35
+local IGNORE_HEIGHTS = {526.377685546875, 5.2832231521606445}
+local VOID_Y_THRESHOLD = -25.072832107543945
+
+--- ユーティリティ関数 ---
+
+local function isPlayerInPlot(player)
+    local char = player.Character
+    if not char then return false end
+    return char.Parent ~= workspace
+end
+
+local function checkPlayer(player)
+    if player == LocalPlayer then return false end
+    local char = player.Character
+    if not char then return false end
+    local root = char:FindFirstChild("HumanoidRootPart")
+    if not root then return false end
+
+    local playerY = root.Position.Y
+    if playerY < VOID_Y_THRESHOLD then return false end
+    for _, ignoreHeight in ipairs(IGNORE_HEIGHTS) do
+        if math.abs(playerY - ignoreHeight) < 0.1 then return false end
+    end
+    return true
+end
+
+local function shouldSkip(player)
+    if excludeFriends then
+        local success, isFriend = pcall(function()
+            return LocalPlayer:IsFriendsWith(player.UserId)
+        end)
+        if success and isFriend then return true end
+    end
+    if skipInPlot and isPlayerInPlot(player) then return true end
+    return false
+end
+
+local function getPlayerNames()
+    local names = {}
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= LocalPlayer then table.insert(names, p.Name) end
+    end
+    return names
+end
+
+local function getTargetRoot(targetName)
+    local t = Players:FindFirstChild(targetName)
+    if not (t and t.Character) then return nil end
+    return t.Character:FindFirstChild("HumanoidRootPart")
+end
+
+local function getBlobmanComponents()
+    local myUsername = LocalPlayer.Name
+    local mySpawnedToys = workspace:FindFirstChild(myUsername .. "SpawnedInToys")
+    if not mySpawnedToys then return nil end
+    local Blobman = mySpawnedToys:FindFirstChild("CreatureBlobman")
+    if not Blobman then return nil end
+
+    local BlobmanScript = Blobman:FindFirstChild("BlobmanSeatAndOwnerScript")
+    local CreatureGrab = BlobmanScript and BlobmanScript:FindFirstChild("CreatureGrab")
+
+    return {
+        GrabEvent = CreatureGrab,
+        Right = {
+            Detector = Blobman:FindFirstChild("RightDetector"),
+            Weld = Blobman:FindFirstChild("RightDetector") and Blobman.RightDetector:FindFirstChild("RightWeld")
+        },
+        Left = {
+            Detector = Blobman:FindFirstChild("LeftDetector"),
+            Weld = Blobman:FindFirstChild("LeftDetector") and Blobman.LeftDetector:FindFirstChild("LeftWeld")
+        }
+    }
+end
+
+local function returnToSaved()
+    if savedPosition then
+        local myRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+        if myRoot then myRoot.CFrame = savedPosition end
+    end
+end
+
+local function startGodMode()
+    workspace.FallenPartsDestroyHeight = -9999999
+end
+
+local function stopGodMode()
+    workspace.FallenPartsDestroyHeight = -500
+end
+
+--- v2コア処理 ---
+
+local V2_TARGET_HEIGHT = 35
+local V2_RISE_TIME     = 0.1
+local V2_GRAB_COUNT    = 10
+
+local function executeGrabV2(targetName, side)
+    local tR = getTargetRoot(targetName)
+    if not tR then return end
+
+    local comp = getBlobmanComponents()
+    local GrabEvents = ReplicatedStorage:FindFirstChild("GrabEvents")
+    local SetNetworkOwner = GrabEvents and GrabEvents:FindFirstChild("SetNetworkOwner")
+    local DestroyGrabLine = GrabEvents and GrabEvents:FindFirstChild("DestroyGrabLine")
+    if not (comp and comp.GrabEvent and SetNetworkOwner) then return end
+
+    local part = (side == "Left") and comp.Left or comp.Right
+    local rotationCFrame = CFrame.new(0,0,0,
+        0.62931931, -0.479560107, 0.611538529,
+        0, 0.786902189, 0.617077887,
+        -0.777146816, -0.388339043, 0.495212734)
+
+    -- ① 自分をターゲットの横にTP
+    local myRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if myRoot then
+        myRoot.CFrame = CFrame.new(tR.Position.X + 5, tR.Position.Y, tR.Position.Z + 5)
+    end
+    task.wait(0.1)
+
+    -- ② 掴む (1回)
+    tR = getTargetRoot(targetName)
+    if not tR then return end
+    comp.GrabEvent:FireServer(part.Detector, tR, part.Weld)
+
+    -- ③ 0.3秒待つ
+    task.wait(0.3)
+
+    -- ④ SetNetworkOwner を送る
+    tR = getTargetRoot(targetName)
+    if not tR then return end
+    SetNetworkOwner:FireServer(tR, CFrame.new(tR.Position) * rotationCFrame)
+
+    -- ⑤ 0.05秒待つ
+    task.wait(0.05)
+
+    -- ⑥ 0.1秒かけて真上35スタッド上昇
+    tR = getTargetRoot(targetName)
+    if not tR then return end
+    local startPos = tR.Position
+    local startTime = os.clock()
+    while os.clock() - startTime < V2_RISE_TIME do
+        tR = getTargetRoot(targetName)
+        if not tR then break end
+        local progress = (os.clock() - startTime) / V2_RISE_TIME
+        local currentY = startPos.Y + (V2_TARGET_HEIGHT * progress)
+        tR.CFrame = CFrame.new(startPos.X, currentY, startPos.Z)
+        task.wait()
+    end
+
+    -- 最終位置確定
+    tR = getTargetRoot(targetName)
+    if not tR then return end
+    local finalCF = CFrame.new(startPos.X, startPos.Y + V2_TARGET_HEIGHT, startPos.Z)
+    tR.CFrame = finalCF
+
+    -- ⑦ DestroyGrabLine → 10回連続掴む
+    tR = getTargetRoot(targetName)
+    if not tR then return end
+    task.wait(0.1)
+    if DestroyGrabLine then DestroyGrabLine:FireServer(tR) end
+    task.wait(0.1)
+
+    for i = 1, V2_GRAB_COUNT do
+        tR = getTargetRoot(targetName)
+        if not tR then break end
+        comp.GrabEvent:FireServer(part.Detector, tR, part.Weld)
+        task.wait(0.05)
+    end
+end
+
+local function executeGrabV2NoTP(targetName, side)
+    local tR = getTargetRoot(targetName)
+    if not tR then return end
+
+    local comp = getBlobmanComponents()
+    local GrabEvents = ReplicatedStorage:FindFirstChild("GrabEvents")
+    local SetNetworkOwner = GrabEvents and GrabEvents:FindFirstChild("SetNetworkOwner")
+    local DestroyGrabLine = GrabEvents and GrabEvents:FindFirstChild("DestroyGrabLine")
+    if not (comp and comp.GrabEvent and SetNetworkOwner) then return end
+
+    local part = (side == "Left") and comp.Left or comp.Right
+    local rotationCFrame = CFrame.new(0,0,0,
+        0.62931931, -0.479560107, 0.611538529,
+        0, 0.786902189, 0.617077887,
+        -0.777146816, -0.388339043, 0.495212734)
+
+    -- ① 掴む (1回)
+    comp.GrabEvent:FireServer(part.Detector, tR, part.Weld)
+
+    -- ② 0.3秒待つ
+    task.wait(0.3)
+
+    -- ③ SetNetworkOwner を送る
+    tR = getTargetRoot(targetName)
+    if not tR then return end
+    SetNetworkOwner:FireServer(tR, CFrame.new(tR.Position) * rotationCFrame)
+
+    -- ④ 0.05秒待つ
+    task.wait(0.05)
+
+    -- ⑤ 0.1秒かけて真上35スタッド上昇
+    tR = getTargetRoot(targetName)
+    if not tR then return end
+    local startPos = tR.Position
+    local startTime = os.clock()
+    while os.clock() - startTime < V2_RISE_TIME do
+        tR = getTargetRoot(targetName)
+        if not tR then break end
+        local progress = (os.clock() - startTime) / V2_RISE_TIME
+        local currentY = startPos.Y + (V2_TARGET_HEIGHT * progress)
+        tR.CFrame = CFrame.new(startPos.X, currentY, startPos.Z)
+        task.wait()
+    end
+
+    -- 最終位置確定
+    tR = getTargetRoot(targetName)
+    if not tR then return end
+    local finalCF = CFrame.new(startPos.X, startPos.Y + V2_TARGET_HEIGHT, startPos.Z)
+    tR.CFrame = finalCF
+
+    -- ⑥ DestroyGrabLine → 10回連続掴む
+    task.wait(0.1)
+    if DestroyGrabLine then DestroyGrabLine:FireServer(tR) end
+    task.wait(0.1)
+
+    for i = 1, V2_GRAB_COUNT do
+        tR = getTargetRoot(targetName)
+        if not tR then break end
+        comp.GrabEvent:FireServer(part.Detector, tR, part.Weld)
+        task.wait(0.05)
+    end
+end
+
+local function startGrabLoop()
+    grabLoop = task.spawn(function()
+        local handCounter = 0
+
+        while isGrabbing do
+            if #selectedPlayers == 0 then task.wait(0.5) continue end
+
+            local validTargets = {}
+            for _, name in ipairs(selectedPlayers) do
+                local p = Players:FindFirstChild(name)
+                if p and checkPlayer(p) and not shouldSkip(p) then
+                    table.insert(validTargets, p)
+                end
+            end
+
+            if #validTargets == 0 then
+                returnToSaved()
+                task.wait(0.5)
+                continue
+            end
+
+            for _, p in ipairs(validTargets) do
+                if not isGrabbing then break end
+                handCounter = handCounter + 1
+                local hand = (handCounter % 2 == 1) and "Right" or "Left"
+                executeGrabV2(p.Name, hand)
+            end
+
+            returnToSaved()
+            task.wait(0.5)
+        end
+    end)
+end
+
+local function startGrabAllLoop()
+    grabAllLoop = task.spawn(function()
+        local handCounter = 0
+        while isGrabbingAll do
+            local validTargets = {}
+            for _, p in ipairs(Players:GetPlayers()) do
+                if p ~= LocalPlayer and checkPlayer(p) and not shouldSkip(p) then
+                    table.insert(validTargets, p)
+                end
+            end
+            if #validTargets == 0 then returnToSaved() task.wait(0.5) continue end
+            for _, p in ipairs(validTargets) do
+                if not isGrabbingAll then break end
+                handCounter = handCounter + 1
+                executeGrabV2(p.Name, (handCounter % 2 == 1) and "Right" or "Left")
+            end
+            returnToSaved()
+            task.wait(0.5)
+        end
+    end)
+end
+
+local function startGrabAuraLoop()
+    grabAuraLoop = task.spawn(function()
+        local handCounter = 0
+        local auraDebounce = {}
+        while isGrabAura do
+            local myRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+            if myRoot then
+                local myPos = myRoot.Position
+                for _, player in ipairs(Players:GetPlayers()) do
+                    if player ~= LocalPlayer and checkPlayer(player) and not shouldSkip(player) then
+                        local tRoot = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+                        if tRoot and (tRoot.Position - myPos).Magnitude <= AURA_RADIUS then
+                            local char = player.Character
+                            if not auraDebounce[char] or (os.clock() - auraDebounce[char] > 3) then
+                                auraDebounce[char] = os.clock()
+                                handCounter = handCounter + 1
+                                local hand = (handCounter % 2 == 1) and "Right" or "Left"
+                                task.spawn(function()
+                                    local tR = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+                                    if not tR then return end
+
+                                    local comp = getBlobmanComponents()
+                                    local GrabEvents = ReplicatedStorage:FindFirstChild("GrabEvents")
+                                    local SetNetworkOwner = GrabEvents and GrabEvents:FindFirstChild("SetNetworkOwner")
+                                    local DestroyGrabLine = GrabEvents and GrabEvents:FindFirstChild("DestroyGrabLine")
+                                    if not (comp and comp.GrabEvent and SetNetworkOwner) then return end
+
+                                    local part = (hand == "Left") and comp.Left or comp.Right
+                                    local rotationCFrame = CFrame.new(0,0,0,
+                                        0.62931931, -0.479560107, 0.611538529,
+                                        0, 0.786902189, 0.617077887,
+                                        -0.777146816, -0.388339043, 0.495212734)
+
+                                    -- ① 掴む
+                                    comp.GrabEvent:FireServer(part.Detector, tR, part.Weld)
+
+                                    -- ② 0.3秒待つ
+                                    task.wait(0.3)
+
+                                    -- ③ SetNetworkOwner
+                                    tR = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+                                    if not tR then return end
+                                    SetNetworkOwner:FireServer(tR, CFrame.new(tR.Position) * rotationCFrame)
+
+                                    -- ④ 0.05秒待つ
+                                    task.wait(0.05)
+
+                                    -- ⑤ 相手だけ真上35スタッド上昇
+                                    tR = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+                                    if not tR then return end
+                                    local startPos = tR.Position
+                                    local startTime = os.clock()
+                                    while os.clock() - startTime < V2_RISE_TIME do
+                                        tR = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+                                        if not tR then break end
+                                        local progress = (os.clock() - startTime) / V2_RISE_TIME
+                                        tR.CFrame = CFrame.new(startPos.X, startPos.Y + V2_TARGET_HEIGHT * progress, startPos.Z)
+                                        task.wait()
+                                    end
+
+                                    tR = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+                                    if not tR then return end
+                                    local finalCF = CFrame.new(startPos.X, startPos.Y + V2_TARGET_HEIGHT, startPos.Z)
+                                    tR.CFrame = finalCF
+
+                                    -- ⑥ DestroyGrabLine → 10回連続掴む
+                                    task.wait(0.1)
+                                    if DestroyGrabLine then DestroyGrabLine:FireServer(tR) end
+                                    task.wait(0.1)
+
+                                    for i = 1, V2_GRAB_COUNT do
+                                        tR = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+                                        if not tR then break end
+                                        comp.GrabEvent:FireServer(part.Detector, tR, part.Weld)
+                                        task.wait(0.05)
+                                    end
+                                end)
+                            end
+                        end
+                    end
+                end
+            end
+            task.wait(0.3)
+        end
+    end)
+end
+
+local function startAutoSitLoop()
+    autoSitLoop = task.spawn(function()
+        while isAutoSit do
+            local myUsername = LocalPlayer.Name
+            local mySpawnedToys = workspace:FindFirstChild(myUsername .. "SpawnedInToys")
+            local Blobman = mySpawnedToys and mySpawnedToys:FindFirstChild("CreatureBlobman")
+
+            if not Blobman then
+                local myChar = LocalPlayer.Character
+                local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+                if myRoot then
+                    local spawnCF = myRoot.CFrame * CFrame.new(0, 0, -5)
+                    local SpawnToyRF = ReplicatedStorage:FindFirstChild("MenuToys") and ReplicatedStorage.MenuToys:FindFirstChild("SpawnToyRemoteFunction")
+                    if SpawnToyRF then pcall(function() SpawnToyRF:InvokeServer("CreatureBlobman", spawnCF, Vector3.new(0, 145.5, 0)) end) end
+                end
+                task.wait(0.5)
+            else
+                local seat = nil
+                for _, v in ipairs(Blobman:GetDescendants()) do if v:IsA("Seat") or v:IsA("VehicleSeat") then seat = v break end end
+                if seat then
+                    local myHum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+                    if myHum and myHum.SeatPart ~= seat then seat:Sit(myHum) end
+                end
+                task.wait(0.1)
+            end
+        end
+    end)
+end
+
+--- UI 構築 ---
+
+local Dropdown = MainTab:CreateDropdown({
+    Name = "対象プレイヤー選択",
+    Options = getPlayerNames(),
+    CurrentOption = {},
+    MultipleOptions = true,
+    Flag = "SelectedPlayers",
+    Callback = function(options) selectedPlayers = options end,
+})
+playerDropdownRef = Dropdown
+
+MainTab:CreateToggle({
+    Name = "掴む (3回/リスポーンで復活/巡回)",
+    CurrentValue = false,
+    Flag = "GrabToggle",
+    Callback = function(value)
+        isGrabbing = value
+        if isGrabbing then
+            if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                savedPosition = LocalPlayer.Character.HumanoidRootPart.CFrame
+            end
+            startGodMode()
+            startGrabLoop()
+        else
+            if grabLoop then task.cancel(grabLoop) end
+            stopGodMode()
+            returnToSaved()
+        end
+    end,
+})
+
+MainTab:CreateToggle({
+    Name = "全員掴む (巡回)",
+    CurrentValue = false,
+    Flag = "GrabAllToggle",
+    Callback = function(value)
+        isGrabbingAll = value
+        if isGrabbingAll then
+            if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                savedPosition = LocalPlayer.Character.HumanoidRootPart.CFrame
+            end
+            startGodMode()
+            startGrabAllLoop()
+        else
+            if grabAllLoop then task.cancel(grabAllLoop) end
+            stopGodMode()
+            returnToSaved()
+        end
+    end,
+})
+
+MainTab:CreateToggle({
+    Name = "掴むオーラ (35m)",
+    CurrentValue = false,
+    Flag = "GrabAuraToggle",
+    Callback = function(value)
+        isGrabAura = value
+        if isGrabAura then startGodMode() startGrabAuraLoop() else if grabAuraLoop then task.cancel(grabAuraLoop) end grabAuraLoop = nil stopGodMode() end
+    end,
+})
+
+MainTab:CreateToggle({
+    Name = "自動で座る (CreatureBlobman)",
+    CurrentValue = false,
+    Flag = "AutoSitToggle",
+    Callback = function(value) isAutoSit = value if isAutoSit then startAutoSitLoop() else if autoSitLoop then task.cancel(autoSitLoop) end end end,
+})
+
+MainTab:CreateToggle({
+    Name = "プロット内プレイヤーをスキップ",
+    CurrentValue = false,
+    Flag = "SkipInPlotToggle",
+    Callback = function(value) skipInPlot = value end,
+})
+
+MainTab:CreateToggle({
+    Name = "フレンドを除外",
+    CurrentValue = false,
+    Flag = "ExcludeFriendsToggle",
+    Callback = function(value) excludeFriends = value end,
+})
+
+Players.PlayerAdded:Connect(function() task.wait(0.5) playerDropdownRef:Refresh(getPlayerNames(), true) end)
+Players.PlayerRemoving:Connect(function() task.wait(0.5) playerDropdownRef:Refresh(getPlayerNames(), true) end)
+
+Rayfield:LoadConfiguration()
