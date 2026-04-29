@@ -6,5 +6,7 @@ local raw = game:HttpGet(
 
 local data = HttpService:JSONDecode(raw)
 
-print(data.header.ppq)
-print(#data.tracks)
+for _,note in ipairs(data.tracks[1].notes) do
+    print(note.midi, note.time)
+    break
+end
