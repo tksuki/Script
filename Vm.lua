@@ -1,2 +1,1 @@
--- THIS SCRIPT IS NOT OPTIMIZED FOR MOBILE!
-loadstring(game:HttpGet("https://gitlab.com/cooldawghaha/gitlabswitch/-/raw/main/Chaos.lua"))()
+loadstring(game:HttpGet("https://raw.githubusercontent.com/kingmagro2525-netizen/yajuhub/refs/heads/main/Aaa.lua"))()
