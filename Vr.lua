@@ -1,9 +1,5 @@
-local HttpService = game:GetService("HttpService")
-
-local raw = HttpService:GetAsync(
+local raw = game:HttpGet(
 "https://raw.githubusercontent.com/tksuki/Script/refs/heads/main/Vm.lua"
 )
 
-local data = HttpService:JSONDecode(raw)
-
-print("読めた")
+print(raw)
