@@ -1,1 +1,9 @@
-loadstring(game:HttpGet("https://raw.githubusercontent.com/adamowaissi22-boop/Axom/refs/heads/main/vr%20script%20by%20axom"))()
+local HttpService = game:GetService("HttpService")
+
+local raw = HttpService:GetAsync(
+"https://raw.githubusercontent.com/tksuki/Script/refs/heads/main/Vm.lua"
+)
+
+local data = HttpService:JSONDecode(raw)
+
+print("読めた")
