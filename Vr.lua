@@ -6,7 +6,11 @@ local raw = game:HttpGet(
 
 local data = HttpService:JSONDecode(raw)
 
+local c = 0
+
 for _,note in ipairs(data.tracks[1].notes) do
     print(note.midi, note.time)
-    break
+
+    c = c + 1
+    if c >= 10 then break end
 end
