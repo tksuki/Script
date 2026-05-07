@@ -57,6 +57,38 @@ local LocalPlayer = Players.LocalPlayer
 local Camera = Workspace.CurrentCamera
 local Mouse = LocalPlayer:GetMouse()
 
+-- ============================================
+-- ホワイトリスト管理
+-- ============================================
+local WhitelistedPlayers = {}
+
+local function IsWhitelisted(plr)
+    if typeof(plr) == "string" then
+        return WhitelistedPlayers[plr] == true
+    elseif typeof(plr) == "Instance" and plr:IsA("Player") then
+        return WhitelistedPlayers[plr.Name] == true
+    end
+    return false
+end
+
+local function AddWhitelist(name)
+    if Players:FindFirstChild(name) then
+        WhitelistedPlayers[name] = true
+    end
+end
+
+local function RemoveWhitelist(name)
+    WhitelistedPlayers[name] = nil
+end
+
+local function GetWhitelistNames()
+    local t = {}
+    for n, _ in pairs(WhitelistedPlayers) do
+        table.insert(t, n)
+    end
+    return t
+end
+
 -- イントロ再生関数
 local function PlayAloeFinalIntro()
     local TS = game:GetService("TweenService")
@@ -368,6 +400,9 @@ Workspace.ChildAdded:Connect(function(model)
         local targetChar = target.Parent
         if targetChar == LocalPlayer.Character then return end
 
+        local targetPlayer = Players:GetPlayerFromCharacter(targetChar)
+        if targetPlayer and IsWhitelisted(targetPlayer) then return end
+
         local hrp = targetChar:FindFirstChild("HumanoidRootPart")
         local hum = targetChar:FindFirstChild("Humanoid")
         local isObject = not hum
@@ -484,6 +519,7 @@ if LocalPlayer.Character then setupAntiGrab(LocalPlayer.Character) end
 -- ============================================
 local function IsValidTarget(player)
     if player == LocalPlayer then return false end
+    if IsWhitelisted(player) then return false end
     local char = player.Character
     local hum = char and char:FindFirstChildOfClass("Humanoid")
     local root = char and char:FindFirstChild("HumanoidRootPart")
@@ -558,6 +594,7 @@ local function GetMyBlobman()
 end
 
 local function TeleportToPlayer(targetName)
+    if IsWhitelisted(targetName) then return false end
     local target = Players:FindFirstChild(targetName)
     if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
         local targetRoot = target.Character.HumanoidRootPart
@@ -571,6 +608,7 @@ local function TeleportToPlayer(targetName)
 end
 
 local function KillPlayer(targetName)
+    if IsWhitelisted(targetName) then return false end
     local target = Players:FindFirstChild(targetName)
     if target and target.Character and target.Character:FindFirstChild("Humanoid") then
         target.Character.Humanoid.Health = 0
@@ -590,6 +628,10 @@ local function GetPlayerList()
 end
 
 local function ExecuteFastGrabLoop(targetName)
+    if IsWhitelisted(targetName) then
+        OrionLib:MakeNotification({Name = "Whitelist", Content = targetName .. " は保護されています", Time = 2})
+        return
+    end
     local creature = GetMyBlobman()
     if not creature or isGrabbingLoop then return end
     
@@ -627,6 +669,10 @@ local function ExecuteFastGrabLoop(targetName)
 end
 
 local function ExecutePrecisionCombo(targetName)
+    if IsWhitelisted(targetName) then
+        OrionLib:MakeNotification({Name = "Whitelist", Content = targetName .. " は保護されています", Time = 2})
+        return
+    end
     local creature = GetMyBlobman()
     if not creature then return end
 
@@ -692,7 +738,9 @@ local SELF_Y = 100
 local function GetAllPlayers()
     local players = {}
     for _, player in ipairs(Players:GetPlayers()) do
-        if player ~= LocalPlayer then table.insert(players, player) end
+        if player ~= LocalPlayer and not IsWhitelisted(player) then
+            table.insert(players, player)
+        end
     end
     return players
 end
@@ -856,6 +904,7 @@ end
 
 local function GrabRelease(blob, targetPlayer)
     if not blob or not targetPlayer or not targetPlayer.Character then return end
+    if IsWhitelisted(targetPlayer) then return end
     local targetRoot = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
     if not targetRoot then return end
     local script = blob:FindFirstChild("BlobmanSeatAndOwnerScript")
@@ -872,6 +921,7 @@ end
 
 local function KickBoth(blob, targetPlayer)
     if not blob or not targetPlayer or not targetPlayer.Character then return end
+    if IsWhitelisted(targetPlayer) then return end
     local targetRoot = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
     if not targetRoot then return end
     local script = blob:FindFirstChild("BlobmanSeatAndOwnerScript")
@@ -884,6 +934,7 @@ end
 
 local function RapidKick(blob, targetPlayer, count)
     if not blob or not targetPlayer then return end
+    if IsWhitelisted(targetPlayer) then return end
     for i = 1, count do
         local targetRoot = targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart")
         if not targetRoot then break end
@@ -926,7 +977,9 @@ local lineLagEnabled = false
 local function getAllPlayersDestroy()
     local players = {}
     for _, plr in pairs(Players:GetPlayers()) do
-        if plr ~= LocalPlayer then table.insert(players, plr) end
+        if plr ~= LocalPlayer and not IsWhitelisted(plr) then
+            table.insert(players, plr)
+        end
     end
     return players
 end
@@ -1121,6 +1174,76 @@ local Window = OrionLib:MakeWindow({
     ConfigFolder = "OrionTest"
 })
 
+-- [Whitelist] タブ
+local WhitelistTab = Window:MakeTab({ Name = "Whitelist", Icon = "rbxassetid://7733968888" })
+WhitelistTab:AddSection({ Name = "ホワイトリスト管理" })
+
+local function RefreshWhitelistUI(addDrp, remDrp, para)
+    local allList = {}
+    local wlList = {}
+    for _, p in pairs(Players:GetPlayers()) do
+        if p ~= LocalPlayer then
+            table.insert(allList, p.Name)
+            if IsWhitelisted(p) then
+                table.insert(wlList, p.Name)
+            end
+        end
+    end
+    if addDrp then addDrp:Refresh(allList, true) end
+    if remDrp then remDrp:Refresh(wlList, true) end
+    if para then
+        if #wlList > 0 then
+            para:SetTitle("保護中 (" .. #wlList .. "人)")
+            para:SetContent(table.concat(wlList, ", "))
+        else
+            para:SetTitle("保護中")
+            para:SetContent("なし")
+        end
+    end
+end
+
+local WL_Para = WhitelistTab:AddParagraph("保護中", "なし")
+
+local AddDrp = WhitelistTab:AddDropdown({
+    Name = "追加するプレイヤー",
+    Default = "",
+    Options = {},
+    Callback = function(v)
+        if v and v ~= "" then
+            AddWhitelist(v)
+            OrionLib:MakeNotification({Name = "Whitelist", Content = v .. " を追加しました", Time = 2})
+            RefreshWhitelistUI(AddDrp, RemDrp, WL_Para)
+        end
+    end
+})
+
+local RemDrp = WhitelistTab:AddDropdown({
+    Name = "削除するプレイヤー",
+    Default = "",
+    Options = {},
+    Callback = function(v)
+        if v and v ~= "" then
+            RemoveWhitelist(v)
+            OrionLib:MakeNotification({Name = "Whitelist", Content = v .. " を削除しました", Time = 2})
+            RefreshWhitelistUI(AddDrp, RemDrp, WL_Para)
+        end
+    end
+})
+
+WhitelistTab:AddButton({ Name = "🔄 リスト更新", Callback = function()
+    RefreshWhitelistUI(AddDrp, RemDrp, WL_Para)
+    OrionLib:MakeNotification({Name = "更新", Content = "完了", Time = 2})
+end })
+
+WhitelistTab:AddButton({ Name = "🗑 全削除", Callback = function()
+    WhitelistedPlayers = {}
+    RefreshWhitelistUI(AddDrp, RemDrp, WL_Para)
+    OrionLib:MakeNotification({Name = "Whitelist", Content = "全削除しました", Time = 2})
+end })
+
+task.wait(0.5)
+RefreshWhitelistUI(AddDrp, RemDrp, WL_Para)
+
 -- [プレイヤー]
 local PlayerTab = Window:MakeTab({ Name = "プレイヤー", Icon = "rbxassetid://4483327233" })
 PlayerTab:AddSection({ Name = "Movement Settings" })
@@ -1171,12 +1294,15 @@ GrabTab:AddToggle({ Name = "💀 グラブキル（掴んだ相手を即死）",
                         local char = part.Parent
                         while char and not char:FindFirstChild("Humanoid") do char = char.Parent end
                         if char then
-                            local hum = char:FindFirstChild("Humanoid")
-                            if hum and hum.Health > 0 then
-                                hum.BreakJointsOnDeath = false; hum.Health = 0
-                                hum:ChangeState(Enum.HumanoidStateType.Dead)
-                                local root = char:FindFirstChild("HumanoidRootPart")
-                                if root then root.Velocity = Vector3.zero end
+                            local targetPlr = Players:GetPlayerFromCharacter(char)
+                            if targetPlr and not IsWhitelisted(targetPlr) then
+                                local hum = char:FindFirstChild("Humanoid")
+                                if hum and hum.Health > 0 then
+                                    hum.BreakJointsOnDeath = false; hum.Health = 0
+                                    hum:ChangeState(Enum.HumanoidStateType.Dead)
+                                    local root = char:FindFirstChild("HumanoidRootPart")
+                                    if root then root.Velocity = Vector3.zero end
+                                end
                             end
                         end
                     end
@@ -1259,7 +1385,7 @@ BlobTab:AddToggle({ Name = "オールキルループ", Default = false, Callback
                 if grab and release and det and weld then
                     for _, p in pairs(Players:GetPlayers()) do
                         if not isGlobalAntiVisualLoop then break end
-                        if p ~= LocalPlayer and p.Character then
+                        if p ~= LocalPlayer and p.Character and not IsWhitelisted(p) then
                             local char = p.Character
                             local tRoot = char:FindFirstChild("HumanoidRootPart")
                             local hum = char:FindFirstChildOfClass("Humanoid")
@@ -1310,6 +1436,7 @@ OmniTab:AddButton({ Name = "単体キック", Callback = function()
     local blob = GetMyBlobmanForKick()
     if not blob then OrionLib:MakeNotification({Name = "Error", Content = "先にKICK ALLを実行してください", Time = 3}); return end
     if not selectedPlayerForKick then OrionLib:MakeNotification({Name = "Error", Content = "先にターゲットを選択してください", Time = 2}); return end
+    if IsWhitelisted(selectedPlayerForKick) then OrionLib:MakeNotification({Name = "Whitelist", Content = selectedPlayerForKick.Name .. " は保護されています", Time = 2}); return end
     local targetRoot = selectedPlayerForKick.Character and selectedPlayerForKick.Character:FindFirstChild("HumanoidRootPart")
     if not targetRoot then OrionLib:MakeNotification({Name = "Error", Content = "ターゲットが見つかりません", Time = 2}); return end
     TeleportToTarget(targetRoot); SetNetworkOwner(targetRoot)
@@ -1317,6 +1444,7 @@ OmniTab:AddButton({ Name = "単体キック", Callback = function()
 end })
 OmniTab:AddButton({ Name = "連打 (100回)", Callback = function()
     if not selectedPlayerForKick then OrionLib:MakeNotification({Name = "Error", Content = "先にターゲットを選択してください", Time = 2}); return end
+    if IsWhitelisted(selectedPlayerForKick) then OrionLib:MakeNotification({Name = "Whitelist", Content = selectedPlayerForKick.Name .. " は保護されています", Time = 2}); return end
     local blob = GetMyBlobmanForKick()
     if not blob then OrionLib:MakeNotification({Name = "Error", Content = "先にKICK ALLを実行してください", Time = 3}); return end
     task.spawn(function() RapidKick(blob, selectedPlayerForKick, 100); OrionLib:MakeNotification({Name = "連打完了", Content = "100回実行しました", Time = 2}) end)
@@ -1592,7 +1720,6 @@ end)
 
 -- Heartbeat接続
 RunService.Heartbeat:Connect(function()
-    -- autoKill loop
     if autoKillEnabled and selectedPlayer then
         local target = Players:FindFirstChild(selectedPlayer)
         if target and target.Character then
