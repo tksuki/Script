@@ -1,8 +1,8 @@
 local OrionLib = loadstring(game:HttpGet("https://raw.githubusercontent.com/jadpy/suki/refs/heads/main/orion"))()
 local Window = OrionLib:MakeWindow({Name = "サイレントエイム", HidePremium = false, SaveConfig = true, ConfigFolder = "PureSilent"})
-
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
+local RunService = game:GetService("RunService")
 local LocalPlayer = Players.LocalPlayer
 local Camera = Workspace.CurrentCamera
 
@@ -25,56 +25,61 @@ local function getLocalRoot()
     return char and char:FindFirstChild("HumanoidRootPart")
 end
 
-local function GetNearParts(position, distance)
-    local region = Region3.new(position - Vector3.new(distance, distance, distance), position + Vector3.new(distance, distance, distance))
-    region = region:ExpandToGrid(4)
-    return Workspace:FindPartsInRegion3(region, nil, math.huge)
-end
-
-local function getDirectionalVector(originalDir, targetPos, magnitude)
-    local origin = getLocalRoot().Position
-    return (targetPos - origin).Unit * magnitude
+local function getNearestTarget()
+    local nearestTarget = nil
+    local shortestDistance = getgenv().Settings.MaxDistance
+    local localRoot = getLocalRoot()
+    
+    if not localRoot then return nil end
+    
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character then
+            local humanoid = player.Character:FindFirstChild("Humanoid")
+            local targetPart = player.Character:FindFirstChild(getgenv().Settings.TargetPart)
+            
+            if humanoid and humanoid.Health > 0 and targetPart then
+                local distance = (localRoot.Position - targetPart.Position).Magnitude
+                
+                if distance < shortestDistance then
+                    shortestDistance = distance
+                    nearestTarget = targetPart
+                end
+            end
+        end
+    end
+    
+    return nearestTarget
 end
 
 if hookmetamethod then
     local _namecallhook = nil
     _namecallhook = hookmetamethod(game, "__namecall", function(...)
-        local data = {...}
-        local wsref = data[1]
-        local _namecallmethod = getnamecallmethod()
+        local args = {...}
+        local self = args[1]
+        local method = getnamecallmethod()
         
-        if wsref and wsref == Workspace then
-            if _namecallmethod == "Raycast" and getLocalChar() and getLocalRoot() then
-                if getgenv().Settings.Enabled then
-                    local omg
-                    local omgDist = getgenv().Settings.MaxDistance
+        if self == Workspace and method == "Raycast" then
+            if getgenv().Settings.Enabled and not checkcaller() then
+                local localRoot = getLocalRoot()
+                if localRoot then
+                    local target = getNearestTarget()
                     
-                    for _, v in ipairs(GetNearParts(getLocalRoot().Position, getgenv().Settings.MaxDistance)) do
-                        if not checkcaller() and not v.Anchored and v.Name == "HumanoidRootPart" then
-                            local char = v.Parent
-                            if char and char ~= getLocalChar() and not char:IsDescendantOf(getLocalChar()) then
-                                local humanoid = char:FindFirstChild("Humanoid")
-                                if humanoid and humanoid.Health > 0 then
-                                    local dist = (getLocalRoot().Position - v.Position).Magnitude
-                                    if dist <= omgDist then
-                                        omgDist = dist
-                                        omg = v
-                                    end
-                                end
-                            end
-                        end
-                    end
-                    
-                    if omg then
-                        data[3] = getDirectionalVector(data[2], omg.Position, 1000)
-                        data[4] = RaycastParams.new()
-                        data[4].FilterDescendantsInstances = {omg.Parent}
-                        data[4].FilterType = Enum.RaycastFilterType.Include
+                    if target then
+                        local origin = args[2]
+                        local direction = (target.Position - origin).Unit * 1000
+                        
+                        args[3] = direction
+                        
+                        local params = args[4] or RaycastParams.new()
+                        params.FilterDescendantsInstances = {target.Parent}
+                        params.FilterType = Enum.RaycastFilterType.Include
+                        args[4] = params
                     end
                 end
             end
         end
-        return _namecallhook(unpack(data))
+        
+        return _namecallhook(unpack(args))
     end)
 end
 
