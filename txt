@@ -1,3 +1,6 @@
+local OrionLib = loadstring(game:HttpGet(('https://raw.githubusercontent.com/shlexware/Orion/main/source')))()
+local Window = OrionLib:MakeWindow({Name = "サイレントエイム", HidePremium = false, SaveConfig = true, ConfigFolder = "SilentAimConfig"})
+
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
 local LocalPlayer = Players.LocalPlayer
@@ -73,4 +76,27 @@ if hookmetamethod then
     end)
 end
 
-SilentAimSettings.Enabled = true
+local Tab = Window:MakeTab({Name = "メイン", Icon = "rbxassetid://4483345998", PremiumOnly = false})
+
+Tab:AddToggle({
+    Name = "Silent Aim",
+    Default = false,
+    Callback = function(Value)
+        SilentAimSettings.Enabled = Value
+    end    
+})
+
+Tab:AddSlider({
+    Name = "サイレントエイム範囲",
+    Min = 10,
+    Max = 200,
+    Default = 30,
+    Color = Color3.fromRGB(255,255,255),
+    Increment = 1,
+    ValueName = "スタッド",
+    Callback = function(Value)
+        SilentAimSettings.MaxDistance = Value
+    end    
+})
+
+OrionLib:Init()
