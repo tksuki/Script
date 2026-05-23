@@ -1,27 +1,17 @@
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
-local RunService = game:GetService("RunService")
 local LocalPlayer = Players.LocalPlayer
-local Camera = Workspace.CurrentCamera
 
 local playerCharacter = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
 LocalPlayer.CharacterAdded:Connect(function(character) 
     playerCharacter = character 
 end)
 
-local SilentAimSettings = {
-    Enabled = false, 
+getgenv().SilentAimSettings = {
+    Enabled = true, 
     MaxDistance = 30, 
     TargetPart = "HumanoidRootPart"
 }
-
-local whitelistedPlayers = {}
-
-local function isWhitelisted(player)
-    if not player then return false end
-    if player == LocalPlayer then return true end
-    return whitelistedPlayers[player.Name]
-end
 
 local function getLocalRoot()
     if not playerCharacter then return nil end
@@ -37,54 +27,48 @@ local function GetNearParts(position, distance)
     return Workspace:FindPartsInRegion3(region, nil, math.huge)
 end
 
-local function getDirectionalVector(originalDir, targetPos, magnitude)
-    local origin = getLocalRoot().Position
-    return (targetPos - origin).Unit * magnitude
+local function getDirectionalVector(targetPos)
+    local origin = getLocalRoot()
+    if not origin then return Vector3.new(0, 0, 0) end
+    return (targetPos - origin.Position).Unit * 1000
 end
 
 if hookmetamethod then
-    local _namecallhook = nil
-    _namecallhook = hookmetamethod(game, "__namecall", function(...)
-        local data = {...}
-        local wsref = data[1]
-        local _namecallmethod = getnamecallmethod()
+    local old
+    old = hookmetamethod(game, "__namecall", function(self, ...)
+        local args = {...}
+        local method = getnamecallmethod()
         
-        if wsref and wsref == Workspace then
-            if _namecallmethod == "Raycast" and getLocalRoot() then
-                if SilentAimSettings.Enabled then
-                    local omg = nil
-                    local omgDist = SilentAimSettings.MaxDistance
+        if not checkcaller() and self == Workspace and method == "Raycast" then
+            if getgenv().SilentAimSettings.Enabled then
+                local root = getLocalRoot()
+                if root then
+                    local nearestTarget = nil
+                    local shortestDistance = getgenv().SilentAimSettings.MaxDistance
                     
-                    for _, v in ipairs(GetNearParts(getLocalRoot().Position, SilentAimSettings.MaxDistance)) do
-                        if not checkcaller() and not v.Anchored and v.Name == "HumanoidRootPart" then
-                            local char = v.Parent
-                            if char and char ~= playerCharacter and not char:IsDescendantOf(playerCharacter) then
-                                local p = Players:GetPlayerFromCharacter(char)
-                                if not isWhitelisted(p) then
-                                    local humanoid = char:FindFirstChild("Humanoid")
-                                    if humanoid and humanoid.Health > 0 then
-                                        local dist = (getLocalRoot().Position - v.Position).Magnitude
-                                        if dist <= omgDist then
-                                            omgDist = dist
-                                            omg = v
-                                        end
+                    for _, part in ipairs(GetNearParts(root.Position, getgenv().SilentAimSettings.MaxDistance)) do
+                        if part.Name == "HumanoidRootPart" and not part.Anchored then
+                            local char = part.Parent
+                            if char and char ~= playerCharacter then
+                                local humanoid = char:FindFirstChild("Humanoid")
+                                if humanoid and humanoid.Health > 0 then
+                                    local dist = (root.Position - part.Position).Magnitude
+                                    if dist < shortestDistance then
+                                        shortestDistance = dist
+                                        nearestTarget = part
                                     end
                                 end
                             end
                         end
                     end
                     
-                    if omg then
-                        data[3] = getDirectionalVector(data[2], omg.Position, 1000)
-                        data[4] = RaycastParams.new()
-                        data[4].FilterDescendantsInstances = {omg.Parent}
-                        data[4].FilterType = Enum.RaycastFilterType.Include
+                    if nearestTarget then
+                        args[2] = getDirectionalVector(nearestTarget.Position)
                     end
                 end
             end
         end
-        return _namecallhook(unpack(data))
+        
+        return old(self, unpack(args))
     end)
 end
-
-SilentAimSettings.Enabled = true
