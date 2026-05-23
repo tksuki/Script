@@ -57,24 +57,20 @@ old = hookmetamethod(game, "__namecall", newcclosure(function(self, ...)
     
     if not checkcaller() and self == Workspace and method == "Raycast" then
         if getgenv().Settings.Enabled then
-            local localRoot = getLocalRoot()
-            if localRoot then
-                local target = getNearestTarget()
+            local target = getNearestTarget()
+            
+            -- ターゲットが見つかった場合のみ方向を変更
+            if target then
+                local origin = args[1]
+                local newDirection = (target.Position - origin).Unit * 1000
                 
-                if target then
-                    -- 元のOriginポイントを取得
-                    local origin = args[1]
-                    -- ターゲットへの新しい方向ベクトルを計算
-                    local newDirection = (target.Position - origin).Unit * 1000
-                    
-                    -- 新しいRaycastParamsを作成
-                    local newParams = RaycastParams.new()
-                    newParams.FilterType = Enum.RaycastFilterType.Include
-                    newParams.FilterDescendantsInstances = {target.Parent}
-                    
-                    -- 新しい引数でRaycastを実行
-                    return old(self, origin, newDirection, newParams)
-                end
+                -- 元のRaycastParamsを保持するか、新しく作成
+                local params = args[3] or RaycastParams.new()
+                
+                -- ターゲットを含めるように変更せず、元のフィルターを維持
+                -- これにより、通常のヒット判定がターゲットに対して行われる
+                
+                return old(self, origin, newDirection, params)
             end
         end
     end
