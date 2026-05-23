@@ -1,17 +1,18 @@
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
 local LocalPlayer = Players.LocalPlayer
-
 local playerCharacter = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
-LocalPlayer.CharacterAdded:Connect(function(character) 
-    playerCharacter = character 
-end)
+LocalPlayer.CharacterAdded:Connect(function(character) playerCharacter = character end)
 
-getgenv().SilentAimSettings = {
-    Enabled = true, 
-    MaxDistance = 30, 
-    TargetPart = "HumanoidRootPart"
-}
+local SilentAimSettings = {Enabled = false, MaxDistance = 30, TargetPart = "HumanoidRootPart"}
+
+local whitelistedPlayers = {}
+
+function isWhitelisted(player) 
+    if not player then return false end 
+    if player == LocalPlayer then return true end 
+    return whitelistedPlayers[player.Name] 
+end
 
 local function getLocalRoot()
     if not playerCharacter then return nil end
@@ -19,56 +20,57 @@ local function getLocalRoot()
 end
 
 local function GetNearParts(position, distance)
-    local region = Region3.new(
-        position - Vector3.new(distance, distance, distance), 
-        position + Vector3.new(distance, distance, distance)
-    )
+    local region = Region3.new(position - Vector3.new(distance, distance, distance), position + Vector3.new(distance, distance, distance))
     region = region:ExpandToGrid(4)
     return Workspace:FindPartsInRegion3(region, nil, math.huge)
 end
 
-local function getDirectionalVector(targetPos)
-    local origin = getLocalRoot()
-    if not origin then return Vector3.new(0, 0, 0) end
-    return (targetPos - origin.Position).Unit * 1000
+local function getDirectionalVector(originalDir, targetPos, magnitude)
+    local origin = getLocalRoot().Position
+    return (targetPos - origin).Unit * magnitude
 end
 
 if hookmetamethod then
-    local old
-    old = hookmetamethod(game, "__namecall", function(self, ...)
-        local args = {...}
-        local method = getnamecallmethod()
+    local _namecallhook = nil
+    _namecallhook = hookmetamethod(game, "__namecall", function(...)
+        local data = {...}
+        local wsref = data[1]
+        local _namecallmethod = getnamecallmethod()
         
-        if not checkcaller() and self == Workspace and method == "Raycast" then
-            if getgenv().SilentAimSettings.Enabled then
-                local root = getLocalRoot()
-                if root then
-                    local nearestTarget = nil
-                    local shortestDistance = getgenv().SilentAimSettings.MaxDistance
-                    
-                    for _, part in ipairs(GetNearParts(root.Position, getgenv().SilentAimSettings.MaxDistance)) do
-                        if part.Name == "HumanoidRootPart" and not part.Anchored then
-                            local char = part.Parent
-                            if char and char ~= playerCharacter then
-                                local humanoid = char:FindFirstChild("Humanoid")
-                                if humanoid and humanoid.Health > 0 then
-                                    local dist = (root.Position - part.Position).Magnitude
-                                    if dist < shortestDistance then
-                                        shortestDistance = dist
-                                        nearestTarget = part
+        if wsref and wsref == Workspace then
+            if _namecallmethod == "Raycast" and getLocalRoot() then
+                if SilentAimSettings.Enabled then
+                    local omg
+                    local omgDist = SilentAimSettings.MaxDistance
+                    for _, v in ipairs(GetNearParts(getLocalRoot().Position, SilentAimSettings.MaxDistance)) do
+                        if not checkcaller() and not v.Anchored and v.Name == "HumanoidRootPart" then
+                            local char = v.Parent
+                            if char and char ~= playerCharacter and not char:IsDescendantOf(playerCharacter) then
+                                local p = Players:GetPlayerFromCharacter(char)
+                                if not isWhitelisted(p) then
+                                    local humanoid = char:FindFirstChild("Humanoid")
+                                    if humanoid and humanoid.Health > 0 then
+                                        local dist = (getLocalRoot().Position - v.Position).Magnitude
+                                        if dist <= omgDist then
+                                            omgDist = dist
+                                            omg = v
+                                        end
                                     end
                                 end
                             end
                         end
                     end
-                    
-                    if nearestTarget then
-                        args[2] = getDirectionalVector(nearestTarget.Position)
+                    if omg then
+                        data[3] = getDirectionalVector(data[2], omg.Position, 1000)
+                        data[4] = RaycastParams.new()
+                        data[4].FilterDescendantsInstances = {omg.Parent}
+                        data[4].FilterType = Enum.RaycastFilterType.Include
                     end
                 end
             end
         end
-        
-        return old(self, unpack(args))
+        return _namecallhook(unpack(data))
     end)
 end
+
+SilentAimSettings.Enabled = true
