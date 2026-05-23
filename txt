@@ -2,7 +2,6 @@ local OrionLib = loadstring(game:HttpGet("https://raw.githubusercontent.com/jadp
 local Window = OrionLib:MakeWindow({Name = "サイレントエイム", HidePremium = false, SaveConfig = true, ConfigFolder = "PureSilent"})
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
-local RunService = game:GetService("RunService")
 local LocalPlayer = Players.LocalPlayer
 local Camera = Workspace.CurrentCamera
 
@@ -51,36 +50,36 @@ local function getNearestTarget()
     return nearestTarget
 end
 
-if hookmetamethod then
-    local _namecallhook = nil
-    _namecallhook = hookmetamethod(game, "__namecall", function(...)
-        local args = {...}
-        local self = args[1]
-        local method = getnamecallmethod()
-        
-        if self == Workspace and method == "Raycast" then
-            if getgenv().Settings.Enabled and not checkcaller() then
-                local localRoot = getLocalRoot()
-                if localRoot then
-                    local target = getNearestTarget()
+local old
+old = hookmetamethod(game, "__namecall", newcclosure(function(self, ...)
+    local args = {...}
+    local method = getnamecallmethod()
+    
+    if not checkcaller() and self == Workspace and method == "Raycast" then
+        if getgenv().Settings.Enabled then
+            local localRoot = getLocalRoot()
+            if localRoot then
+                local target = getNearestTarget()
+                
+                if target then
+                    -- 元のOriginポイントを取得
+                    local origin = args[1]
+                    -- ターゲットへの新しい方向ベクトルを計算
+                    local newDirection = (target.Position - origin).Unit * 1000
                     
-                    if target then
-                        local origin = args[2]
-                        local direction = (target.Position - origin).Unit * 1000
-                        
-                        args[3] = direction
-                        
-                        local params = args[4] or RaycastParams.new()
-                        params.FilterDescendantsInstances = {target.Parent}
-                        params.FilterType = Enum.RaycastFilterType.Include
-                        args[4] = params
-                    end
+                    -- 新しいRaycastParamsを作成
+                    local newParams = RaycastParams.new()
+                    newParams.FilterType = Enum.RaycastFilterType.Include
+                    newParams.FilterDescendantsInstances = {target.Parent}
+                    
+                    -- 新しい引数でRaycastを実行
+                    return old(self, origin, newDirection, newParams)
                 end
             end
         end
-        
-        return _namecallhook(unpack(args))
-    end)
-end
+    end
+    
+    return old(self, ...)
+end))
 
 OrionLib:Init()
