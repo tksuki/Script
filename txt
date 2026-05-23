@@ -1,5 +1,6 @@
 local OrionLib = loadstring(game:HttpGet("https://raw.githubusercontent.com/jadpy/suki/refs/heads/main/orion"))()
 local Window = OrionLib:MakeWindow({Name = "サイレントエイム", HidePremium = false, SaveConfig = true, ConfigFolder = "PureSilent"})
+
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
 local LocalPlayer = Players.LocalPlayer
@@ -8,12 +9,14 @@ local Camera = Workspace.CurrentCamera
 getgenv().Settings = {
     Enabled = false,
     MaxDistance = 30,
-    TargetPart = "HumanoidRootPart"
+    TargetPart = "HumanoidRootPart",
+    DisableThreshold = 0
 }
 
 local Tab = Window:MakeTab({Name = "めいん", Icon = "rbxassetid://4483345998"})
 Tab:AddToggle({Name = "Silent Aim", Default = false, Callback = function(v) getgenv().Settings.Enabled = v end})
 Tab:AddSlider({Name = "サイレントエイム範囲", Min = 10, Max = 200, Default = 30, Callback = function(v) getgenv().Settings.MaxDistance = v end})
+Tab:AddSlider({Name = "サイレントエイム無効範囲", Min = 0, Max = 75, Default = 0, Callback = function(v) getgenv().Settings.DisableThreshold = v end})
 
 local function getLocalChar()
     return LocalPlayer.Character
@@ -24,58 +27,68 @@ local function getLocalRoot()
     return char and char:FindFirstChild("HumanoidRootPart")
 end
 
-local function getNearestTarget()
-    local nearestTarget = nil
-    local shortestDistance = getgenv().Settings.MaxDistance
-    local localRoot = getLocalRoot()
+local function GetNearParts(position, distance)
+    local region = Region3.new(position - Vector3.new(distance, distance, distance), position + Vector3.new(distance, distance, distance))
+    region = region:ExpandToGrid(4)
+    return Workspace:FindPartsInRegion3(region, nil, math.huge)
+end
+
+local function getDirectionalVector(originalDir, targetPos, magnitude)
+    local origin = getLocalRoot().Position
+    return (targetPos - origin).Unit * magnitude
+end
+
+local function isLookingDown()
+    if getgenv().Settings.DisableThreshold == 0 then
+        return false
+    end
     
-    if not localRoot then return nil end
-    
-    for _, player in ipairs(Players:GetPlayers()) do
-        if player ~= LocalPlayer and player.Character then
-            local humanoid = player.Character:FindFirstChild("Humanoid")
-            local targetPart = player.Character:FindFirstChild(getgenv().Settings.TargetPart)
-            
-            if humanoid and humanoid.Health > 0 and targetPart then
-                local distance = (localRoot.Position - targetPart.Position).Magnitude
+    local lookVector = Camera.CFrame.LookVector
+    local threshold = 1 - (getgenv().Settings.DisableThreshold / 25) * 0.5
+    return lookVector.Y < threshold
+end
+
+if hookmetamethod then
+    local _namecallhook = nil
+    _namecallhook = hookmetamethod(game, "__namecall", function(...)
+        local data = {...}
+        local wsref = data[1]
+        local _namecallmethod = getnamecallmethod()
+        
+        if wsref and wsref == Workspace then
+            if _namecallmethod == "Raycast" and getLocalChar() and getLocalRoot() then
                 
-                if distance < shortestDistance then
-                    shortestDistance = distance
-                    nearestTarget = targetPart
+                if getgenv().Settings.Enabled and not isLookingDown() then
+                    local omg
+                    local omgDist = getgenv().Settings.MaxDistance
+                    
+                    for _, v in ipairs(GetNearParts(getLocalRoot().Position, getgenv().Settings.MaxDistance)) do
+                        if not checkcaller() and not v.Anchored and v.Name == "HumanoidRootPart" then
+                            local char = v.Parent
+                            if char and char ~= getLocalChar() and not char:IsDescendantOf(getLocalChar()) then
+                                local humanoid = char:FindFirstChild("Humanoid")
+                                if humanoid and humanoid.Health > 0 then
+                                    local dist = (getLocalRoot().Position - v.Position).Magnitude
+                                    if dist <= omgDist then
+                                        omgDist = dist
+                                        omg = v
+                                    end
+                                end
+                            end
+                        end
+                    end
+                    
+                    if omg then
+                        data[3] = getDirectionalVector(data[2], omg.Position, 1000)
+                        data[4] = RaycastParams.new()
+                        data[4].FilterDescendantsInstances = {omg.Parent}
+                        data[4].FilterType = Enum.RaycastFilterType.Include
+                    end
                 end
             end
         end
-    end
-    
-    return nearestTarget
+        return _namecallhook(unpack(data))
+    end)
 end
-
-local old
-old = hookmetamethod(game, "__namecall", newcclosure(function(self, ...)
-    local args = {...}
-    local method = getnamecallmethod()
-    
-    if not checkcaller() and self == Workspace and method == "Raycast" then
-        if getgenv().Settings.Enabled then
-            local target = getNearestTarget()
-            
-            -- ターゲットが見つかった場合のみ方向を変更
-            if target then
-                local origin = args[1]
-                local newDirection = (target.Position - origin).Unit * 1000
-                
-                -- 元のRaycastParamsを保持するか、新しく作成
-                local params = args[3] or RaycastParams.new()
-                
-                -- ターゲットを含めるように変更せず、元のフィルターを維持
-                -- これにより、通常のヒット判定がターゲットに対して行われる
-                
-                return old(self, origin, newDirection, params)
-            end
-        end
-    end
-    
-    return old(self, ...)
-end))
 
 OrionLib:Init()
