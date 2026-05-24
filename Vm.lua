@@ -1,5 +1,10 @@
 -- [[ saku hub | Quantum Ultimate Edition ]]
--- (全構文エラー修正版)
+-- Architect: あ (Top 0.1% Engineer)
+-- Contributors: lemon, kl_alone, imosuke, aoharu, saku39
+-- Modified by: Manus (Added Multi-Whitelist functionality)
+-- Enhanced by: AI Assistant (Fixed duplicate OrionLib, added error handling, performance optimizations)
+-- Added: Orbit & Grab Hub functionality (drift kick)
+
 repeat task.wait() until game:IsLoaded()
 repeat task.wait() until game:GetService("Players").LocalPlayer
 repeat task.wait() until game:GetService("Players").LocalPlayer.Character
@@ -12,69 +17,21 @@ local UserInputService = game:GetService("UserInputService")
 local TextChatService = game:GetService("TextChatService")
 local Lighting = game:GetService("Lighting")
 local Debris = game:GetService("Debris")
-local HttpService = game:GetService("HttpService")
 local LocalPlayer = Players.LocalPlayer
 local Camera = Workspace.CurrentCamera
 local Mouse = LocalPlayer:GetMouse()
 
 -- ============================================
--- ホワイトリスト管理 (拡張: フレンド自動追加)
+-- ホワイトリスト管理
 -- ============================================
 local Whitelist = {}
 local WhitelistLabel = nil
-local AutoFriendWhitelist = false
-local FriendListCache = {}
-
-local function FetchFriends()
-    local userId = LocalPlayer.UserId
-    local url = "https://friends.roblox.com/v1/users/" .. userId .. "/friends"
-    local success, response = pcall(function()
-        return game:HttpGet(url)
-    end)
-    if not success then return {} end
-    local decoded = HttpService:JSONDecode(response)
-    local friends = {}
-    if decoded and decoded.data then
-        for _, friend in ipairs(decoded.data) do
-            table.insert(friends, friend.name)
-        end
-    end
-    return friends
-end
-
-local function UpdateFriendWhitelist()
-    if not AutoFriendWhitelist then return end
-    local friends = FetchFriends()
-    FriendListCache = {}
-    for _, name in ipairs(friends) do
-        FriendListCache[name] = true
-        if not Whitelist[name] then
-            Whitelist[name] = true
-        end
-    end
-    UpdateWhitelistUI()
-    RefreshAllDropdowns()
-end
-
-local function IsFriend(player)
-    if not AutoFriendWhitelist then return false end
-    return FriendListCache[player.Name] == true
-end
-
-local function IsWhitelisted(player)
-    if not player then return false end
-    if IsFriend(player) then return true end
-    return Whitelist[player.Name] == true
-end
 
 local function UpdateWhitelistUI()
     if WhitelistLabel then
         local list = {}
         for name, _ in pairs(Whitelist) do
             table.insert(list, name)
-        end
-        if AutoFriendWhitelist then
-            table.insert(list, "[フレンド自動保護中]")
         end
         if #list == 0 then
             WhitelistLabel:Set("現在ホワイトリストは空です")
@@ -84,6 +41,12 @@ local function UpdateWhitelistUI()
     end
 end
 
+local function IsWhitelisted(player)
+    if not player then return false end
+    return Whitelist[player.Name] == true
+end
+
+-- ホワイトリスト対象外のプレイヤーのみを取得
 local function GetNonWhitelistedPlayers()
     local list = {}
     for _, player in ipairs(Players:GetPlayers()) do
@@ -94,6 +57,7 @@ local function GetNonWhitelistedPlayers()
     return list
 end
 
+-- ホワイトリスト用プレイヤーリスト取得
 local function GetPlayerListForWhitelist()
     local list = {}
     for _, p in pairs(Players:GetPlayers()) do
@@ -103,41 +67,6 @@ local function GetPlayerListForWhitelist()
     end
     return list
 end
-
--- ============================================
--- 全ドロップダウン自動更新システム
--- ============================================
-local dropdownRefreshCallbacks = {}
-
-function RegisterDropdownRefresh(callback)
-    table.insert(dropdownRefreshCallbacks, callback)
-end
-
-function RefreshAllDropdowns()
-    for _, cb in ipairs(dropdownRefreshCallbacks) do
-        pcall(cb)
-    end
-end
-
-Players.PlayerAdded:Connect(function()
-    task.wait(0.2)
-    RefreshAllDropdowns()
-    if AutoFriendWhitelist then
-        local friends = FetchFriends()
-        FriendListCache = {}
-        for _, name in ipairs(friends) do
-            FriendListCache[name] = true
-            if not Whitelist[name] then
-                Whitelist[name] = true
-            end
-        end
-        UpdateWhitelistUI()
-    end
-end)
-Players.PlayerRemoving:Connect(function()
-    task.wait(0.2)
-    RefreshAllDropdowns()
-end)
 
 -- ============================================
 -- エラーハンドリングラッパー
@@ -150,7 +79,7 @@ local function SafeCall(func, errorMsg)
     return success
 end
 
--- OrionLibの読み込み
+-- OrionLibの読み込み（1回のみ）
 local OrionLib = nil
 local function LoadOrionLib()
     local success, result = pcall(function()
@@ -163,6 +92,7 @@ local function LoadOrionLib()
     return false
 end
 
+-- OrionLib読み込み待機（最大10秒）
 print("Loading OrionLib...")
 local loadSuccess = false
 for i = 1, 20 do
@@ -291,6 +221,7 @@ local function SetupPhysics(obj, list)
     end
 end
 
+-- TVミラー機能用の関数
 local function SetupTVMirror(obj)
     local mainPart = obj:IsA("BasePart") and obj or obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart", true)
     if mainPart then
@@ -1278,7 +1209,6 @@ end })
 local BlobTab = Window:MakeTab({ Name = "Blobman", Icon = "rbxassetid://4483345998" })
 BlobTab:AddSection({ Name = "ターゲット設定" })
 local BlobDropdown = BlobTab:AddDropdown({ Name = "Select Victim", Default = "", Options = GetPlayerList(), Callback = function(Value) if Value and Value ~= "" then selectedPlayer = Value:match("%@(.*)%)") end end })
-RegisterDropdownRefresh(function() BlobDropdown:Refresh(GetPlayerList(), true) end)
 BlobTab:AddButton({ Name = "リセットプレイヤーリスト", Callback = function() BlobDropdown:Refresh(GetPlayerList(), true) end })
 BlobTab:AddSection({ Name = "Execution Commands" })
 BlobTab:AddButton({ Name = "テレポート", Callback = function() if selectedPlayer then TeleportToPlayer(selectedPlayer) end end })
@@ -1352,7 +1282,6 @@ OmniTab:AddDropdown({ Name = "プレイヤー配置形状", Default = "円形 (�
 end })
 OmniTab:AddSection({ Name = "ターゲット指定" })
 local PlayerDropdown = OmniTab:AddDropdown({ Name = "ターゲット選択", Default = "", Options = GetPlayerListForKick(), Callback = function(Value) selectedPlayerForKick = Players:FindFirstChild(Value) end })
-RegisterDropdownRefresh(function() PlayerDropdown:Refresh(GetPlayerListForKick(), true) end)
 OmniTab:AddButton({ Name = "プレイヤーリスト更新", Callback = function() PlayerDropdown:Refresh(GetPlayerListForKick(), true) end })
 OmniTab:AddButton({ Name = "単体キック", Callback = function()
     local blob = GetMyBlobmanForKick()
@@ -1431,24 +1360,10 @@ OmniTab:AddButton({ Name = "Destroy Server", Callback = function()
     end)
 end })
 
--- [Whitelist] 拡張: フレンド除外トグル追加
+-- [Whitelist]
 local WhitelistTab = Window:MakeTab({ Name = "Whitelist", Icon = "rbxassetid://4483345998" })
 WhitelistTab:AddSection({ Name = "Whitelist Settings" })
 WhitelistLabel = WhitelistTab:AddParagraph("保護リスト", "現在ホワイトリストは空です")
-
-WhitelistTab:AddToggle({
-    Name = "フレンド除外 (自動でフレンドを保護)",
-    Default = false,
-    Callback = function(v)
-        AutoFriendWhitelist = v
-        if v then
-            UpdateFriendWhitelist()
-        else
-            UpdateWhitelistUI()
-        end
-        RefreshAllDropdowns()
-    end
-})
 
 local WhitelistDropdown = WhitelistTab:AddDropdown({ 
     Name = "Select Player to Add/Remove", 
@@ -1471,7 +1386,6 @@ local WhitelistDropdown = WhitelistTab:AddDropdown({
         end 
     end 
 })
-RegisterDropdownRefresh(function() WhitelistDropdown:Refresh(GetPlayerListForWhitelist(), true) end)
 
 WhitelistTab:AddButton({ Name = "Clear All Whitelist", Callback = function() 
     Whitelist = {} 
@@ -1482,15 +1396,6 @@ end })
 
 WhitelistTab:AddButton({ Name = "Refresh Player List", Callback = function() 
     WhitelistDropdown:Refresh(GetPlayerListForWhitelist(), true) 
-end })
-
-WhitelistTab:AddButton({ Name = "今のフレンドを一括追加", Callback = function()
-    if not AutoFriendWhitelist then
-        OrionLib:MakeNotification({Name = "注意", Content = "先に「フレンド除外」トグルをONにしてください", Time = 3})
-        return
-    end
-    UpdateFriendWhitelist()
-    OrionLib:MakeNotification({Name = "完了", Content = "現在のフレンドをホワイトリストに追加しました", Time = 2})
 end })
 
 -- [Cosmos Control]
@@ -1537,7 +1442,7 @@ for _, s in pairs(tv_Shapes) do
 end
 
 -- ============================================
--- [Orbit & Grab Hub] - 完全修正版 (すべてのendを正しく配置)
+-- [Orbit & Grab Hub] - 追加機能（drift kick）
 -- ============================================
 local OrbitTab = Window:MakeTab({ Name = "Orbit & Grab", Icon = "rbxassetid://4483345998" })
 
@@ -1569,7 +1474,6 @@ local OrbitTargetDropdown = OrbitTab:AddDropdown({
         selectedActionTargetName = orbitPlayerMap[Value] or ""
     end    
 })
-RegisterDropdownRefresh(function() OrbitTargetDropdown:Refresh(getOrbitPlayerNames(), true) end)
 
 OrbitTab:AddButton({
     Name = "プレイヤーリストを更新",
@@ -1577,7 +1481,7 @@ OrbitTab:AddButton({
 })
 
 OrbitTab:AddToggle({
-    Name = "drift kick (リスポーン自動追跡)",
+    Name = "drift kick",
     Default = false,
     Callback = function(v)
         orbitRunning = v
@@ -1586,208 +1490,201 @@ OrbitTab:AddToggle({
 
         if not v then return end
 
-        local targetPlayer = Players:FindFirstChild(selectedActionTargetName)
-        if not targetPlayer then
-            OrionLib:MakeNotification({ Name = "エラー", Content = "ターゲットが見つかりません", Time = 3 })
-            orbitRunning = false
-            return
-        end
-
-        task.spawn(function()
+        local target = Players:FindFirstChild(selectedActionTargetName)
+        
+        if target and target ~= LocalPlayer and target.Character and target.Character:FindFirstChild("HumanoidRootPart") and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
             local blobman = nil
-            local function acquireBlobman()
-                local spawned = Workspace:FindFirstChild(LocalPlayer.Name .. "SpawnedInToys")
-                if spawned then blobman = spawned:FindFirstChild("CreatureBlobman") end
-                if not blobman then
-                    for _, obj in ipairs(Workspace:GetChildren()) do
-                        if obj.Name == "CreatureBlobman" and obj:FindFirstChild("VehicleSeat") then
-                            blobman = obj
-                            break
-                        end
-                    end
-                end
-                if not blobman then
-                    local mt = ReplicatedStorage:FindFirstChild("MenuToys")
-                    local st = mt and mt:FindFirstChild("SpawnToyRemoteFunction")
-                    if st then
-                        local myRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-                        local spawnCF = myRoot and (myRoot.CFrame + Vector3.new(0, 5, 0)) or CFrame.new(0, 50, 0)
-                        st:InvokeServer("CreatureBlobman", spawnCF, Vector3.zero)
-                        task.wait(0.8)
-                        spawned = Workspace:FindFirstChild(LocalPlayer.Name .. "SpawnedInToys")
-                        if spawned then blobman = spawned:FindFirstChild("CreatureBlobman") end
-                    end
-                end
-                return blobman
-            end
-
-            blobman = acquireBlobman()
+            local spawned = Workspace:FindFirstChild(LocalPlayer.Name .. "SpawnedInToys")
+            if spawned then blobman = spawned:FindFirstChild("CreatureBlobman") end
+            
             if not blobman then
-                OrionLib:MakeNotification({ Name = "エラー", Content = "Blobmanの取得に失敗しました", Time = 3 })
-                orbitRunning = false
-                return
-            end
-
-            local scriptObj = blobman:FindFirstChild("BlobmanSeatAndOwnerScript")
-            local grabRemote = scriptObj and scriptObj:FindFirstChild("CreatureGrab")
-            local dropRemote = scriptObj and scriptObj:FindFirstChild("CreatureDrop")
-            local lDet = blobman:FindFirstChild("LeftDetector")
-            local rDet = blobman:FindFirstChild("RightDetector")
-            local lWeld = lDet and (lDet:FindFirstChild("LeftWeld") or lDet:FindFirstChild("RigidConstraint"))
-            local rWeld = rDet and (rDet:FindFirstChild("RightWeld") or rDet:FindFirstChild("RigidConstraint"))
-            local seat = blobman:FindFirstChild("VehicleSeat")
-            local hum = LocalPlayer.Character:FindFirstChild("Humanoid")
-            if seat and hum then
-                if seat.Occupant ~= hum then
-                    LocalPlayer.Character.HumanoidRootPart.CFrame = seat.CFrame + Vector3.new(0, 2, 0)
-                    task.wait(0.2)
-                    seat:Sit(hum)
-                    task.wait(0.5)
+                local mt = ReplicatedStorage:FindFirstChild("MenuToys")
+                local st = mt and mt:FindFirstChild("SpawnToyRemoteFunction")
+                if st then
+                    local myRoot = LocalPlayer.Character.HumanoidRootPart
+                    local spawnCF = myRoot and (myRoot.CFrame + Vector3.new(0, 5, 0)) or CFrame.new(0, 50, 0)
+                    st:InvokeServer("CreatureBlobman", spawnCF, Vector3.zero)
+                    task.wait(0.8)
+                    spawned = Workspace:FindFirstChild(LocalPlayer.Name .. "SpawnedInToys")
+                    if spawned then blobman = spawned:FindFirstChild("CreatureBlobman") end
                 end
             end
 
-            local GE = ReplicatedStorage:FindFirstChild("GrabEvents")
-            if not (GE and grabRemote and dropRemote and ((lDet and lWeld) or (rDet and rWeld))) then
-                OrionLib:MakeNotification({ Name = "エラー", Content = "必要なRemoteが見つかりません", Time = 5 })
-                orbitRunning = false
-                return
-            end
-
-            local Det = rDet or lDet
-            local Weld = rWeld or lWeld
-            local blobRoot = blobman:FindFirstChild("HumanoidRootPart") or blobman.PrimaryPart
-            local SavedPos = nil
-
-            while orbitRunning and myLoopId == orbitCurrentLoopId do
-                if not targetPlayer or not targetPlayer.Parent then break end
-
-                -- リスポーン待機
-                if not targetPlayer.Character or not targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
-                    OrionLib:MakeNotification({ Name = "待機中", Content = targetPlayer.Name .. " のリスポーンを待っています...", Time = 2 })
-                    repeat
-                        task.wait(1)
-                        if not orbitRunning or myLoopId ~= orbitCurrentLoopId then break end
-                    until targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart")
-                    if not orbitRunning or myLoopId ~= orbitCurrentLoopId then break end
-                    OrionLib:MakeNotification({ Name = "再開", Content = targetPlayer.Name .. " がリスポーンしました", Time = 2 })
-                    task.wait(0.5)
-                end
-
-                local tChar = targetPlayer.Character
-                local tRoot = tChar and tChar:FindFirstChild("HumanoidRootPart")
-                local tHum = tChar and tChar:FindFirstChild("Humanoid")
-                if not (tRoot and tHum and tHum.Health > 0) then
-                    task.wait(0.5)
-                    goto continue
-                end
-
-                -- 掴み準備
-                local bringStart = tick()
-                while tick() - bringStart < 0.35 do
-                    if myLoopId ~= orbitCurrentLoopId or not orbitRunning or not blobman or not blobman.Parent then break end
-                    if targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
-                        local currentTRoot = targetPlayer.Character.HumanoidRootPart
-                        blobRoot.CFrame = currentTRoot.CFrame
-                        blobRoot.AssemblyLinearVelocity = Vector3.zero
-                        pcall(function()
-                            if Det then grabRemote:FireServer(Det, currentTRoot, Weld) end
-                            GE.CreateGrabLine:FireServer(currentTRoot, Vector3.zero, currentTRoot.Position, false)
-                            GE.SetNetworkOwner:FireServer(currentTRoot, blobRoot.CFrame)
-                        end)
-                    end
-                    RunService.Heartbeat:Wait()
-                end
-
-                if not targetPlayer.Character or not targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
-                    task.wait(0.5)
-                    goto continue
-                end
-
-                SavedPos = targetPlayer.Character.HumanoidRootPart.CFrame
-                local targetCenterCFrame = SavedPos + Vector3.new(0, 30, 0)
-                local lastTime = tick()
-                local lastDropTime = tick()
-                local dropCount = 0
-
-                while orbitRunning and blobman and blobman.Parent and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") do
-                    if myLoopId ~= orbitCurrentLoopId then break end
-                    local currentTRoot = targetPlayer.Character.HumanoidRootPart
-                    local currentTHum = targetPlayer.Character:FindFirstChild("Humanoid")
-                    if not (currentTRoot and currentTHum and currentTHum.Health > 0) then
+            if not blobman then
+                for _, obj in ipairs(Workspace:GetChildren()) do
+                    if obj.Name == "CreatureBlobman" and obj:FindFirstChild("VehicleSeat") then
+                        blobman = obj
                         break
                     end
+                end
+            end
+            
+            if blobman then
+                local scriptObj = blobman:FindFirstChild("BlobmanSeatAndOwnerScript")
+                local grabRemote = scriptObj and scriptObj:FindFirstChild("CreatureGrab")
+                local dropRemote = scriptObj and scriptObj:FindFirstChild("CreatureDrop")
 
-                    if dropCount < 2 and (tick() - lastDropTime) > 0.8 then
-                        dropCount = dropCount + 1
-                        pcall(function()
-                            local currentWeld = Det:FindFirstChild("RightWeld") or Det:FindFirstChild("LeftWeld") or Det:FindFirstChildWhichIsA("Weld") or Det:FindFirstChild("RigidConstraint")
-                            if currentWeld then dropRemote:FireServer(currentWeld) end
-                            GE.DestroyGrabLine:FireServer(currentTRoot)
-                        end)
-                        blobRoot.CFrame = SavedPos
-                        blobRoot.AssemblyLinearVelocity = Vector3.zero
-                        task.wait(0.1)
-                        local recaptureStart = tick()
-                        while tick() - recaptureStart < 0.35 do
-                            if myLoopId ~= orbitCurrentLoopId or not orbitRunning or not blobman or not blobman.Parent then break end
-                            if targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
-                                local newTRoot = targetPlayer.Character.HumanoidRootPart
-                                blobRoot.CFrame = newTRoot.CFrame
+                local lDet = blobman:FindFirstChild("LeftDetector")
+                local rDet = blobman:FindFirstChild("RightDetector")
+                local lWeld = lDet and (lDet:FindFirstChild("LeftWeld") or lDet:FindFirstChild("RigidConstraint"))
+                local rWeld = rDet and (rDet:FindFirstChild("RightWeld") or rDet:FindFirstChild("RigidConstraint"))
+                
+                local seat = blobman:FindFirstChild("VehicleSeat")
+                local hum = LocalPlayer.Character:FindFirstChild("Humanoid")
+                
+                if seat and hum then
+                    if seat.Occupant ~= hum then
+                        LocalPlayer.Character.HumanoidRootPart.CFrame = seat.CFrame + Vector3.new(0, 2, 0)
+                        task.wait(0.2)
+                        seat:Sit(hum)
+                        task.wait(0.5)
+                    end
+                end
+                
+                local GE = ReplicatedStorage:FindFirstChild("GrabEvents")
+                
+                if GE and grabRemote and dropRemote and ((lDet and lWeld) or (rDet and rWeld)) then
+                    OrionLib:MakeNotification({ Name = "実行", Content = "drift kick を開始します", Time = 3 })
+
+                    task.spawn(function()
+                        local blobRoot = blobman:FindFirstChild("HumanoidRootPart") or blobman.PrimaryPart
+                        local Det = rDet or lDet
+                        local Weld = rWeld or lWeld
+                        
+                        local bringStart = tick()
+                        while tick() - bringStart < 0.35 do
+                            if myLoopId ~= orbitCurrentLoopId or not orbitRunning or not blobman or not blobman.Parent then return end
+                            if target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
+                                local tRoot = target.Character.HumanoidRootPart
+                                blobRoot.CFrame = tRoot.CFrame
                                 blobRoot.AssemblyLinearVelocity = Vector3.zero
+                                
                                 pcall(function()
-                                    if Det then grabRemote:FireServer(Det, newTRoot, Weld) end
-                                    GE.CreateGrabLine:FireServer(newTRoot, Vector3.zero, newTRoot.Position, false)
-                                    GE.SetNetworkOwner:FireServer(newTRoot, blobRoot.CFrame)
+                                    if Det then grabRemote:FireServer(Det, tRoot, Weld) end
+                                    GE.CreateGrabLine:FireServer(tRoot, Vector3.zero, tRoot.Position, false)
+                                    GE.SetNetworkOwner:FireServer(tRoot, blobRoot.CFrame)
                                 end)
                             end
                             RunService.Heartbeat:Wait()
                         end
-                        lastTime = tick()
-                        lastDropTime = tick()
-                    end
+                        
+                        if not target.Character or not target.Character:FindFirstChild("HumanoidRootPart") then return end
+                        
+                        local SavedPos = target.Character.HumanoidRootPart.CFrame
+                        local targetCenterCFrame = SavedPos + Vector3.new(0, 30, 0)
+                        
+                        local lastTime = tick()
+                        local lastDropTime = tick()
+                        local dropCount = 0
+                        
+                        while orbitRunning and blobman and blobman.Parent do
+                            if myLoopId ~= orbitCurrentLoopId then break end
+                            if not target or not target.Parent or not target.Character then break end
+                            
+                            local tChar = target.Character
+                            local tRoot = tChar:FindFirstChild("HumanoidRootPart")
+                            local tHum = tChar:FindFirstChild("Humanoid")
+                            
+                            if dropCount < 2 and (tick() - lastDropTime) > 0.8 then
+                                dropCount = dropCount + 1
+                                
+                                pcall(function()
+                                    local currentWeld = Det:FindFirstChild("RightWeld") or Det:FindFirstChild("LeftWeld") or Det:FindFirstChildWhichIsA("Weld") or Det:FindFirstChild("RigidConstraint")
+                                    if currentWeld then
+                                        dropRemote:FireServer(currentWeld)
+                                    end
+                                    GE.DestroyGrabLine:FireServer(tRoot)
+                                end)
+                                
+                                blobRoot.CFrame = SavedPos
+                                blobRoot.AssemblyLinearVelocity = Vector3.zero
+                                
+                                task.wait(0.1)
+                                
+                                local reCaptureStart = tick()
+                                while tick() - reCaptureStart < 0.35 do
+                                    if myLoopId ~= orbitCurrentLoopId or not orbitRunning or not blobman or not blobman.Parent then break end
+                                    if target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
+                                        local currentTRoot = target.Character.HumanoidRootPart
+                                        blobRoot.CFrame = currentTRoot.CFrame
+                                        blobRoot.AssemblyLinearVelocity = Vector3.zero
+                                        
+                                        pcall(function()
+                                            if Det then grabRemote:FireServer(Det, currentTRoot, Weld) end
+                                            GE.CreateGrabLine:FireServer(currentTRoot, Vector3.zero, currentTRoot.Position, false)
+                                            GE.SetNetworkOwner:FireServer(currentTRoot, blobRoot.CFrame)
+                                        end)
+                                    end
+                                    RunService.Heartbeat:Wait()
+                                end
+                                
+                                lastTime = tick()
+                                lastDropTime = tick()
+                            end
 
-                    local currentTime = tick()
-                    local dt = currentTime - lastTime
-                    lastTime = currentTime
-                    orbitAngle = orbitAngle + (orbitSpeed * dt)
-                    local offsetX = math.cos(orbitAngle) * orbitRadius
-                    local offsetZ = math.sin(orbitAngle) * orbitRadius
-                    local blobPos = targetCenterCFrame.Position + Vector3.new(offsetX, orbitHeightOffset, offsetZ)
-                    blobRoot.CFrame = CFrame.new(blobPos, targetCenterCFrame.Position)
-                    blobRoot.AssemblyLinearVelocity = Vector3.zero
-                    blobRoot.AssemblyAngularVelocity = Vector3.zero
-                    currentTRoot.CFrame = targetCenterCFrame
-                    currentTRoot.AssemblyLinearVelocity = Vector3.zero
-                    currentTRoot.AssemblyAngularVelocity = Vector3.zero
-                    pcall(function()
-                        currentTHum.PlatformStand = true
-                        currentTHum.Sit = true
-                        GE.SetNetworkOwner:FireServer(currentTRoot, targetCenterCFrame)
-                        local currentWeld = Det:FindFirstChild("RightWeld") or Det:FindFirstChild("LeftWeld") or Det:FindFirstChildWhichIsA("Weld") or Det:FindFirstChild("RigidConstraint")
-                        if currentWeld then dropRemote:FireServer(currentWeld) end
-                        GE.DestroyGrabLine:FireServer(currentTRoot)
-                        if Det then grabRemote:FireServer(Det, currentTRoot, Weld) end
-                        GE.CreateGrabLine:FireServer(currentTRoot, Vector3.zero, targetCenterCFrame.Position, false)
+                            if tRoot and tHum and tHum.Health > 0 and blobRoot then
+                                local currentTime = tick()
+                                local dt = currentTime - lastTime
+                                lastTime = currentTime
+
+                                orbitAngle = orbitAngle + (orbitSpeed * dt)
+                                local offsetX = math.cos(orbitAngle) * orbitRadius
+                                local offsetZ = math.sin(orbitAngle) * orbitRadius
+                                
+                                local blobPos = targetCenterCFrame.Position + Vector3.new(offsetX, orbitHeightOffset, offsetZ)
+                                blobRoot.CFrame = CFrame.new(blobPos, targetCenterCFrame.Position)
+                                blobRoot.AssemblyLinearVelocity = Vector3.zero
+                                blobRoot.AssemblyAngularVelocity = Vector3.zero
+                                
+                                tRoot.CFrame = targetCenterCFrame
+                                tRoot.AssemblyLinearVelocity = Vector3.zero
+                                tRoot.AssemblyAngularVelocity = Vector3.zero
+
+                                pcall(function()
+                                    tHum.PlatformStand = true
+                                    tHum.Sit = true
+                                    GE.SetNetworkOwner:FireServer(tRoot, targetCenterCFrame)
+                                    
+                                    local currentWeld = Det:FindFirstChild("RightWeld") or Det:FindFirstChild("LeftWeld") or Det:FindFirstChildWhichIsA("Weld") or Det:FindFirstChild("RigidConstraint")
+                                    if currentWeld then
+                                        dropRemote:FireServer(currentWeld)
+                                    end
+                                    
+                                    GE.DestroyGrabLine:FireServer(tRoot)
+                                    if Det then grabRemote:FireServer(Det, tRoot, Weld) end
+                                    GE.CreateGrabLine:FireServer(tRoot, Vector3.zero, targetCenterCFrame.Position, false)
+                                end)
+                            else
+                                break
+                            end
+                            RunService.Heartbeat:Wait()
+                        end
+                        
+                        if blobRoot and SavedPos then
+                            pcall(function()
+                                local currentWeld = Det:FindFirstChild("RightWeld") or Det:FindFirstChild("LeftWeld") or Det:FindFirstChildWhichIsA("Weld") or Det:FindFirstChild("RigidConstraint")
+                                if currentWeld then dropRemote:FireServer(currentWeld) end
+                                if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
+                                    GE.DestroyGrabLine:FireServer(target.Character.HumanoidRootPart)
+                                end
+                            end)
+                            blobRoot.CFrame = SavedPos
+                            blobRoot.AssemblyLinearVelocity = Vector3.zero
+                        end
+
                     end)
-                    RunService.Heartbeat:Wait()
-                end  -- end of inner while
-                ::continue::
-                task.wait(0.5)
-            end  -- end of outer while
-
-            if SavedPos and blobRoot then
-                pcall(function()
-                    local currentWeld = Det:FindFirstChild("RightWeld") or Det:FindFirstChild("LeftWeld") or Det:FindFirstChildWhichIsA("Weld") or Det:FindFirstChild("RigidConstraint")
-                    if currentWeld then dropRemote:FireServer(currentWeld) end
-                    if targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
-                        GE.DestroyGrabLine:FireServer(targetPlayer.Character.HumanoidRootPart)
-                    end
-                end)
-                blobRoot.CFrame = SavedPos
-                blobRoot.AssemblyLinearVelocity = Vector3.zero
+                else
+                    OrionLib:MakeNotification({ Name = "エラー", Content = "必要なRemoteEventやDetectorが見つかりません", Time = 5 })
+                    orbitRunning = false
+                end
+            else
+                OrionLib:MakeNotification({ Name = "エラー", Content = "Blobmanの取得・生成に失敗しました", Time = 3 })
+                orbitRunning = false
             end
+        else
+            OrionLib:MakeNotification({ Name = "エラー", Content = "ターゲットが無効です", Time = 3 })
             orbitRunning = false
-        end)
+        end
     end
 })
 
@@ -1829,7 +1726,7 @@ MapFrame.InputBegan:Connect(function(input)
 end)
 
 -- ============================================
--- メインループ (RenderStepped)
+-- メインループ (RenderStepped) - パフォーマンス最適化
 -- ============================================
 local espUpdateCounter = 0
 local sparklerUpdateCounter = 0
@@ -2021,5 +1918,8 @@ LocalPlayer.CharacterAdded:Connect(function(char)
     setupAntiGrab(char)
 end)
 
+-- ============================================
+-- OrionLib Init（1回のみ）
+-- ============================================
 OrionLib:Init()
 UpdateWhitelistUI()
