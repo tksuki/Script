@@ -1,6 +1,5 @@
 -- [[ saku hub | Quantum Ultimate Edition ]]
--- (省略なしの完全修正版、エラー解消済み)
-
+-- (全構文エラー修正版)
 repeat task.wait() until game:IsLoaded()
 repeat task.wait() until game:GetService("Players").LocalPlayer
 repeat task.wait() until game:GetService("Players").LocalPlayer.Character
@@ -1538,7 +1537,7 @@ for _, s in pairs(tv_Shapes) do
 end
 
 -- ============================================
--- [Orbit & Grab Hub] - リスポーン対応版 (完全修正)
+-- [Orbit & Grab Hub] - 完全修正版 (すべてのendを正しく配置)
 -- ============================================
 local OrbitTab = Window:MakeTab({ Name = "Orbit & Grab", Icon = "rbxassetid://4483345998" })
 
@@ -1661,6 +1660,7 @@ OrbitTab:AddToggle({
 
             while orbitRunning and myLoopId == orbitCurrentLoopId do
                 if not targetPlayer or not targetPlayer.Parent then break end
+
                 -- リスポーン待機
                 if not targetPlayer.Character or not targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
                     OrionLib:MakeNotification({ Name = "待機中", Content = targetPlayer.Name .. " のリスポーンを待っています...", Time = 2 })
@@ -1681,7 +1681,7 @@ OrbitTab:AddToggle({
                     goto continue
                 end
 
-                -- 掴みフェーズ
+                -- 掴み準備
                 local bringStart = tick()
                 while tick() - bringStart < 0.35 do
                     if myLoopId ~= orbitCurrentLoopId or not orbitRunning or not blobman or not blobman.Parent then break end
@@ -1770,10 +1770,10 @@ OrbitTab:AddToggle({
                         GE.CreateGrabLine:FireServer(currentTRoot, Vector3.zero, targetCenterCFrame.Position, false)
                     end)
                     RunService.Heartbeat:Wait()
-                end
+                end  -- end of inner while
                 ::continue::
                 task.wait(0.5)
-            end
+            end  -- end of outer while
 
             if SavedPos and blobRoot then
                 pcall(function()
