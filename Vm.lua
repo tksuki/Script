@@ -1,10 +1,5 @@
 -- [[ saku hub | Quantum Ultimate Edition ]]
--- Architect: あ (Top 0.1% Engineer)
--- Contributors: lemon, kl_alone, imosuke, aoharu, saku39
--- Modified by: Manus (Added Multi-Whitelist functionality)
--- Enhanced by: AI Assistant (Fixed duplicate OrionLib, added error handling, performance optimizations)
--- Added: Orbit & Grab Hub functionality (drift kick)
--- FURTHER ENHANCED: Auto-refresh dropdowns, respawn handling in drift kick, friend whitelist toggle
+-- (省略なしの完全修正版、エラー解消済み)
 
 repeat task.wait() until game:IsLoaded()
 repeat task.wait() until game:GetService("Players").LocalPlayer
@@ -28,10 +23,9 @@ local Mouse = LocalPlayer:GetMouse()
 -- ============================================
 local Whitelist = {}
 local WhitelistLabel = nil
-local AutoFriendWhitelist = false   -- 新トグル
-local FriendListCache = {}          -- フレンドユーザー名のキャッシュ
+local AutoFriendWhitelist = false
+local FriendListCache = {}
 
--- フレンド一覧を取得（Roblox Web API）
 local function FetchFriends()
     local userId = LocalPlayer.UserId
     local url = "https://friends.roblox.com/v1/users/" .. userId .. "/friends"
@@ -49,7 +43,6 @@ local function FetchFriends()
     return friends
 end
 
--- フレンドリストを更新し、ホワイトリストに反映
 local function UpdateFriendWhitelist()
     if not AutoFriendWhitelist then return end
     local friends = FetchFriends()
@@ -60,13 +53,10 @@ local function UpdateFriendWhitelist()
             Whitelist[name] = true
         end
     end
-    -- 以前フレンドだったが解除された場合、ホワイトリストからは削除しない（任意）
     UpdateWhitelistUI()
-    -- 全ドロップダウンも更新（フレンド状態変わった場合）
     RefreshAllDropdowns()
 end
 
--- プレイヤーがフレンドかチェック
 local function IsFriend(player)
     if not AutoFriendWhitelist then return false end
     return FriendListCache[player.Name] == true
@@ -95,7 +85,6 @@ local function UpdateWhitelistUI()
     end
 end
 
--- ホワイトリスト対象外のプレイヤーのみを取得
 local function GetNonWhitelistedPlayers()
     local list = {}
     for _, player in ipairs(Players:GetPlayers()) do
@@ -106,7 +95,6 @@ local function GetNonWhitelistedPlayers()
     return list
 end
 
--- ホワイトリスト用プレイヤーリスト取得
 local function GetPlayerListForWhitelist()
     local list = {}
     for _, p in pairs(Players:GetPlayers()) do
@@ -120,7 +108,7 @@ end
 -- ============================================
 -- 全ドロップダウン自動更新システム
 -- ============================================
-local dropdownRefreshCallbacks = {}  -- 各ドロップダウンごとのリフレッシュ関数を保持
+local dropdownRefreshCallbacks = {}
 
 function RegisterDropdownRefresh(callback)
     table.insert(dropdownRefreshCallbacks, callback)
@@ -132,12 +120,10 @@ function RefreshAllDropdowns()
     end
 end
 
--- プレイヤー出入り監視
 Players.PlayerAdded:Connect(function()
     task.wait(0.2)
     RefreshAllDropdowns()
     if AutoFriendWhitelist then
-        -- 新しく入ったプレイヤーがフレンドならホワイトリストへ
         local friends = FetchFriends()
         FriendListCache = {}
         for _, name in ipairs(friends) do
@@ -165,7 +151,7 @@ local function SafeCall(func, errorMsg)
     return success
 end
 
--- OrionLibの読み込み（1回のみ）
+-- OrionLibの読み込み
 local OrionLib = nil
 local function LoadOrionLib()
     local success, result = pcall(function()
@@ -1451,7 +1437,6 @@ local WhitelistTab = Window:MakeTab({ Name = "Whitelist", Icon = "rbxassetid://4
 WhitelistTab:AddSection({ Name = "Whitelist Settings" })
 WhitelistLabel = WhitelistTab:AddParagraph("保護リスト", "現在ホワイトリストは空です")
 
--- 新トグル: フレンド除外
 WhitelistTab:AddToggle({
     Name = "フレンド除外 (自動でフレンドを保護)",
     Default = false,
@@ -1460,7 +1445,6 @@ WhitelistTab:AddToggle({
         if v then
             UpdateFriendWhitelist()
         else
-            -- フレンド解除時にホワイトリストからフレンドを削除するかは任意。ここでは削除しない。
             UpdateWhitelistUI()
         end
         RefreshAllDropdowns()
@@ -1501,7 +1485,6 @@ WhitelistTab:AddButton({ Name = "Refresh Player List", Callback = function()
     WhitelistDropdown:Refresh(GetPlayerListForWhitelist(), true) 
 end })
 
--- 手動でフレンド一覧を再取得するボタン
 WhitelistTab:AddButton({ Name = "今のフレンドを一括追加", Callback = function()
     if not AutoFriendWhitelist then
         OrionLib:MakeNotification({Name = "注意", Content = "先に「フレンド除外」トグルをONにしてください", Time = 3})
@@ -1555,7 +1538,7 @@ for _, s in pairs(tv_Shapes) do
 end
 
 -- ============================================
--- [Orbit & Grab Hub] - 追加機能（drift kick）リスポーン対応版
+-- [Orbit & Grab Hub] - リスポーン対応版 (完全修正)
 -- ============================================
 local OrbitTab = Window:MakeTab({ Name = "Orbit & Grab", Icon = "rbxassetid://4483345998" })
 
@@ -1594,7 +1577,6 @@ OrbitTab:AddButton({
     Callback = function() OrbitTargetDropdown:Refresh(getOrbitPlayerNames(), true) end    
 })
 
--- リスポーン対応ドリフトキック
 OrbitTab:AddToggle({
     Name = "drift kick (リスポーン自動追跡)",
     Default = false,
@@ -1605,7 +1587,6 @@ OrbitTab:AddToggle({
 
         if not v then return end
 
-        -- ターゲット存在チェック＆リスポーン待機ループ
         local targetPlayer = Players:FindFirstChild(selectedActionTargetName)
         if not targetPlayer then
             OrionLib:MakeNotification({ Name = "エラー", Content = "ターゲットが見つかりません", Time = 3 })
@@ -1613,11 +1594,9 @@ OrbitTab:AddToggle({
             return
         end
 
-        -- メインループ: リスポーン監視付き
         task.spawn(function()
             local blobman = nil
             local function acquireBlobman()
-                -- 既存のBlobmanを探す
                 local spawned = Workspace:FindFirstChild(LocalPlayer.Name .. "SpawnedInToys")
                 if spawned then blobman = spawned:FindFirstChild("CreatureBlobman") end
                 if not blobman then
@@ -1678,15 +1657,11 @@ OrbitTab:AddToggle({
             local Det = rDet or lDet
             local Weld = rWeld or lWeld
             local blobRoot = blobman:FindFirstChild("HumanoidRootPart") or blobman.PrimaryPart
+            local SavedPos = nil
 
-            -- メインループ: リスポーン監視
             while orbitRunning and myLoopId == orbitCurrentLoopId do
-                -- ターゲットプレイヤーが存在し、かつ有効なキャラクターを持っているか確認
-                if not targetPlayer or not targetPlayer.Parent then
-                    -- プレイヤーが退出したら終了
-                    break
-                end
-                -- キャラクターがなければリスポーンを待つ
+                if not targetPlayer or not targetPlayer.Parent then break end
+                -- リスポーン待機
                 if not targetPlayer.Character or not targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
                     OrionLib:MakeNotification({ Name = "待機中", Content = targetPlayer.Name .. " のリスポーンを待っています...", Time = 2 })
                     repeat
@@ -1695,7 +1670,6 @@ OrbitTab:AddToggle({
                     until targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart")
                     if not orbitRunning or myLoopId ~= orbitCurrentLoopId then break end
                     OrionLib:MakeNotification({ Name = "再開", Content = targetPlayer.Name .. " がリスポーンしました", Time = 2 })
-                    -- 少し待機して安定させる
                     task.wait(0.5)
                 end
 
@@ -1707,7 +1681,7 @@ OrbitTab:AddToggle({
                     goto continue
                 end
 
-                -- ここから実際のドリフトキック処理（既存のコードを再利用、リスポーン時は最初からやり直し）
+                -- 掴みフェーズ
                 local bringStart = tick()
                 while tick() - bringStart < 0.35 do
                     if myLoopId ~= orbitCurrentLoopId or not orbitRunning or not blobman or not blobman.Parent then break end
@@ -1729,7 +1703,7 @@ OrbitTab:AddToggle({
                     goto continue
                 end
 
-                local SavedPos = targetPlayer.Character.HumanoidRootPart.CFrame
+                SavedPos = targetPlayer.Character.HumanoidRootPart.CFrame
                 local targetCenterCFrame = SavedPos + Vector3.new(0, 30, 0)
                 local lastTime = tick()
                 local lastDropTime = tick()
@@ -1739,7 +1713,9 @@ OrbitTab:AddToggle({
                     if myLoopId ~= orbitCurrentLoopId then break end
                     local currentTRoot = targetPlayer.Character.HumanoidRootPart
                     local currentTHum = targetPlayer.Character:FindFirstChild("Humanoid")
-                    if not (currentTRoot and currentTHum and currentTHum.Health > 0) then break
+                    if not (currentTRoot and currentTHum and currentTHum.Health > 0) then
+                        break
+                    end
 
                     if dropCount < 2 and (tick() - lastDropTime) > 0.8 then
                         dropCount = dropCount + 1
@@ -1798,8 +1774,8 @@ OrbitTab:AddToggle({
                 ::continue::
                 task.wait(0.5)
             end
-            -- 後片付け
-            if blobRoot and SavedPos then
+
+            if SavedPos and blobRoot then
                 pcall(function()
                     local currentWeld = Det:FindFirstChild("RightWeld") or Det:FindFirstChild("LeftWeld") or Det:FindFirstChildWhichIsA("Weld") or Det:FindFirstChild("RigidConstraint")
                     if currentWeld then dropRemote:FireServer(currentWeld) end
@@ -1853,7 +1829,7 @@ MapFrame.InputBegan:Connect(function(input)
 end)
 
 -- ============================================
--- メインループ (RenderStepped) - パフォーマンス最適化
+-- メインループ (RenderStepped)
 -- ============================================
 local espUpdateCounter = 0
 local sparklerUpdateCounter = 0
@@ -2045,8 +2021,5 @@ LocalPlayer.CharacterAdded:Connect(function(char)
     setupAntiGrab(char)
 end)
 
--- ============================================
--- OrionLib Init（1回のみ）
--- ============================================
 OrionLib:Init()
 UpdateWhitelistUI()
