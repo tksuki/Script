@@ -11,7 +11,7 @@
 task.wait(3)
 
 local function SendStartupMessage()
-    local message = "☠️lemon hub☠️"
+    local message = ""
     local sent = false
 
     local tcs = game:GetService("TextChatService")
