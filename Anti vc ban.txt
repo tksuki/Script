@@ -1,0 +1,83 @@
+local vcs = cloneref(game:GetService("VoiceChatService"))
+local vci = cloneref(game:GetService("VoiceChatInternal"))
+local cg = game:GetService("CoreGui")
+local sg = game:GetService("StarterGui")
+local lp = game:GetService("Players").LocalPlayer
+local gc = clonefunction(getconnections)
+
+local m_img = "rbxasset://textures/ui/VoiceChat/MicLight/Muted.png"
+local is_m = true
+local h_fold = Instance.new("Folder", game:GetService("RobloxReplicatedStorage"))
+
+local ok, has_vc = pcall(vcs.IsVoiceEnabledForUserIdAsync, vcs, lp.UserId)
+if not ok or not has_vc then
+    sg:SetCore("SendNotification", {Title = "LeakD", Text = "no vc bro", Duration = 5})
+    return
+end
+
+local t_app = cg:WaitForChild("TopBarApp", 15):WaitForChild("TopBarApp", 15)
+local u_left = t_app:WaitForChild("UnibarLeftFrame", 15)
+local u_menu = u_left:WaitForChild("UnibarMenu", 15) or u_left:WaitForChild("ChromeMenu", 15)
+local u_cont = u_menu:WaitForChild("2", 15):WaitForChild("3", 15)
+local m_btn = u_cont:FindFirstChild("toggle_mic_mute", true)
+
+if not m_btn then 
+    vcs:joinVoice() 
+    m_btn = u_cont:WaitForChild("toggle_mic_mute", 15)
+end
+
+if m_btn.IntegrationIconFrame.IntegrationIcon["1"].Image == m_img then
+    local g = Instance.new("ScreenGui", cg)
+    g.Name = "p"
+    local l = Instance.new("TextLabel", g)
+    l.Size = UDim2.new(0, 400, 0, 80)
+    l.Position = UDim2.new(0.5, -200, 0.5, -40)
+    l.BackgroundTransparency = 1
+    l.Font = Enum.Font.GothamBold
+    l.TextSize = 24
+    l.TextColor3 = Color3.fromRGB(255, 110, 0)
+    l.Text = "YO TURN ON YOUR MIC BRO"
+    l.TextStrokeTransparency = 0.5
+    l.Parent = g
+    
+    repeat task.wait(0.1) until m_btn.IntegrationIconFrame.IntegrationIcon["1"].Image ~= m_img
+    g:Destroy()
+end
+
+sg:SetCore("SendNotification", {Title = "LeakD", Text = "wait...", Duration = 3})
+
+vcs:leaveVoice()
+task.wait(2)
+
+local conns = gc(vci.StateChanged)
+for i = 7, #conns do 
+    if conns[i] then conns[i]:Disable() end
+end
+task.wait(1.5)
+
+vcs:joinVoice()
+task.wait(2)
+
+u_cont = u_menu:WaitForChild("2", 15):WaitForChild("3", 15)
+m_btn = u_cont:WaitForChild("toggle_mic_mute", 15)
+
+local cl = m_btn:Clone()
+m_btn.Parent = h_fold
+cl.Name = "toggle_mic_mute_new"
+cl.Parent = u_cont
+
+local cl_icon = cl.IntegrationIconFrame.IntegrationIcon["1"]
+local orig_icon = m_btn.IntegrationIconFrame.IntegrationIcon["1"]
+
+local dev = lp:FindFirstChildWhichIsA("AudioDeviceInput", true)
+if dev then dev.Active = false else vci:PublishPause(true) end
+cl_icon.Image = m_img
+
+cl.IconHitArea_toggle_mic_mute.Activated:Connect(function()
+    is_m = not is_m
+    local dev2 = lp:FindFirstChildWhichIsA("AudioDeviceInput", true)
+    if dev2 then dev2.Active = not is_m else vci:PublishPause(is_m) end
+    cl_icon.Image = is_m and m_img or orig_icon.Image
+end)
+
+sg:SetCore("SendNotification", {Title = "LeakD", Text = "bypass loaded fr", Duration = 5})

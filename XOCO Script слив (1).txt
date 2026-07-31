@@ -1,0 +1,188 @@
+-- Obsidian Library + Blobman GRAB + KILL (Teleport 0.05s, 10 Grabs, No Lift)
+local repo = "https://raw.githubusercontent.com/deividcomsono/Obsidian/main/"
+local Library = loadstring(game:HttpGet(repo .. "Library.lua"))()
+local ThemeManager = loadstring(game:HttpGet(repo .. "addons/ThemeManager.lua"))()
+local SaveManager = loadstring(game:HttpGet(repo .. "addons/SaveManager.lua"))()
+
+local Players = game:GetService("Players")
+local RS = game:GetService("ReplicatedStorage")
+local LPlr = Players.LocalPlayer
+
+local Window = Library:CreateWindow({
+    Title = "Blobman | GRAB KILL",
+    Footer = "Teleport 0.05s, 10 grabs, no lift",
+    Icon = 95816097006870,
+})
+
+local MainTab = Window:AddTab("Main", "user")
+local Group = MainTab:AddLeftGroupbox("Execution")
+
+local blob = nil
+local loopActive = false
+
+local function spawnBlobman()
+    local root = LPlr.Character and LPlr.Character:FindFirstChild("HumanoidRootPart")
+    if not root then return nil end
+    if blob and blob.Parent then blob:Destroy() end
+
+    local success, err = pcall(function()
+        RS:WaitForChild("MenuToys"):WaitForChild("SpawnToyRemoteFunction"):InvokeServer("CreatureBlobman", root.CFrame, Vector3.new(0,0,0))
+    end)
+    if not success then
+        warn("Blobman spawn error: " .. tostring(err))
+        return nil
+    end
+
+    task.wait(0.05)
+
+    for _, v in pairs(workspace:GetDescendants()) do
+        if v.Name == "CreatureBlobman" and v:FindFirstChild("VehicleSeat") then
+            v.VehicleSeat:Sit(LPlr.Character.Humanoid)
+            local hrp = v:FindFirstChild("HumanoidRootPart")
+            if hrp then v.PrimaryPart = hrp end
+            return v
+        end
+    end
+    return nil
+end
+
+-- ★ ネットパケット送信 (10回)
+local function grabSpam(detector, targetRoot, weldName)
+    if not blob or not detector or not targetRoot then return end
+
+    local gScript = blob:FindFirstChild("BlobmanSeatAndOwnerScript")
+    if not gScript then
+        warn("BlobmanSeatAndOwnerScript not found")
+        return
+    end
+
+    local weld = detector:FindFirstChild(weldName)
+    if not weld then
+        warn("Weld not found: " .. weldName)
+        return
+    end
+
+    for i = 1, 10 do
+        local success, err = pcall(function()
+            gScript.CreatureGrab:FireServer(detector, targetRoot, weld)
+        end)
+        if not success then
+            warn("FireServer failed (" .. i .. "): " .. tostring(err))
+        end
+        task.wait(0.001)
+    end
+end
+
+-- ★ 確実キル (Health=0 + BreakJoints + Dead状態)
+local function killCharacter(character)
+    if not character then return end
+    pcall(function()
+        local humanoid = character:FindFirstChild("Humanoid")
+        if humanoid then
+            humanoid.Health = 0
+            humanoid:ChangeState(Enum.HumanoidStateType.Dead)
+            humanoid.BreakJointsOnDeath = false
+        end
+        character:BreakJoints()
+        for _, part in pairs(character:GetDescendants()) do
+            if part:IsA("BasePart") then
+                part:BreakJoints()
+            end
+        end
+    end)
+end
+
+-- ★ 1人処理 (テレポ→掴み→キル, 上げ動作なし)
+local function grabAndKill(target, detector, handName)
+    if not target or not target.Character then return end
+    local tRoot = target.Character:FindFirstChild("HumanoidRootPart")
+    if not tRoot then return end
+
+    if not blob or not blob.PrimaryPart or not blob.Parent then
+        blob = spawnBlobman()
+        if not blob then return end
+    end
+
+    local weldName = (handName == "Left") and "LeftWeld" or "RightWeld"
+
+    blob:PivotTo(tRoot.CFrame * CFrame.new(0, -5, 0))
+    task.wait(0.05)
+
+    grabSpam(detector, tRoot, weldName)
+    task.wait(0.001)
+
+    killCharacter(target.Character)
+    task.wait(0.001)
+end
+
+-- ★ 全員処理
+local function allGrabAndKill()
+    local targets = {}
+    for _, p in pairs(Players:GetPlayers()) do
+        if p ~= LPlr and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+            table.insert(targets, p)
+        end
+    end
+
+    if #targets == 0 then return end
+
+    if not blob or not blob.PrimaryPart or not blob.Parent then
+        blob = spawnBlobman()
+        if not blob then return end
+    end
+
+    local LDet = blob:FindFirstChild("LeftDetector")
+    local RDet = blob:FindFirstChild("RightDetector")
+    if not LDet or not RDet then
+        warn("Detectors not found")
+        return
+    end
+
+    local useLeft = true
+    for _, target in ipairs(targets) do
+        if useLeft then
+            grabAndKill(target, LDet, "Left")
+        else
+            grabAndKill(target, RDet, "Right")
+        end
+        useLeft = not useLeft
+        task.wait(0.001)
+    end
+end
+
+Group:AddButton({
+    Text = "🔥 GRAB + KILL (No Lift)",
+    Func = function()
+        allGrabAndKill()
+    end
+})
+
+Group:AddToggle("LoopToggle", {
+    Text = "🔄 Loop GRAB + KILL",
+    Default = false,
+    Callback = function(state)
+        loopActive = state
+        if loopActive then
+            task.spawn(function()
+                while loopActive do
+                    allGrabAndKill()
+                    if loopActive then
+                        task.wait(0.02)
+                    end
+                end
+            end)
+        end
+    end
+})
+
+Group:AddButton({
+    Text = "♻️ リセット",
+    Func = function()
+        if blob then blob:Destroy(); blob = nil end
+        task.wait(0.05)
+        blob = spawnBlobman()
+    end
+})
+
+ThemeManager:ApplyToTab(MainTab)
+SaveManager:BuildConfigSection(MainTab)

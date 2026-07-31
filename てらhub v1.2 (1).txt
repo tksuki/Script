@@ -1,0 +1,2201 @@
+local OrionLib = loadstring(game:HttpGet(('https://raw.githubusercontent.com/jadpy/suki/refs/heads/main/orion')))()
+local Window = OrionLib:MakeWindow({
+    Name = "てらhub v1.2",
+    HidePremium = false,
+    SaveConfig = false,
+    ConfigFolder = "TeraHubConfig",
+    Theme = {
+        Background = Color3.fromRGB(8, 8, 35),
+        ElementBackground = Color3.fromRGB(15, 15, 50),
+        TabBackground = Color3.fromRGB(20, 20, 65),
+        TabBackgroundSelected = Color3.fromRGB(0, 80, 255),
+        TextColor = Color3.fromRGB(255, 255, 255),
+        Shadow = Color3.fromRGB(0, 80, 255),
+        SliderProgress = Color3.fromRGB(0, 100, 255),
+        ElementStroke = Color3.fromRGB(0, 80, 255),
+        TabStroke = Color3.fromRGB(0, 80, 255),
+        ToggleEnabled = Color3.fromRGB(0, 100, 255),
+        ToggleBackground = Color3.fromRGB(20, 20, 65),
+        InputBackground = Color3.fromRGB(10, 10, 40),
+        DropdownSelected = Color3.fromRGB(0, 80, 255),
+        DropdownUnselected = Color3.fromRGB(15, 15, 50),
+        NotificationBackground = Color3.fromRGB(15, 15, 50),
+        Topbar = Color3.fromRGB(0, 50, 150)
+    }
+})
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local Debris = game:GetService("Debris")
+local Player = Players.LocalPlayer
+
+-- 変数
+local selectedKickPlayer = nil
+local kickLoopEnabled = false
+local kickLoopV2Enabled = false
+local kickLoopV3Enabled = false
+local driftKickEnabled = false
+local driftKickCoroutine = nil
+local driftKickLoopId = 0
+
+-- トグル用の変数
+local kickToggleActive = false
+local kickV2ToggleActive = false
+local kickGrabSpamActive = false
+
+-- プレイヤー機能用変数
+local superSpeed = false
+local Multiplier = 0.15
+local infiniteJump = false
+local noclip = false
+local noclipConn = nil
+
+-- Orbit設定用変数
+local orbitRadius = 19
+local orbitSpeed = 8.5
+local orbitHeightOffset = 0
+local orbitAngle = 0
+
+-- Grab Events
+local GrabEvents = ReplicatedStorage:WaitForChild("GrabEvents", 10)
+local setNetworkOwnerEvent = GrabEvents and GrabEvents:WaitForChild("SetNetworkOwner", 5)
+local destroyGrabLineEvent = GrabEvents and GrabEvents:WaitForChild("DestroyGrabLine", 5)
+local createGrabLineEvent = GrabEvents and GrabEvents:WaitForChild("CreateGrabLine", 5)
+
+-- Character Events
+local CharacterEvents = ReplicatedStorage:WaitForChild("CharacterEvents", 5)
+local Struggle = CharacterEvents and CharacterEvents:WaitForChild("Struggle", 5)
+local RagdollRemote = CharacterEvents and CharacterEvents:WaitForChild("RagdollRemote", 5)
+
+-- MenuToys
+local MenuToys = ReplicatedStorage:WaitForChild("MenuToys", 5)
+local SpawnToyRF = MenuToys and MenuToys:WaitForChild("SpawnToyRemoteFunction", 5)
+local DestroyToy = MenuToys and MenuToys:WaitForChild("DestroyToy", 5)
+
+-- ============ プレイヤー機能用のHeartbeat/Jump接続 ============
+RunService.Heartbeat:Connect(function()
+    if superSpeed and Player.Character then
+        local hum = Player.Character:FindFirstChildOfClass("Humanoid")
+        local root = Player.Character:FindFirstChild("HumanoidRootPart")
+        if hum and root then
+            root.CFrame = root.CFrame + hum.MoveDirection * Multiplier
+        end
+    end
+end)
+
+UserInputService.JumpRequest:Connect(function()
+    if infiniteJump and Player.Character then
+        local hum = Player.Character:FindFirstChildOfClass("Humanoid")
+        if hum then
+            hum:ChangeState("Jumping")
+        end
+    end
+end)
+
+-- ============ アンチグラブ用変数 ============
+local AntiGrabActive = false
+
+-- ============ アンチペイント用変数 ============
+local paintPartsBackup = {}
+local paintConnections = {}
+local AntiPaintActive = false
+
+-- ============ アンチ爆発・アンチブロブマン用変数 ============
+local antiExplosionActive = false
+local antiExplosionConnection = nil
+local antiBlobmanActive = false
+
+-- ============ アンチラグドール（mahou hub スタイル） ============
+local antiRagdollActive = false
+local antiRagdollConnection = nil
+
+-- ============ アンチ爆発 (ササミックスHUB FTAP 移植) ============
+local function setupAntiExplosion(character)
+    local partOwner = character:WaitForChild("Humanoid"):FindFirstChild("Ragdolled")
+    if partOwner then
+        local partOwnerChangedConn
+        partOwnerChangedConn = partOwner:GetPropertyChangedSignal("Value"):Connect(function()
+            if partOwner.Value then
+                for _, part in pairs(character:GetChildren()) do
+                    if part:IsA("BasePart") then
+                        part.Anchored = true
+                    end
+                end
+            else
+                for _, part in pairs(character:GetChildren()) do
+                    if part:IsA("BasePart") then
+                        part.Anchored = false
+                    end
+                end
+            end
+        end)
+        antiExplosionConnection = partOwnerChangedConn
+    end
+end
+
+-- ============ アンチブロブマン (ササミックスHUB FTAP 移植) ============
+local function SetAntiBlobman(enabled)
+    local function processPart(part)
+        local invalid = part.Name == "LeftWeld" or part.Name == "RightWeld" or part.Name == "LeftAlignOrientation" or part.Name == "RightAlignOrientation"
+        if invalid and part.Parent and part.Parent.Parent and part.Parent.Parent.Parent ~= Workspace:FindFirstChild(Player.Name) then
+            part.Enabled = not enabled
+        end
+    end
+    for _, part in pairs(Workspace:GetDescendants()) do
+        processPart(part)
+    end
+end
+
+-- シミュレーション半径の最適化
+pcall(function()
+    RunService.Heartbeat:Connect(function()
+        pcall(function()
+            sethiddenproperty(Player, "SimulationRadius", math.huge)
+            sethiddenproperty(Player, "MaxSimulationRadius", math.huge)
+        end)
+    end)
+end)
+
+-- アンチグラブループ
+RunService.Heartbeat:Connect(function()
+    if not AntiGrabActive then return end
+    local char = Player.Character
+    if not char or not Struggle then return end
+    
+    local IsHeld = Player:FindFirstChild("IsHeld")
+    if IsHeld and IsHeld.Value == true then
+        Struggle:FireServer(Player)
+        for _, part in ipairs(char:GetChildren()) do
+            if part:IsA("BasePart") then part.Anchored = true end
+        end
+    else
+        for _, part in ipairs(char:GetChildren()) do
+            if part:IsA("BasePart") then part.Anchored = false end
+        end
+    end
+end)
+
+-- ============ アンチペイント用関数群 ============
+local function deleteAllPaintParts()
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if obj:IsA("BasePart") and obj.Name == "PaintPlayerPart" then
+            local clone = obj:Clone()
+            clone.Archivable = true
+            paintPartsBackup[obj:GetDebugId()] = {
+                clone = clone,
+                parent = obj.Parent
+            }
+            obj:Destroy()
+        end
+    end
+end
+
+local function restorePaintParts()
+    for _, data in pairs(paintPartsBackup) do
+        if data.clone and data.parent then
+            data.clone.Parent = data.parent
+        end
+    end
+    paintPartsBackup = {}
+end
+
+local function watchNewPaintParts()
+    table.insert(paintConnections, workspace.DescendantAdded:Connect(function(obj)
+        if obj:IsA("BasePart") and obj.Name == "PaintPlayerPart" then
+            task.defer(function()
+                if obj and obj.Parent then
+                    local clone = obj:Clone()
+                    clone.Archivable = true
+                    paintPartsBackup[obj:GetDebugId()] = {
+                        clone = clone,
+                        parent = obj.Parent
+                    }
+                    obj:Destroy()
+                end
+            end)
+        end
+    end))
+end
+
+local function disconnectWatchers()
+    for _, conn in ipairs(paintConnections) do
+        if conn.Connected then
+            conn:Disconnect()
+        end
+    end
+    paintConnections = {}
+end
+
+local function setTouchQuery(state)
+    local char = Player.Character
+    if not char then return end
+    for _, v in ipairs(char:GetChildren()) do
+        if v:IsA("Part") or v:IsA("BasePart") then
+            v.CanTouch = state
+            v.CanQuery = state
+        end
+    end
+end
+
+-- ============ キックオール用の変数と関数 ============
+local kickAllActive = false
+local whitelistFriends = false
+local playerStatus = {}
+
+-- プレイヤー退室時の通知
+Players.PlayerRemoving:Connect(function(player)
+    local status = playerStatus[player.UserId]
+    if status == "Kicked" then
+        OrionLib:MakeNotification({
+            Name = "キックしました",
+            Content = player.DisplayName .. " (@" .. player.Name .. ")",
+            Image = "rbxassetid://3944680095",
+            Time = 5
+        })
+    else
+        OrionLib:MakeNotification({
+            Name = "退室しました",
+            Content = player.DisplayName .. " (@" .. player.Name .. ")",
+            Image = "rbxassetid://4483345998",
+            Time = 5
+        })
+    end
+    playerStatus[player.UserId] = nil
+end)
+
+local function GetAllPlayers()
+    local players = {}
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= Player then
+            local isFriend = false
+            if whitelistFriends then
+                pcall(function()
+                    isFriend = Player:IsFriendsWith(player.UserId)
+                end)
+            end
+            if not isFriend then
+                table.insert(players, player)
+            end
+        end
+    end
+    return players
+end
+
+local function GetMyRoot()
+    return Player.Character and Player.Character:FindFirstChild("HumanoidRootPart")
+end
+
+local function ResetTargets()
+    for id, status in pairs(playerStatus) do
+        if status == "Targeting" then playerStatus[id] = nil end
+    end
+end
+
+local function KickAll()
+    if kickAllActive then return end
+    kickAllActive = true
+    
+    local allPlayers = GetAllPlayers()
+    if #allPlayers == 0 then 
+        OrionLib:MakeNotification({
+            Name = "対象がいません",
+            Content = "キックできるプレイヤーがいません。",
+            Image = "rbxassetid://4483345998",
+            Time = 3
+        })
+        kickAllActive = false
+        return 
+    end
+
+    for _, targetPlayer in ipairs(allPlayers) do
+        playerStatus[targetPlayer.UserId] = "Targeting"
+    end
+    
+    local rootPart = GetMyRoot()
+    if rootPart then
+        local spawnPos = rootPart.CFrame * CFrame.new(0, 0, -5)
+        SpawnToyRF:InvokeServer("CreatureBlobman", spawnPos, Vector3.new(0, 127, 0))
+    end
+    task.wait(0.5)
+    
+    local toyFolder = workspace:FindFirstChild(Player.Name .. "SpawnedInToys")
+    local currentBlob = toyFolder and toyFolder:FindFirstChild("CreatureBlobman")
+    if not currentBlob then 
+        ResetTargets()
+        kickAllActive = false
+        return 
+    end
+    
+    local vehicleSeat = currentBlob:FindFirstChild("VehicleSeat")
+    if vehicleSeat and Player.Character then
+        vehicleSeat:Sit(Player.Character:FindFirstChildOfClass("Humanoid"))
+    end
+    task.wait(0.3)
+    
+    local myRoot = GetMyRoot()
+    if not myRoot then 
+        ResetTargets()
+        kickAllActive = false
+        return 
+    end
+    
+    for _, targetPlayer in ipairs(allPlayers) do
+        local targetRoot = targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+        if targetRoot then
+            myRoot.CFrame = targetRoot.CFrame
+            task.wait(0.02)
+            
+            for i = 1, 5 do
+                pcall(function()
+                    currentBlob.BlobmanSeatAndOwnerScript.CreatureGrab:FireServer(
+                        currentBlob.LeftDetector, targetRoot, currentBlob.LeftDetector.LeftWeld
+                    )
+                    currentBlob.BlobmanSeatAndOwnerScript.CreatureRelease:FireServer(currentBlob.LeftDetector.LeftWeld)
+                end)
+                if i < 5 then task.wait(0.08) end
+            end
+        end
+    end
+    
+    myRoot.CFrame = CFrame.new(0, 100, 0)
+    task.wait(0.1)
+    
+    for _, part in ipairs(currentBlob:GetDescendants()) do
+        if part:IsA("BasePart") then pcall(function() part.Anchored = true end) end
+    end
+    task.wait(0.1)
+    
+    local radius = 15
+    for i, targetPlayer in ipairs(allPlayers) do
+        local targetRoot = targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+        if targetRoot then
+            local angle = math.rad((i - 1) * (360 / #allPlayers))
+            local x = radius * math.cos(angle)
+            local z = radius * math.sin(angle)
+            targetRoot.CFrame = CFrame.new(x, 110, z)
+        end
+    end
+    task.wait(0.1)
+    
+    for _ = 1, 2 do
+        for _, targetPlayer in ipairs(allPlayers) do
+            local targetRoot = targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+            if targetRoot then
+                task.spawn(function()
+                    pcall(function()
+                        setNetworkOwnerEvent:FireServer(targetRoot, CFrame.new(targetRoot.Position))
+                        destroyGrabLineEvent:FireServer(targetRoot)
+                    end)
+                end)
+            end
+        end
+        task.wait(0.1)
+    end
+    
+    task.wait(0.3)
+    
+    for _, targetPlayer in ipairs(allPlayers) do
+        local targetRoot = targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+        if targetRoot then
+            task.spawn(function()
+                pcall(function()
+                    currentBlob.BlobmanSeatAndOwnerScript.CreatureGrab:FireServer(
+                        currentBlob.LeftDetector, targetRoot, currentBlob.LeftDetector.LeftWeld
+                    )
+                    currentBlob.BlobmanSeatAndOwnerScript.CreatureGrab:FireServer(
+                        currentBlob.RightDetector, targetRoot, currentBlob.RightDetector.RightWeld
+                    )
+                end)
+            end)
+        end
+    end
+    
+    task.wait(0.1)
+
+    for _, targetPlayer in ipairs(allPlayers) do
+        if targetPlayer and targetPlayer.Parent == Players then
+            playerStatus[targetPlayer.UserId] = "Kicked"
+        end
+    end
+
+    myRoot.CFrame = CFrame.new(0, -50000, 0)
+    
+    for _, part in ipairs(currentBlob:GetDescendants()) do
+        if part:IsA("BasePart") then pcall(function() part.Anchored = false end) end
+    end
+    
+    task.wait(1)
+    kickAllActive = false
+end
+
+-- ============ プレイヤーリスト取得関数 ============
+local function getPlayerList()
+    local list = {}
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= Player then
+            table.insert(list, plr.DisplayName .. " (" .. plr.Name .. ")")
+        end
+    end
+    return list
+end
+
+local function getPlayerFromSelection(selection)
+    if not selection then return nil end
+    local username = selection:match("%((.-)%)")
+    return username and Players:FindFirstChild(username) or nil
+end
+
+-- ============ アンチインプットラグ用の変数 ============
+local ToyList = {
+    ["Coconut"] = "FoodCoconut",
+    ["Banana"] = "FoodBanana",
+    ["Fries"] = "FoodFrenchFries",
+    ["MeatStick"] = "FoodMeatStick",
+    ["Poop"] = "PoopPile",
+    ["Donut"] = "FoodDonut",
+    ["Cake"] = "FoodCakePink",
+    ["Burger"] = "FoodHamburger",
+    ["Pizza"] = "FoodPizzaCheese",
+    ["Hotdog"] = "FoodHotdog",
+    ["Mushroom"] = "FoodMushroomPoison",
+}
+
+local DropdownValues = {}
+for shortName, _ in pairs(ToyList) do
+    table.insert(DropdownValues, shortName)
+end
+table.sort(DropdownValues)
+
+local SelectedToy = ToyList[DropdownValues[1]]
+local AntiInputLagActive = false
+local AntiInputLagCoroutine = nil
+
+-- ============ 補助関数 ============
+local loopNoclipConnection = nil
+local loopNoclipping = false
+
+local function EnableLoopNoclip()
+    if not loopNoclipConnection then
+        loopNoclipping = false
+        loopNoclipConnection = RunService.Stepped:Connect(function()
+            if loopNoclipping == false and Player.Character then
+                for _, part in pairs(Player.Character:GetChildren()) do
+                    if part:IsA("BasePart") and part.CanCollide and part.Name ~= "floatName" then
+                        part.CanCollide = false
+                    end
+                end
+            end
+        end)
+    end
+end
+
+local function DisableLoopNoclip()
+    if loopNoclipConnection then
+        loopNoclipConnection:Disconnect()
+        loopNoclipConnection = nil
+    end
+    loopNoclipping = true
+end
+
+local function IsValidTarget(targetPlayer)
+    if typeof(targetPlayer) == "Instance" and targetPlayer ~= Player then
+        if targetPlayer:IsA("Player") and targetPlayer.Character then
+            local root = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+            local humanoid = targetPlayer.Character:FindFirstChildOfClass("Humanoid")
+            if root and humanoid and humanoid.Health > 0 then return true end
+        end
+    end
+    return false
+end
+
+-- ============ 新規：Blobman Kill System ============
+local BlobmanKill = {
+    isRunning = false,
+    isKillAura = false,
+    isSelectedKill = false,
+    selectedPlayer = nil,
+    currentBlobman = nil,
+    killAuraConnection = nil,
+    selectedKillConnection = nil,
+    selectedPlayerConnection = nil,
+    selectedKillAuraConnection = nil,
+    killAllLoop = nil,
+}
+
+local TP_WAIT = 0.02
+local GRAB_WAIT = 0.005
+local RETRY_WAIT = 0.005
+local MAX_RETRIES = 5
+local MAX_BLOBMAN_DISTANCE = 500
+local AURA_RANGE = 40
+local SELECTED_AURA_RANGE = 40
+
+local function GetSeatedBlobman()
+    local char = Player.Character
+    if not char then return nil end
+    local humanoid = char:FindFirstChildOfClass("Humanoid")
+    if not humanoid then return nil end
+    local seat = humanoid.SeatPart
+    if not seat or not seat:IsA("VehicleSeat") then return nil end
+    local obj = seat
+    while obj do
+        if obj:IsA("Model") and obj.Name == "CreatureBlobman" then
+            return obj
+        end
+        obj = obj.Parent
+    end
+    return nil
+end
+
+function BlobmanKill:SpawnBlobman()
+    local seatedBlobman = GetSeatedBlobman()
+    if seatedBlobman then
+        self.currentBlobman = seatedBlobman
+        return seatedBlobman
+    end
+
+    if self.currentBlobman and self.currentBlobman.Parent then
+        local blobmanPos = nil
+        if self.currentBlobman.PrimaryPart then
+            blobmanPos = self.currentBlobman.PrimaryPart.Position
+        else
+            local part = self.currentBlobman:FindFirstChildWhichIsA("BasePart")
+            if part then blobmanPos = part.Position end
+        end
+        local character = Player.Character
+        local rootPart = character and character:FindFirstChild("HumanoidRootPart")
+        local localPos = rootPart and rootPart.Position
+        if blobmanPos and localPos and (blobmanPos - localPos).Magnitude < MAX_BLOBMAN_DISTANCE then
+            local seat = self.currentBlobman:FindFirstChild("VehicleSeat")
+            if seat then
+                local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+                if humanoid then
+                    seat:Sit(humanoid)
+                    task.wait(0.05)
+                end
+            end
+            return self.currentBlobman
+        else
+            pcall(function() self.currentBlobman:Destroy() end)
+            self.currentBlobman = nil
+        end
+    end
+
+    local character = Player.Character
+    if not character then return nil end
+    local rootPart = character:FindFirstChild("HumanoidRootPart")
+    if not rootPart then return nil end
+
+    local spawnPos = rootPart.CFrame * CFrame.new(0, 0, -5)
+    pcall(function()
+        SpawnToyRF:InvokeServer("CreatureBlobman", spawnPos, Vector3.new(0, 127, 0))
+    end)
+
+    local toyFolderName = Player.Name .. "SpawnedInToys"
+    local blobman = nil
+    local startTime = tick()
+    repeat
+        local toyFolder = Workspace:FindFirstChild(toyFolderName)
+        if toyFolder then blobman = toyFolder:FindFirstChild("CreatureBlobman") end
+        if blobman then break end
+        task.wait()
+    until tick() - startTime > 2
+    if not blobman then return nil end
+
+    self.currentBlobman = blobman
+    local seat = blobman:FindFirstChild("VehicleSeat")
+    if seat then
+        local humanoid = character:FindFirstChildOfClass("Humanoid")
+        if humanoid then seat:Sit(humanoid) end
+    end
+    task.wait(0.05)
+    return blobman
+end
+
+function BlobmanKill:KillPlayer(targetPlayer)
+    if not targetPlayer or not targetPlayer.Character then return false end
+    local humanoid = targetPlayer.Character:FindFirstChildOfClass("Humanoid")
+    if not humanoid then return false end
+    for _ = 1, MAX_RETRIES do
+        local success = pcall(function()
+            humanoid.BreakJointsOnDeath = false
+            humanoid:ChangeState(Enum.HumanoidStateType.Dead)
+        end)
+        if success and humanoid.Health <= 0 then return true end
+        task.wait(RETRY_WAIT)
+    end
+    return false
+end
+
+function BlobmanKill:GrabRelease(blobman, targetRoot)
+    if not blobman or not targetRoot then return end
+    pcall(function()
+        local script = blobman:FindFirstChild("BlobmanSeatAndOwnerScript")
+        if script then
+            script.CreatureGrab:FireServer(blobman.LeftDetector, targetRoot, blobman.LeftDetector.LeftWeld)
+            script.CreatureRelease:FireServer(blobman.LeftDetector.LeftWeld)
+        end
+    end)
+end
+
+function BlobmanKill:ProcessPlayer(targetPlayer)
+    if not targetPlayer or not targetPlayer.Character then return false end
+    local humanoid = targetPlayer.Character:FindFirstChildOfClass("Humanoid")
+    if not humanoid or humanoid.Health <= 0 then return false end
+    local targetRoot = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if not targetRoot then return false end
+    local localChar = Player.Character
+    if not localChar then return false end
+    local myRoot = localChar:FindFirstChild("HumanoidRootPart")
+    if not myRoot then return false end
+
+    local originalCFrame = myRoot.CFrame
+    local originalVel = myRoot.AssemblyLinearVelocity
+    local originalAngVel = myRoot.AssemblyAngularVelocity
+
+    pcall(function()
+        myRoot.CFrame = targetRoot.CFrame
+        myRoot.AssemblyLinearVelocity = Vector3.zero
+        myRoot.AssemblyAngularVelocity = Vector3.zero
+        RunService.Heartbeat:Wait()
+        humanoid.BreakJointsOnDeath = false
+        humanoid:ChangeState(Enum.HumanoidStateType.Dead)
+        local blobman = GetSeatedBlobman()
+        if blobman then self:GrabRelease(blobman, targetRoot) end
+    end)
+
+    if myRoot and myRoot.Parent then
+        myRoot.CFrame = originalCFrame
+        myRoot.AssemblyLinearVelocity = originalVel or Vector3.zero
+        myRoot.AssemblyAngularVelocity = originalAngVel or Vector3.zero
+        myRoot.Velocity = Vector3.zero
+        myRoot.RotVelocity = Vector3.zero
+    end
+    return true
+end
+
+function BlobmanKill:ProcessAllPlayers()
+    local localChar = Player.Character
+    if not localChar or not localChar:FindFirstChild("HumanoidRootPart") then return end
+    local rootPart = localChar.HumanoidRootPart
+    local blobman = self:SpawnBlobman()
+    if not blobman then return end
+
+    local targets = {}
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= Player and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+            local isFriend = false
+            if whitelistFriends then
+                pcall(function() isFriend = Player:IsFriendsWith(player.UserId) end)
+            end
+            if not isFriend then
+                table.insert(targets, player)
+            end
+        end
+    end
+
+    for _, player in ipairs(targets) do
+        if not self.isRunning then break end
+        local targetChar = player.Character
+        if not targetChar then continue end
+        local humanoid = targetChar:FindFirstChildOfClass("Humanoid")
+        if not humanoid or humanoid.Health <= 0 then continue end
+        local targetRoot = targetChar:FindFirstChild("HumanoidRootPart")
+        if not targetRoot then continue end
+
+        rootPart.CFrame = targetRoot.CFrame
+        task.wait(TP_WAIT)
+        self:KillPlayer(player)
+        for _ = 1, 2 do
+            self:GrabRelease(blobman, targetRoot)
+            task.wait(GRAB_WAIT)
+        end
+    end
+end
+
+function BlobmanKill:SetupKillAura()
+    if self.killAuraConnection then
+        self.killAuraConnection:Disconnect()
+        self.killAuraConnection = nil
+    end
+    self.killAuraConnection = RunService.Heartbeat:Connect(function()
+        if not self.isKillAura then return end
+        local localChar = Player.Character
+        if not localChar or not localChar:FindFirstChild("HumanoidRootPart") then return end
+        local localRoot = localChar.HumanoidRootPart
+        if not self.currentBlobman or not self.currentBlobman.Parent then
+            self.currentBlobman = self:SpawnBlobman()
+            if not self.currentBlobman then return end
+        end
+        for _, player in ipairs(Players:GetPlayers()) do
+            if player ~= Player and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+                local isFriend = false
+                if whitelistFriends then
+                    pcall(function() isFriend = Player:IsFriendsWith(player.UserId) end)
+                end
+                if isFriend then continue end
+                local targetRoot = player.Character.HumanoidRootPart
+                if (localRoot.Position - targetRoot.Position).Magnitude <= AURA_RANGE then
+                    self:KillPlayer(player)
+                    self:GrabRelease(self.currentBlobman, targetRoot)
+                end
+            end
+        end
+    end)
+end
+
+function BlobmanKill:UpdateKillAuraConnection()
+    if self.isKillAura then
+        if not self.killAuraConnection then self:SetupKillAura() end
+    else
+        if self.killAuraConnection then
+            self.killAuraConnection:Disconnect()
+            self.killAuraConnection = nil
+        end
+    end
+end
+
+function BlobmanKill:StartSelectedKillLoop()
+    if self.selectedKillConnection then
+        self.selectedKillConnection:Disconnect()
+        self.selectedKillConnection = nil
+    end
+    if self.selectedPlayerConnection then
+        self.selectedPlayerConnection:Disconnect()
+        self.selectedPlayerConnection = nil
+    end
+    if not self.selectedPlayer then return end
+
+    task.spawn(function()
+        while self.isSelectedKill do
+            if self.selectedPlayer and self.selectedPlayer.Parent then
+                pcall(self.ProcessPlayer, self, self.selectedPlayer)
+            end
+            RunService.Heartbeat:Wait()
+        end
+    end)
+
+    self.selectedPlayerConnection = self.selectedPlayer.CharacterAdded:Connect(function()
+        if self.isSelectedKill then
+            task.spawn(function() pcall(self.ProcessPlayer, self, self.selectedPlayer) end)
+        end
+    end)
+
+    if self.selectedKillAuraConnection then
+        self.selectedKillAuraConnection:Disconnect()
+        self.selectedKillAuraConnection = nil
+    end
+    self.selectedKillAuraConnection = RunService.Heartbeat:Connect(function()
+        if not self.isSelectedKill or not self.selectedPlayer then return end
+        local targetPlayer = self.selectedPlayer
+        if not targetPlayer.Parent then return end
+        local localChar = Player.Character
+        if not localChar then return end
+        local localRoot = localChar:FindFirstChild("HumanoidRootPart")
+        if not localRoot then return end
+        local targetChar = targetPlayer.Character
+        if not targetChar then return end
+        local targetRoot = targetChar:FindFirstChild("HumanoidRootPart")
+        if not targetRoot then return end
+        if (localRoot.Position - targetRoot.Position).Magnitude <= SELECTED_AURA_RANGE then
+            local blobman = GetSeatedBlobman()
+            if not blobman then blobman = self:SpawnBlobman() end
+            if blobman then
+                self:KillPlayer(targetPlayer)
+                self:GrabRelease(blobman, targetRoot)
+            end
+        end
+    end)
+end
+
+function BlobmanKill:StopSelectedKill()
+    self.isSelectedKill = false
+    if self.selectedKillConnection then
+        self.selectedKillConnection:Disconnect()
+        self.selectedKillConnection = nil
+    end
+    if self.selectedPlayerConnection then
+        self.selectedPlayerConnection:Disconnect()
+        self.selectedPlayerConnection = nil
+    end
+    if self.selectedKillAuraConnection then
+        self.selectedKillAuraConnection:Disconnect()
+        self.selectedKillAuraConnection = nil
+    end
+end
+
+-- ============ タブ: プレイヤー ============
+local PlayerTab = Window:MakeTab({
+    Name = "プレイヤー",
+    Icon = "rbxassetid://7743871002",
+    PremiumOnly = false
+})
+
+PlayerTab:AddSection({Name = "移動速度"})
+PlayerTab:AddToggle({
+    Name = "移動速度",
+    Default = false,
+    Callback = function(v)
+        superSpeed = v
+    end
+})
+PlayerTab:AddSlider({
+    Name = "速度倍率",
+    Min = 0.1,
+    Max = 5,
+    Default = 0.15,
+    Increment = 0.01,
+    Callback = function(v)
+        Multiplier = v
+    end
+})
+
+PlayerTab:AddSection({Name = "無限ジャンプ"})
+PlayerTab:AddToggle({
+    Name = "無限ジャンプ",
+    Default = false,
+    Callback = function(v)
+        infiniteJump = v
+    end
+})
+PlayerTab:AddSlider({
+    Name = "ジャンプ力",
+    Min = 24,
+    Max = 1000,
+    Default = 24,
+    Increment = 10,
+    Callback = function(v)
+        local hum = Player.Character and Player.Character:FindFirstChildOfClass("Humanoid")
+        if hum then hum.JumpPower = v end
+    end
+})
+
+PlayerTab:AddSection({Name = "壁抜け"})
+PlayerTab:AddToggle({
+    Name = "壁抜け",
+    Default = false,
+    Callback = function(v)
+        noclip = v
+        if v then
+            noclipConn = RunService.Stepped:Connect(function()
+                if Player.Character then
+                    for _, part in pairs(Player.Character:GetDescendants()) do
+                        if part:IsA("BasePart") then part.CanCollide = false end
+                    end
+                end
+            end)
+        elseif noclipConn then
+            noclipConn:Disconnect()
+            noclipConn = nil
+        end
+    end
+})
+
+-- ============ タブ: アンチ ============
+local AntiTab = Window:MakeTab({
+    Name = "アンチ",
+    Icon = "rbxassetid://4483345998",
+    PremiumOnly = false
+})
+
+AntiTab:AddToggle({
+    Name = "アンチグラブ",
+    Default = false,
+    Callback = function(on)
+        AntiGrabActive = on
+        if not on and Player.Character then
+            for _, part in ipairs(Player.Character:GetChildren()) do
+                if part:IsA("BasePart") then part.Anchored = false end
+            end
+        end
+        OrionLib:MakeNotification({
+            Name = "アンチグラブ",
+            Content = on and "有効化（掴み自動脱出）" or "無効化",
+            Time = 2
+        })
+    end
+})
+
+-- アンチ爆発（ササミックスHUB FTAP 移植）
+AntiTab:AddToggle({
+    Name = "アンチ爆発",
+    Default = false,
+    Callback = function(on)
+        antiExplosionActive = on
+        if on then
+            if Player.Character then setupAntiExplosion(Player.Character) end
+            local conn = Player.CharacterAdded:Connect(function(char)
+                if antiExplosionConnection then antiExplosionConnection:Disconnect() end
+                setupAntiExplosion(char)
+            end)
+            -- 接続を保存（後で切断するためにグローバル変数に追加しても良いが、今回は使用しない）
+        else
+            if antiExplosionConnection then antiExplosionConnection:Disconnect(); antiExplosionConnection = nil end
+        end
+        OrionLib:MakeNotification({Name = "アンチ爆発", Content = on and "有効化" or "無効化", Time = 2})
+    end
+})
+
+-- ============ アンチラグドール（mahou hub スタイル） ============
+AntiTab:AddToggle({
+    Name = "アンチラグドール",
+    Default = false,
+    Callback = function(on)
+        antiRagdollActive = on
+        if antiRagdollConnection then
+            antiRagdollConnection:Disconnect()
+            antiRagdollConnection = nil
+        end
+        if on then
+            antiRagdollConnection = RunService.Heartbeat:Connect(function()
+                local char = Player.Character
+                if not char then return end
+                local hum = char:FindFirstChildOfClass("Humanoid")
+                if not hum then return end
+                -- 強制的にラグドール状態を解除
+                hum.PlatformStand = false
+                hum.Sit = false
+                -- 必要に応じて RagdollRemote を叩くことも可能（必要なら追加）
+                -- if RagdollRemote then RagdollRemote:FireServer(char.HumanoidRootPart, 0) end
+            end)
+            OrionLib:MakeNotification({Name = "アンチラグドール", Content = "有効化", Time = 2})
+        else
+            OrionLib:MakeNotification({Name = "アンチラグドール", Content = "無効化", Time = 2})
+        end
+    end
+})
+
+-- アンチブロブマン（ササミックスHUB FTAP 移植）
+AntiTab:AddToggle({
+    Name = "アンチブロブマン",
+    Default = false,
+    Callback = function(on)
+        antiBlobmanActive = on
+        SetAntiBlobman(on)
+        OrionLib:MakeNotification({Name = "アンチブロブマン", Content = on and "有効化" or "無効化", Time = 2})
+    end
+})
+
+AntiTab:AddDropdown({
+    Name = "アンチインプットラグ用アイテム",
+    Default = DropdownValues[1],
+    Options = DropdownValues,
+    Callback = function(Value)
+        SelectedToy = ToyList[Value]
+    end
+})
+
+AntiTab:AddToggle({
+    Name = "アンチインプットラグ",
+    Default = false,
+    Callback = function(on)
+        AntiInputLagActive = on
+        if on then
+            if AntiInputLagCoroutine then
+                coroutine.close(AntiInputLagCoroutine)
+                AntiInputLagCoroutine = nil
+            end
+            AntiInputLagCoroutine = coroutine.create(function()
+                local plr = Player
+                local char = plr.Character or plr.CharacterAdded:Wait()
+                local hrp = char:WaitForChild("HumanoidRootPart")
+                while AntiInputLagActive do
+                    local toysFolder = Workspace:FindFirstChild(plr.Name .. "SpawnedInToys")
+                    if not toysFolder then
+                        task.wait()
+                        continue
+                    end
+                    local toy = toysFolder:FindFirstChild(SelectedToy)
+                    if not toy then
+                        pcall(function()
+                            SpawnToyRF:InvokeServer(
+                                SelectedToy,
+                                hrp.CFrame * CFrame.new(0, 5, 0),
+                                Vector3.zero
+                            )
+                        end)
+                        local t0 = tick()
+                        repeat
+                            RunService.Heartbeat:Wait()
+                            toysFolder = Workspace:FindFirstChild(plr.Name .. "SpawnedInToys")
+                            toy = toysFolder and toysFolder:FindFirstChild(SelectedToy)
+                        until toy or tick() - t0 > 1 or not AntiInputLagActive
+                        if not toy then
+                            continue
+                        end
+                    end
+                    if toy and toy.Parent then
+                        local holdPart = toy:FindFirstChild("HoldPart")
+                        if holdPart then
+                            for i = 1, 80000000 do
+                                if not AntiInputLagActive then break end
+                                pcall(function()
+                                    holdPart.HoldItemRemoteFunction:InvokeServer(toy, char)
+                                end)
+                                pcall(function()
+                                    holdPart.DropItemRemoteFunction:InvokeServer(
+                                        toy,
+                                        hrp.CFrame * CFrame.new(0, 2000, 0),
+                                        Vector3.zero
+                                    )
+                                end)
+                            end
+                        end
+                    end
+                    task.wait()
+                end
+            end)
+            coroutine.resume(AntiInputLagCoroutine)
+            OrionLib:MakeNotification({
+                Name = "アンチインプットラグ",
+                Content = "有効化（超高速掴み＆離し連鎖）",
+                Time = 3
+            })
+        else
+            if AntiInputLagCoroutine then
+                coroutine.close(AntiInputLagCoroutine)
+                AntiInputLagCoroutine = nil
+            end
+            OrionLib:MakeNotification({
+                Name = "アンチインプットラグ",
+                Content = "無効化",
+                Time = 2
+            })
+        end
+    end
+})
+
+-- アンチペイント
+AntiTab:AddToggle({
+    Name = "アンチペイント",
+    Default = false,
+    Callback = function(on)
+        AntiPaintActive = on
+        if on then
+            deleteAllPaintParts()
+            watchNewPaintParts()
+            setTouchQuery(false)
+            OrionLib:MakeNotification({
+                Name = "アンチペイント",
+                Content = "有効化（ペイント自動削除＆自分への付着防止）",
+                Time = 3
+            })
+        else
+            restorePaintParts()
+            disconnectWatchers()
+            setTouchQuery(true)
+            OrionLib:MakeNotification({
+                Name = "アンチペイント",
+                Content = "無効化",
+                Time = 2
+            })
+        end
+    end
+})
+
+-- ============ タブ: 攻撃 ============
+local AttackTab = Window:MakeTab({
+    Name = "攻撃",
+    Icon = "rbxassetid://4483345998",
+    PremiumOnly = false
+})
+
+AttackTab:AddDropdown({
+    Name = "人選択",
+    Default = "",
+    Options = getPlayerList(),
+    Callback = function(Value)
+        selectedKickPlayer = getPlayerFromSelection(Value)
+        BlobmanKill.selectedPlayer = selectedKickPlayer
+    end
+})
+
+AttackTab:AddButton({
+    Name = "プレイヤーリスト更新",
+    Callback = function()
+        OrionLib:MakeNotification({
+            Name = "Info",
+            Content = "ドロップダウンを再度開いてリストを更新してください",
+            Image = "rbxassetid://4483345998",
+            Time = 5
+        })
+    end
+})
+
+-- スパムキック
+AttackTab:AddToggle({
+    Name = "スパムキック",
+    Default = false,
+    Callback = function(on)
+        kickLoopEnabled = on
+        if on and not selectedKickPlayer then
+            OrionLib:MakeNotification({Name = "Error", Content = "ターゲットを選択してください", Time = 3})
+            kickLoopEnabled = false
+            return
+        end
+        local char = Player.Character
+        local hum = char and char:FindFirstChild("Humanoid")
+        local seat = hum and hum.SeatPart
+        if on and (not seat or seat.Parent.Name ~= "CreatureBlobman") then
+            OrionLib:MakeNotification({Name = "Error", Content = "Blobmanに乗ってください", Time = 3})
+            kickLoopEnabled = false
+            return
+        end
+        if on then
+            local target = selectedKickPlayer
+            local GE = GrabEvents
+            local blob = seat.Parent
+            local blobRoot = blob:FindFirstChild("HumanoidRootPart") or blob.PrimaryPart
+            local scriptObj = blob:FindFirstChild("BlobmanSeatAndOwnerScript")
+            local CG = scriptObj and scriptObj:FindFirstChild("CreatureGrab")
+            local CD = scriptObj and scriptObj:FindFirstChild("CreatureDrop")
+            local R_Det = blob:FindFirstChild("RightDetector")
+            local R_Weld = R_Det and (R_Det:FindFirstChild("RightWeld") or R_Det:FindFirstChildWhichIsA("Weld"))
+            local SavedPos = blobRoot.CFrame
+            task.spawn(function()
+                local tChar = target.Character
+                local tRoot = tChar and tChar:FindFirstChild("HumanoidRootPart")
+                if tRoot and blobRoot then
+                    local bringStart = tick()
+                    while tick() - bringStart < 0.35 and kickLoopEnabled do
+                        blobRoot.CFrame = tRoot.CFrame
+                        pcall(function()
+                            if CG and R_Det then CG:FireServer(R_Det, tRoot, R_Weld) end
+                            GE.SetNetworkOwner:FireServer(tRoot, blobRoot.CFrame)
+                        end)
+                        RunService.Heartbeat:Wait()
+                    end
+                end
+                local packetTimer = 0
+                while kickLoopEnabled do
+                    if not target or not target.Parent or not target.Character then break end
+                    tChar = target.Character
+                    tRoot = tChar and tChar:FindFirstChild("HumanoidRootPart")
+                    local tHum = tChar and tChar:FindFirstChild("Humanoid")
+                    if tRoot and tHum and tHum.Health > 0 then
+                        blobRoot.CFrame = SavedPos
+                        local lockPos = SavedPos * CFrame.new(0, 23, 0)
+                        tRoot.CFrame = lockPos
+                        if tick() - packetTimer > 0.05 then
+                            packetTimer = tick()
+                            pcall(function()
+                                tHum.PlatformStand = true
+                                tHum.Sit = true
+                                GE.SetNetworkOwner:FireServer(tRoot, lockPos)
+                                if R_Det then CD:FireServer(R_Det:FindFirstChildWhichIsA("Weld")) end
+                                GE.DestroyGrabLine:FireServer(tRoot)
+                                if CG and R_Det then CG:FireServer(R_Det, tRoot, R_Weld) end
+                                GE.CreateGrabLine:FireServer(tRoot, Vector3.zero, tRoot.Position, false)
+                            end)
+                        end
+                    end
+                    RunService.Heartbeat:Wait()
+                end
+                blobRoot.CFrame = SavedPos
+            end)
+        end
+    end
+})
+
+-- スパムキックv2
+AttackTab:AddToggle({
+    Name = "スパムキックv2",
+    Default = false,
+    Callback = function(on)
+        kickLoopV2Enabled = on
+        if on and not selectedKickPlayer then
+            OrionLib:MakeNotification({Name = "Error", Content = "ターゲットを選択してください", Time = 3})
+            kickLoopV2Enabled = false
+            return
+        end
+        if not on then return end
+        local target = selectedKickPlayer
+        if target and target ~= Player and target.Character and target.Character:FindFirstChild("HumanoidRootPart") and Player.Character and Player.Character:FindFirstChild("HumanoidRootPart") then
+            local blobman = nil
+            local spawned = Workspace:FindFirstChild(Player.Name .. "SpawnedInToys")
+            if spawned then blobman = spawned:FindFirstChild("CreatureBlobman") end
+            if not blobman then
+                local mt = ReplicatedStorage:FindFirstChild("MenuToys")
+                local st = mt and mt:FindFirstChild("SpawnToyRemoteFunction")
+                if st then
+                    local myRoot = Player.Character and Player.Character:FindFirstChild("HumanoidRootPart")
+                    local spawnCF = myRoot and (myRoot.CFrame + Vector3.new(0, 5, 0)) or CFrame.new(0, 50, 0)
+                    st:InvokeServer("CreatureBlobman", spawnCF, Vector3.zero)
+                    task.wait(0.5)
+                    spawned = Workspace:FindFirstChild(Player.Name .. "SpawnedInToys")
+                    if spawned then blobman = spawned:FindFirstChild("CreatureBlobman") end
+                end
+            end
+            if not blobman then
+                for _, obj in ipairs(Workspace:GetChildren()) do
+                    if obj.Name == "CreatureBlobman" and obj:FindFirstChild("VehicleSeat") then
+                        blobman = obj
+                        break
+                    end
+                end
+            end
+            if blobman then
+                local scriptObj = blobman:FindFirstChild("BlobmanSeatAndOwnerScript")
+                local grabRemote = scriptObj and scriptObj:FindFirstChild("CreatureGrab")
+                local dropRemote = scriptObj and scriptObj:FindFirstChild("CreatureDrop")
+                local lDet = blobman:FindFirstChild("LeftDetector")
+                local rDet = blobman:FindFirstChild("RightDetector")
+                local lWeld = lDet and (lDet:FindFirstChild("LeftWeld") or lDet:FindFirstChild("RigidConstraint"))
+                local rWeld = rDet and (rDet:FindFirstChild("RightWeld") or rDet:FindFirstChild("RigidConstraint"))
+                local seat = blobman:FindFirstChild("VehicleSeat")
+                local hum = Player.Character and Player.Character:FindFirstChild("Humanoid")
+                if seat and hum then
+                    if seat.Occupant ~= hum then
+                        Player.Character.HumanoidRootPart.CFrame = seat.CFrame + Vector3.new(0, 2, 0)
+                        seat:Sit(hum)
+                        task.wait(0.3)
+                    end
+                end
+                if grabRemote and dropRemote and ((lDet and lWeld) or (rDet and rWeld)) then
+                    OrionLib:MakeNotification({ Name = "実行", Content = "スパムキックv2 Loop", Time = 3 })
+                    task.spawn(function()
+                        local GE = ReplicatedStorage:WaitForChild("GrabEvents")
+                        local blobRoot = blobman:FindFirstChild("HumanoidRootPart") or blobman.PrimaryPart
+                        local SavedPos = blobRoot.CFrame
+                        local Det = rDet or lDet
+                        local Weld = rWeld or lWeld
+                        local bringStart = tick()
+                        while tick() - bringStart < 0.35 do
+                            if not kickLoopV2Enabled or not blobman or not blobman.Parent then break end
+                            if target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
+                                local tRoot = target.Character.HumanoidRootPart
+                                blobRoot.CFrame = tRoot.CFrame
+                                blobRoot.AssemblyLinearVelocity = Vector3.zero
+                                pcall(function()
+                                    if Det then grabRemote:FireServer(Det, tRoot, Weld) end
+                                    GE.CreateGrabLine:FireServer(tRoot, Vector3.zero, tRoot.Position, false)
+                                    GE.SetNetworkOwner:FireServer(tRoot, blobRoot.CFrame)
+                                end)
+                            end
+                            RunService.Heartbeat:Wait()
+                        end
+                        if blobRoot then
+                            blobRoot.CFrame = SavedPos
+                            blobRoot.AssemblyLinearVelocity = Vector3.zero
+                            task.wait(0.05)
+                        end
+                        while kickLoopV2Enabled and blobman and blobman.Parent do
+                            if not target or not target.Parent or not target.Character then break end
+                            local tChar = target.Character
+                            local tRoot = tChar:FindFirstChild("HumanoidRootPart")
+                            local tHum = tChar:FindFirstChild("Humanoid")
+                            if tRoot and tHum and tHum.Health > 0 and blobRoot then
+                                blobRoot.CFrame = SavedPos
+                                blobRoot.AssemblyLinearVelocity = Vector3.zero
+                                local lockPos = SavedPos * CFrame.new(0, 23, 0)
+                                tRoot.CFrame = lockPos
+                                tRoot.AssemblyLinearVelocity = Vector3.zero
+                                tRoot.AssemblyAngularVelocity = Vector3.zero
+                                pcall(function()
+                                    tHum.PlatformStand = true
+                                    tHum.Sit = true
+                                    GE.SetNetworkOwner:FireServer(tRoot, lockPos)
+                                    local currentWeld = Det:FindFirstChild("RightWeld") or Det:FindFirstChild("LeftWeld") or Det:FindFirstChildWhichIsA("Weld") or Det:FindFirstChild("RigidConstraint")
+                                    if currentWeld then dropRemote:FireServer(currentWeld) end
+                                    GE.DestroyGrabLine:FireServer(tRoot)
+                                    if Det then grabRemote:FireServer(Det, tRoot, Weld) end
+                                    GE.CreateGrabLine:FireServer(tRoot, Vector3.zero, tRoot.Position, false)
+                                end)
+                            else
+                                if blobRoot then
+                                    blobRoot.CFrame = SavedPos
+                                    blobRoot.AssemblyLinearVelocity = Vector3.zero
+                                end
+                            end
+                            RunService.Heartbeat:Wait()
+                        end
+                        if blobRoot then
+                            blobRoot.CFrame = SavedPos
+                            blobRoot.AssemblyLinearVelocity = Vector3.zero
+                        end
+                    end)
+                else
+                    local missing = {}
+                    if not grabRemote then table.insert(missing, "CreatureGrab") end
+                    if not dropRemote then table.insert(missing, "CreatureDrop") end
+                    if not (lDet or rDet) then table.insert(missing, "Detector") end
+                    if not (lWeld or rWeld) then table.insert(missing, "Weld/Constraint") end
+                    OrionLib:MakeNotification({ Name = "エラー", Content = "不足: " .. table.concat(missing, ", "), Time = 5 })
+                end
+            else
+                OrionLib:MakeNotification({ Name = "エラー", Content = "Blobmanが見つかりません (おもちゃを出してください)", Time = 3 })
+            end
+        end
+    end
+})
+
+-- スパムキックv3（Ultimate版のループキックグラブ+ブロブを統合）
+AttackTab:AddToggle({
+    Name = "スパムキックv3",
+    Default = false,
+    Callback = function(on)
+        kickLoopV3Enabled = on
+        if on and not selectedKickPlayer then
+            OrionLib:MakeNotification({Name = "Error", Content = "ターゲットを選択してください", Time = 3})
+            kickLoopV3Enabled = false
+            return
+        end
+
+        if not on then return end
+
+        local targetName = selectedKickPlayer.Name
+        local GE = ReplicatedStorage:WaitForChild("GrabEvents")
+        local REMOTE_DELAY = 0.002
+        local lastRemote = 0
+
+        task.spawn(function()
+            local target = Players:FindFirstChild(targetName)
+            if not target then return end
+            local char = Player.Character or Player.CharacterAdded:Wait()
+            local hum = char:WaitForChild("Humanoid")
+            local seat = hum.SeatPart
+            if not seat or seat.Parent.Name ~= "CreatureBlobman" then
+                OrionLib:MakeNotification({Title = "スパムキックv3", Content = "CreatureBlobmanに乗ってからONにしてください", Time = 5})
+                kickLoopV3Enabled = false
+                return
+            end
+            local blob = seat.Parent
+            local blobRoot = blob:FindFirstChild("HumanoidRootPart") or blob.PrimaryPart
+            local scriptObj = blob:WaitForChild("BlobmanSeatAndOwnerScript")
+            local CG = scriptObj:WaitForChild("CreatureGrab")
+            local CD = scriptObj:WaitForChild("CreatureDrop")
+            local R_Det = blob:WaitForChild("RightDetector")
+            local savedPos = blobRoot.CFrame
+            local dragging = false
+            local grabStartTime = 0
+
+            while kickLoopV3Enabled do
+                local currentTarget = Players:FindFirstChild(targetName)
+                if not currentTarget then break end
+                char = Player.Character
+                hum = char and char:FindFirstChild("Humanoid")
+                seat = hum and hum.SeatPart
+                if not seat or seat.Parent.Name ~= "CreatureBlobman" then
+                    OrionLib:MakeNotification({Title = "スパムキックv3", Content = "Blobから降りました。停止します。", Time = 4})
+                    break
+                end
+                blob = seat.Parent
+                blobRoot = blob:FindFirstChild("HumanoidRootPart") or blob.PrimaryPart
+                local tChar = currentTarget.Character
+                local tRoot = tChar and tChar:FindFirstChild("HumanoidRootPart")
+                local tHum = tChar and tChar:FindFirstChild("Humanoid")
+
+                if tRoot and tHum and tHum.Health > 0 and blobRoot then
+                    tRoot.Velocity = Vector3.zero
+                    if not dragging then
+                        blobRoot.CFrame = tRoot.CFrame
+                        blobRoot.Velocity = Vector3.zero
+                        if tick() - lastRemote >= REMOTE_DELAY then
+                            lastRemote = tick()
+                            pcall(function()
+                                tHum.PlatformStand = true
+                                tHum.Sit = true
+                                GE.SetNetworkOwner:FireServer(tRoot, blobRoot.CFrame)
+                                GE.DestroyGrabLine:FireServer(tRoot)
+                            end)
+                        end
+                        if grabStartTime == 0 then grabStartTime = tick() end
+                        if tick() - grabStartTime > 0.35 then
+                            dragging = true
+                            grabStartTime = 0
+                            blobRoot.CFrame = savedPos
+                            blobRoot.Velocity = Vector3.zero
+                        end
+                    else
+                        blobRoot.CFrame = savedPos
+                        blobRoot.Velocity = Vector3.zero
+                        local lockPos = savedPos * CFrame.new(0, 23, 0)
+                        tRoot.CFrame = lockPos
+                        tHum.PlatformStand = true
+                        tHum.Sit = true
+                        if tick() - lastRemote >= REMOTE_DELAY then
+                            lastRemote = tick()
+                            pcall(function()
+                                GE.SetNetworkOwner:FireServer(tRoot, lockPos)
+                                GE.DestroyGrabLine:FireServer(tRoot)
+                                local weld = R_Det:FindFirstChild("RightWeld") or R_Det:FindFirstChildWhichIsA("Weld")
+                                if weld then
+                                    CD:FireServer(weld)
+                                    CG:FireServer(R_Det, tRoot, weld)
+                                end
+                            end)
+                        end
+                    end
+                else
+                    dragging, grabStartTime = false, 0
+                end
+                RunService.Heartbeat:Wait()
+            end
+            if blobRoot then
+                blobRoot.CFrame = savedPos
+                blobRoot.Velocity = Vector3.zero
+            end
+        end)
+    end
+})
+
+AttackTab:AddSlider({
+    Name = "Orbit半径",
+    Min = 5,
+    Max = 50,
+    Default = 19,
+    Increment = 1,
+    Callback = function(value) orbitRadius = value end
+})
+AttackTab:AddSlider({
+    Name = "Orbit速度",
+    Min = 1,
+    Max = 20,
+    Default = 8.5,
+    Increment = 0.5,
+    Callback = function(value) orbitSpeed = value end
+})
+AttackTab:AddSlider({
+    Name = "高度オフセット",
+    Min = -10,
+    Max = 10,
+    Default = 0,
+    Increment = 1,
+    Callback = function(value) orbitHeightOffset = value end
+})
+
+-- ドリフトキック
+AttackTab:AddToggle({
+    Name = "ドリフトキック",
+    Default = false,
+    Callback = function(on)
+        if on and not selectedKickPlayer then
+            OrionLib:MakeNotification({Name = "Error", Content = "ターゲットを選択してください", Time = 3})
+            return
+        end
+        driftKickEnabled = on
+        if not on then
+            if driftKickCoroutine then
+                coroutine.close(driftKickCoroutine)
+                driftKickCoroutine = nil
+            end
+            OrionLib:MakeNotification({Name = "ドリフトキック", Content = "停止しました", Time = 2})
+            return
+        end
+        local target = selectedKickPlayer
+        local myChar = Player.Character
+        local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+        if not myRoot then
+            OrionLib:MakeNotification({Name = "Error", Content = "自分のキャラクターが見つかりません", Time = 3})
+            driftKickEnabled = false
+            return
+        end
+        local blobman = nil
+        local spawned = Workspace:FindFirstChild(Player.Name .. "SpawnedInToys")
+        if spawned then blobman = spawned:FindFirstChild("CreatureBlobman") end
+        if not blobman then
+            local mt = ReplicatedStorage:FindFirstChild("MenuToys")
+            local st = mt and mt:FindFirstChild("SpawnToyRemoteFunction")
+            if st then
+                local spawnCF = myRoot.CFrame + Vector3.new(0, 5, 0)
+                st:InvokeServer("CreatureBlobman", spawnCF, Vector3.zero)
+                task.wait(0.8)
+                spawned = Workspace:FindFirstChild(Player.Name .. "SpawnedInToys")
+                if spawned then blobman = spawned:FindFirstChild("CreatureBlobman") end
+            end
+        end
+        if not blobman then
+            for _, obj in ipairs(Workspace:GetChildren()) do
+                if obj.Name == "CreatureBlobman" and obj:FindFirstChild("VehicleSeat") then
+                    blobman = obj
+                    break
+                end
+            end
+        end
+        if not blobman then
+            OrionLib:MakeNotification({Name = "Error", Content = "Blobmanの取得・生成に失敗しました", Time = 3})
+            driftKickEnabled = false
+            return
+        end
+        local seat = blobman:FindFirstChild("VehicleSeat")
+        local hum = Player.Character:FindFirstChild("Humanoid")
+        if seat and hum then
+            if seat.Occupant ~= hum then
+                Player.Character.HumanoidRootPart.CFrame = seat.CFrame + Vector3.new(0, 2, 0)
+                task.wait(0.2)
+                seat:Sit(hum)
+                task.wait(0.5)
+            end
+        end
+        local scriptObj = blobman:FindFirstChild("BlobmanSeatAndOwnerScript")
+        local grabRemote = scriptObj and scriptObj:FindFirstChild("CreatureGrab")
+        local dropRemote = scriptObj and scriptObj:FindFirstChild("CreatureDrop")
+        local lDet = blobman:FindFirstChild("LeftDetector")
+        local rDet = blobman:FindFirstChild("RightDetector")
+        local lWeld = lDet and (lDet:FindFirstChild("LeftWeld") or lDet:FindFirstChild("RigidConstraint"))
+        local rWeld = rDet and (rDet:FindFirstChild("RightWeld") or rDet:FindFirstChild("RigidConstraint"))
+        local Det = rDet or lDet
+        local Weld = rWeld or lWeld
+        if not (GrabEvents and grabRemote and dropRemote and Det and Weld) then
+            OrionLib:MakeNotification({Name = "Error", Content = "必要なRemoteEventやDetectorが見つかりません", Time = 5})
+            driftKickEnabled = false
+            return
+        end
+        driftKickLoopId = driftKickLoopId + 1
+        local myLoopId = driftKickLoopId
+        OrionLib:MakeNotification({Name = "実行", Content = "drift kick を開始します", Time = 3})
+        driftKickCoroutine = coroutine.create(function()
+            local blobRoot = blobman:FindFirstChild("HumanoidRootPart") or blobman.PrimaryPart
+            local GE = GrabEvents
+            local bringStart = tick()
+            while tick() - bringStart < 0.35 do
+                if myLoopId ~= driftKickLoopId or not driftKickEnabled or not blobman or not blobman.Parent then return end
+                if target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
+                    local tRoot = target.Character.HumanoidRootPart
+                    blobRoot.CFrame = tRoot.CFrame
+                    blobRoot.AssemblyLinearVelocity = Vector3.zero
+                    pcall(function()
+                        if Det then grabRemote:FireServer(Det, tRoot, Weld) end
+                        GE.CreateGrabLine:FireServer(tRoot, Vector3.zero, tRoot.Position, false)
+                        GE.SetNetworkOwner:FireServer(tRoot, blobRoot.CFrame)
+                    end)
+                end
+                RunService.Heartbeat:Wait()
+            end
+            if not target.Character or not target.Character:FindFirstChild("HumanoidRootPart") then return end
+            local SavedPos = target.Character.HumanoidRootPart.CFrame
+            local targetCenterCFrame = SavedPos + Vector3.new(0, 30, 0)
+            local lastTime = tick()
+            local lastDropTime = tick()
+            local dropCount = 0
+            while driftKickEnabled and blobman and blobman.Parent do
+                if myLoopId ~= driftKickLoopId then break end
+                if not target or not target.Parent or not target.Character then break end
+                local tChar = target.Character
+                local tRoot = tChar:FindFirstChild("HumanoidRootPart")
+                local tHum = tChar:FindFirstChild("Humanoid")
+                if dropCount < 2 and (tick() - lastDropTime) > 0.8 then
+                    dropCount = dropCount + 1
+                    pcall(function()
+                        local currentWeld = Det:FindFirstChild("RightWeld") or Det:FindFirstChild("LeftWeld") or Det:FindFirstChildWhichIsA("Weld") or Det:FindFirstChild("RigidConstraint")
+                        if currentWeld then
+                            dropRemote:FireServer(currentWeld)
+                        end
+                        GE.DestroyGrabLine:FireServer(tRoot)
+                    end)
+                    blobRoot.CFrame = SavedPos
+                    blobRoot.AssemblyLinearVelocity = Vector3.zero
+                    task.wait(0.1)
+                    local reCaptureStart = tick()
+                    while tick() - reCaptureStart < 0.35 do
+                        if myLoopId ~= driftKickLoopId or not driftKickEnabled or not blobman or not blobman.Parent then break end
+                        if target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
+                            local currentTRoot = target.Character.HumanoidRootPart
+                            blobRoot.CFrame = currentTRoot.CFrame
+                            blobRoot.AssemblyLinearVelocity = Vector3.zero
+                            pcall(function()
+                                if Det then grabRemote:FireServer(Det, currentTRoot, Weld) end
+                                GE.CreateGrabLine:FireServer(currentTRoot, Vector3.zero, currentTRoot.Position, false)
+                                GE.SetNetworkOwner:FireServer(currentTRoot, blobRoot.CFrame)
+                            end)
+                        end
+                        RunService.Heartbeat:Wait()
+                    end
+                    lastTime = tick()
+                    lastDropTime = tick()
+                end
+                if tRoot and tHum and tHum.Health > 0 and blobRoot then
+                    local currentTime = tick()
+                    local dt = currentTime - lastTime
+                    lastTime = currentTime
+                    orbitAngle = orbitAngle + (orbitSpeed * dt)
+                    local offsetX = math.cos(orbitAngle) * orbitRadius
+                    local offsetZ = math.sin(orbitAngle) * orbitRadius
+                    local blobPos = targetCenterCFrame.Position + Vector3.new(offsetX, orbitHeightOffset, offsetZ)
+                    blobRoot.CFrame = CFrame.new(blobPos, targetCenterCFrame.Position)
+                    blobRoot.AssemblyLinearVelocity = Vector3.zero
+                    blobRoot.AssemblyAngularVelocity = Vector3.zero
+                    tRoot.CFrame = targetCenterCFrame
+                    tRoot.AssemblyLinearVelocity = Vector3.zero
+                    tRoot.AssemblyAngularVelocity = Vector3.zero
+                    pcall(function()
+                        tHum.PlatformStand = true
+                        tHum.Sit = true
+                        GE.SetNetworkOwner:FireServer(tRoot, targetCenterCFrame)
+                        local currentWeld = Det:FindFirstChild("RightWeld") or Det:FindFirstChild("LeftWeld") or Det:FindFirstChildWhichIsA("Weld") or Det:FindFirstChild("RigidConstraint")
+                        if currentWeld then
+                            dropRemote:FireServer(currentWeld)
+                        end
+                        GE.DestroyGrabLine:FireServer(tRoot)
+                        if Det then grabRemote:FireServer(Det, tRoot, Weld) end
+                        GE.CreateGrabLine:FireServer(tRoot, Vector3.zero, targetCenterCFrame.Position, false)
+                    end)
+                else
+                    break
+                end
+                RunService.Heartbeat:Wait()
+            end
+            if blobRoot and SavedPos then
+                pcall(function()
+                    local currentWeld = Det:FindFirstChild("RightWeld") or Det:FindFirstChild("LeftWeld") or Det:FindFirstChildWhichIsA("Weld") or Det:FindFirstChild("RigidConstraint")
+                    if currentWeld then dropRemote:FireServer(currentWeld) end
+                    if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
+                        GE.DestroyGrabLine:FireServer(target.Character.HumanoidRootPart)
+                    end
+                end)
+                blobRoot.CFrame = SavedPos
+                blobRoot.AssemblyLinearVelocity = Vector3.zero
+            end
+            driftKickCoroutine = nil
+        end)
+        coroutine.resume(driftKickCoroutine)
+    end
+})
+
+-- ブロブマンキル（Selected Kill）トグル
+AttackTab:AddToggle({
+    Name = "ブロブマンキル",
+    Default = false,
+    Callback = function(on)
+        if on then
+            if not selectedKickPlayer then
+                OrionLib:MakeNotification({Name = "エラー", Content = "ターゲットを選択してください", Time = 3})
+                return
+            end
+            BlobmanKill.selectedPlayer = selectedKickPlayer
+            BlobmanKill.isSelectedKill = true
+            BlobmanKill:StartSelectedKillLoop()
+            OrionLib:MakeNotification({Name = "ブロブマンキル", Content = "有効化（ターゲット: " .. selectedKickPlayer.Name .. "）", Time = 2})
+        else
+            BlobmanKill:StopSelectedKill()
+            OrionLib:MakeNotification({Name = "ブロブマンキル", Content = "無効化", Time = 2})
+        end
+    end
+})
+
+-- キック（トグル）
+AttackTab:AddToggle({
+    Name = "キック",
+    Default = false,
+    Callback = function(on)
+        kickToggleActive = on
+        if on then
+            if not selectedKickPlayer then
+                OrionLib:MakeNotification({Name = "エラー", Content = "ターゲットを選択してください", Time = 3})
+                kickToggleActive = false
+                return
+            end
+            task.spawn(function()
+                while kickToggleActive do
+                    if selectedKickPlayer and IsValidTarget(selectedKickPlayer) then
+                        local root = selectedKickPlayer.Character:FindFirstChild("HumanoidRootPart")
+                        local initialPos = Player.Character.HumanoidRootPart.CFrame
+                        EnableLoopNoclip()
+                        for i = 1, 40 do
+                            if not IsValidTarget(selectedKickPlayer) or not kickToggleActive then break end
+                            SNOWship(root)
+                            if CheckNetworkOwnership(selectedKickPlayer) or root.AssemblyLinearVelocity.Magnitude > 300 then
+                                CreateSkyVelocity(root)
+                                pcall(function() destroyGrabLineEvent:FireServer(root) end)
+                                break
+                            end
+                            task.wait(0.03)
+                            TeleportPlayerLoop(root.CFrame * CFrame.new(0, -8, 0))
+                        end
+                        DisableLoopNoclip()
+                        TeleportPlayerLoop(initialPos)
+                    else
+                        kickToggleActive = false
+                        break
+                    end
+                    task.wait(0.5)
+                end
+            end)
+            OrionLib:MakeNotification({Name = "キック", Content = "ループ開始", Time = 2})
+        else
+            OrionLib:MakeNotification({Name = "キック", Content = "ループ停止", Time = 2})
+        end
+    end
+})
+
+-- キルv2（Ultimate版のループキルを統合）
+AttackTab:AddToggle({
+    Name = "キルv2",
+    Default = false,
+    Callback = function(on)
+        kickV2ToggleActive = on
+        if on then
+            if not selectedKickPlayer then
+                OrionLib:MakeNotification({Name = "エラー", Content = "ターゲットを選択してください", Time = 3})
+                kickV2ToggleActive = false
+                return
+            end
+
+            task.spawn(function()
+                local target = selectedKickPlayer
+                local GE = ReplicatedStorage:WaitForChild("GrabEvents")
+                local RagdollRemote = ReplicatedStorage:FindFirstChild("CharacterEvents") and ReplicatedStorage.CharacterEvents:FindFirstChild("RagdollRemote")
+
+                while kickV2ToggleActive and target and target.Parent do
+                    if not target.Character then task.wait(0.3) continue end
+                    local myChar = Player.Character
+                    local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+                    local tChar = target.Character
+                    local tRoot = tChar and tChar:FindFirstChild("HumanoidRootPart")
+                    local tHum = tChar and tChar:FindFirstChild("Humanoid")
+
+                    if tRoot and tHum and tHum.Health > 0 and myRoot then
+                        local currentPos = myRoot.CFrame
+                        local attackStart = tick()
+                        while tick() - attackStart < 0.7 and kickV2ToggleActive do
+                            if not tRoot.Parent then break end
+                            myRoot.CFrame = tRoot.CFrame * CFrame.new(0, 0, 2)
+                            myRoot.Velocity = Vector3.zero
+                            pcall(function()
+                                for i = 1, 3 do GE.SetNetworkOwner:FireServer(tRoot, myRoot.CFrame) end
+                                tHum:ChangeState(Enum.HumanoidStateType.Dead)
+                                tHum.Health = 0
+                                if RagdollRemote then RagdollRemote:FireServer(tRoot, 0) end
+                                GE.CreateGrabLine:FireServer(tRoot, Vector3.zero, tRoot.Position, false)
+                                GE.DestroyGrabLine:FireServer(tRoot)
+                            end)
+                            RunService.Heartbeat:Wait()
+                        end
+                        if myRoot then
+                            myRoot.CFrame = currentPos
+                            myRoot.Velocity = Vector3.zero
+                        end
+                        task.wait(0.45)
+                    else
+                        task.wait(0.3)
+                    end
+                end
+            end)
+
+            OrionLib:MakeNotification({Name = "キルv2", Content = "ループ開始（高速キル）", Time = 2})
+        else
+            OrionLib:MakeNotification({Name = "キルv2", Content = "ループ停止", Time = 2})
+        end
+    end
+})
+
+-- キックグラブスパム（Ultimate版の所有権キックを統合）
+AttackTab:AddToggle({
+    Name = "キックグラブスパム",
+    Default = false,
+    Callback = function(on)
+        kickGrabSpamActive = on
+        if on then
+            if not selectedKickPlayer then
+                OrionLib:MakeNotification({Name = "エラー", Content = "ターゲットを選択してください", Time = 3})
+                kickGrabSpamActive = false
+                return
+            end
+
+            task.spawn(function()
+                local target = selectedKickPlayer
+                local GE = ReplicatedStorage:WaitForChild("GrabEvents")
+                local myChar = Player.Character
+                local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+                if not myRoot then kickGrabSpamActive = false return end
+
+                local savedPos = myRoot.CFrame
+                local dragging = false
+                local grabStartTime = 0
+                local checkStartTime = 0
+                local currentFPS = 60
+                local fpsConnection = RunService.RenderStepped:Connect(function(dt) currentFPS = 1 / dt end)
+                local bodyPos, bodyGyro = nil, nil
+
+                local function cleanupBodies()
+                    pcall(function()
+                        if bodyPos then bodyPos:Destroy() bodyPos = nil end
+                        if bodyGyro then bodyGyro:Destroy() bodyGyro = nil end
+                    end)
+                end
+
+                local function createBodies(targetRoot, pos)
+                    cleanupBodies()
+                    for _, v in pairs(targetRoot:GetChildren()) do
+                        if v:IsA("BodyPosition") or v:IsA("BodyGyro") then v:Destroy() end
+                    end
+                    bodyPos = Instance.new("BodyPosition")
+                    bodyPos.MaxForce = Vector3.new(9e9, 9e9, 9e9)
+                    bodyPos.D = 100
+                    bodyPos.Position = pos
+                    bodyPos.Parent = targetRoot
+                    bodyGyro = Instance.new("BodyGyro")
+                    bodyGyro.MaxTorque = Vector3.new(9e9, 9e9, 9e9)
+                    bodyGyro.D = 100
+                    bodyGyro.CFrame = CFrame.new(pos)
+                    bodyGyro.Parent = targetRoot
+                end
+
+                while kickGrabSpamActive and target.Parent do
+                    local tChar = target.Character
+                    local tRoot = tChar and tChar:FindFirstChild("HumanoidRootPart")
+                    local tHum = tChar and tChar:FindFirstChild("Humanoid")
+                    myChar = Player.Character
+                    myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+
+                    if tRoot and tHum and tHum.Health > 0 and myRoot then
+                        if not dragging then
+                            myRoot.CFrame = tRoot.CFrame * CFrame.new(0, 0, 3)
+                            cleanupBodies()
+                            pcall(function()
+                                tHum.PlatformStand = true
+                                tHum.Sit = true
+                                GE.SetNetworkOwner:FireServer(tRoot, tRoot.CFrame)
+                                GE.SetNetworkOwner:FireServer(tRoot, tRoot.CFrame)
+                                GE.DestroyGrabLine:FireServer(tRoot)
+                            end)
+                            if grabStartTime == 0 then grabStartTime = tick() end
+                            if tick() - grabStartTime > 0.35 then
+                                dragging = true
+                                grabStartTime = 0
+                                checkStartTime = tick()
+                                createBodies(tRoot, (savedPos * CFrame.new(0, 17, 0)).Position)
+                            end
+                        else
+                            myRoot.CFrame = savedPos
+                            local lockPos = savedPos * CFrame.new(0, 17, 0)
+                            if bodyPos and bodyPos.Parent then
+                                bodyPos.Position = lockPos.Position
+                                if bodyGyro then bodyGyro.CFrame = lockPos end
+                            else
+                                createBodies(tRoot, lockPos.Position)
+                            end
+                            tHum.PlatformStand = true
+                            pcall(function()
+                                local fires = (currentFPS > 200) and 2 or (currentFPS >= 155 and 3 or 4)
+                                for i = 1, fires do GE.SetNetworkOwner:FireServer(tRoot, lockPos) end
+                                GE.DestroyGrabLine:FireServer(tRoot)
+                            end)
+                            if checkStartTime > 0 and tick() - checkStartTime > 0.30 then
+                                if (tRoot.Position - lockPos.Position).Magnitude > 10 then
+                                    dragging = false
+                                    grabStartTime, checkStartTime = 0, 0
+                                    cleanupBodies()
+                                else
+                                    checkStartTime = tick()
+                                end
+                            end
+                        end
+                    else
+                        dragging, grabStartTime, checkStartTime = false, 0, 0
+                        cleanupBodies()
+                    end
+                    RunService.Heartbeat:Wait()
+                end
+                fpsConnection:Disconnect()
+                cleanupBodies()
+                if myRoot then myRoot.CFrame = savedPos end
+            end)
+
+            OrionLib:MakeNotification({Name = "キックグラブスパム", Content = "ループ開始（所有権キック）", Time = 2})
+        else
+            OrionLib:MakeNotification({Name = "キックグラブスパム", Content = "ループ停止", Time = 2})
+        end
+    end
+})
+
+-- キル（トグル）
+AttackTab:AddToggle({
+    Name = "キル",
+    Default = false,
+    Callback = function(on)
+        if on then
+            if not selectedKickPlayer then
+                OrionLib:MakeNotification({Name = "エラー", Content = "ターゲットを選択してください", Time = 3})
+                return
+            end
+            task.spawn(function()
+                while true do
+                    if not on then break end
+                    if selectedKickPlayer and IsValidTarget(selectedKickPlayer) then
+                        local root = selectedKickPlayer.Character:FindFirstChild("HumanoidRootPart")
+                        local humanoid = selectedKickPlayer.Character:FindFirstChildOfClass("Humanoid")
+                        local initialPos = Player.Character.HumanoidRootPart.CFrame
+                        EnableLoopNoclip()
+                        for i = 1, 30 do
+                            if not IsValidTarget(selectedKickPlayer) then break end
+                            SNOWship(root)
+                            if CheckNetworkOwnership(selectedKickPlayer) or root.AssemblyLinearVelocity.Magnitude > 300 then
+                                CreateSkyVelocity(root)
+                                pcall(function() destroyGrabLineEvent:FireServer(root) end)
+                                break
+                            end
+                            task.wait(0.03)
+                            TeleportPlayerLoop(root.CFrame * CFrame.new(0, -8, 0))
+                            humanoid.BreakJointsOnDeath = false
+                            humanoid:ChangeState(Enum.HumanoidStateType.Dead)
+                            humanoid.Jump = true
+                            humanoid.Sit = false
+                        end
+                        DisableLoopNoclip()
+                        TeleportPlayerLoop(initialPos)
+                    else
+                        break
+                    end
+                    task.wait(0.5)
+                end
+            end)
+            OrionLib:MakeNotification({Name = "キル", Content = "ループ開始", Time = 2})
+        else
+            OrionLib:MakeNotification({Name = "キル", Content = "ループ停止", Time = 2})
+        end
+    end
+})
+
+-- キルオーラ
+AttackTab:AddToggle({
+    Name = "キルオーラ",
+    Default = false,
+    Callback = function(on)
+        BlobmanKill.isKillAura = on
+        if on then
+            BlobmanKill:SpawnBlobman()
+            BlobmanKill:SetupKillAura()
+            OrionLib:MakeNotification({Name = "キルオーラ", Content = "有効化（範囲内自動キル）", Time = 2})
+        else
+            BlobmanKill:UpdateKillAuraConnection()
+            OrionLib:MakeNotification({Name = "キルオーラ", Content = "無効化", Time = 2})
+        end
+    end
+})
+
+-- ============ タブ: サーバー ============
+local ServerTab = Window:MakeTab({
+    Name = "サーバー",
+    Icon = "rbxassetid://4483345998",
+    PremiumOnly = false
+})
+
+ServerTab:AddButton({
+    Name = "キックオール",
+    Callback = KickAll
+})
+
+-- キルオール
+ServerTab:AddToggle({
+    Name = "キルオール",
+    Default = false,
+    Callback = function(on)
+        BlobmanKill.isRunning = on
+        if on then
+            BlobmanKill:SpawnBlobman()
+            task.spawn(function()
+                while BlobmanKill.isRunning do
+                    BlobmanKill:ProcessAllPlayers()
+                    task.wait()
+                end
+            end)
+            OrionLib:MakeNotification({Name = "キルオール", Content = "有効化（全員キルループ）", Time = 2})
+        else
+            OrionLib:MakeNotification({Name = "キルオール", Content = "無効化", Time = 2})
+        end
+    end
+})
+
+ServerTab:AddToggle({
+    Name = "ホワイトリスト（フレンド除外）",
+    Default = false,
+    Callback = function(Value)
+        whitelistFriends = Value
+    end
+})
+
+-- ============ Destroy Server（ラグ攻撃）セクション ============
+ServerTab:AddSection({ Name = "Destroy Server (ラグ攻撃)" })
+
+local selectedHeight = "Spawn"
+
+ServerTab:AddDropdown({
+    Name = "移動先＆モード",
+    Default = "Spawn (通常)",
+    Options = {"Spawn (通常)", "Heaven (天国)"},
+    Callback = function(Value)
+        selectedHeight = (Value == "Heaven (天国)") and "Heaven" or "Spawn"
+    end
+})
+
+local lineLagEnabled = false
+local lineLagThread = nil
+
+local function startLineLag()
+    if lineLagEnabled then return end
+    lineLagEnabled = true
+    lineLagThread = coroutine.create(function()
+        if not GrabEvents then return end
+        local createLine = GrabEvents:FindFirstChild("CreateGrabLine")
+        if not createLine then return end
+        while lineLagEnabled do
+            local spawnLocation = Workspace:FindFirstChild("SpawnLocation") or Workspace:FindFirstChild("Spawn") or (Player.Character and Player.Character:FindFirstChild("HumanoidRootPart"))
+            if spawnLocation then
+                local randomX = math.random(-1e9, 1e9)
+                local randomZ = math.random(-1e9, 1e9)
+                local directions = {
+                    CFrame.new(randomX, 0, randomZ),
+                    CFrame.new(-randomX, 0, -randomZ),
+                    CFrame.new(randomX, 0, -randomZ),
+                    CFrame.new(-randomX, 0, randomZ)
+                }
+                for i = 1, 4 do
+                    for _, pos in pairs(directions) do
+                        createLine:FireServer(spawnLocation, pos)
+                    end
+                end
+            end
+            task.wait(0)
+        end
+    end)
+    coroutine.resume(lineLagThread)
+end
+
+local function stopLineLag()
+    lineLagEnabled = false
+    if lineLagThread then
+        coroutine.close(lineLagThread)
+        lineLagThread = nil
+    end
+end
+
+ServerTab:AddButton({
+    Name = "Destroy Server",
+    Callback = function()
+        task.spawn(function()
+            local height = (selectedHeight == "Heaven") and 1e9 or 35
+            startLineLag()
+            task.wait(1)
+            local players = {}
+            for _, plr in ipairs(Players:GetPlayers()) do
+                if plr ~= Player then table.insert(players, plr) end
+            end
+            if #players == 0 then
+                stopLineLag()
+                OrionLib:MakeNotification({Title = "Destroy", Content = "対象プレイヤーがいません", Time = 3})
+                return
+            end
+            local myChar = Player.Character
+            local myHrp = myChar and myChar:FindFirstChild("HumanoidRootPart")
+            if not myHrp then stopLineLag(); return end
+            local playerData = {}
+            for _, plr in ipairs(players) do
+                local char = plr.Character
+                local hrp = char and char:FindFirstChild("HumanoidRootPart")
+                if hrp then table.insert(playerData, {player = plr, hrp = hrp}) end
+            end
+            for _, data in ipairs(playerData) do
+                pcall(function()
+                    myHrp.CFrame = data.hrp.CFrame * CFrame.new(0, 5, 5)
+                    myHrp.AssemblyLinearVelocity = Vector3.zero
+                end)
+                task.wait(0.2)
+                if setNetworkOwnerEvent and data.hrp then
+                    pcall(function() setNetworkOwnerEvent:FireServer(data.hrp, data.hrp.CFrame) end)
+                end
+                task.wait()
+            end
+            local radius = 40
+            local angleStep = (math.pi * 2) / #playerData
+            for idx, data in ipairs(playerData) do
+                local angle = (idx - 1) * angleStep
+                local x = math.cos(angle) * radius
+                local z = math.sin(angle) * radius
+                pcall(function()
+                    data.hrp.CFrame = CFrame.new(x, height, z)
+                    data.hrp.AssemblyLinearVelocity = Vector3.zero
+                end)
+                for j = 1, 3 do
+                    local bp = Instance.new("BodyPosition")
+                    bp.MaxForce = Vector3.new(1e9, 1e9, 1e9)
+                    bp.P = 40000000
+                    bp.Position = Vector3.new(x + math.random(-3, 3), height + math.random(-3, 3), z + math.random(-3, 3))
+                    bp.Parent = data.hrp
+                    task.delay(2, function() pcall(function() bp:Destroy() end) end)
+                end
+                task.wait()
+            end
+            for i = 1, 8 do
+                for _, data in ipairs(playerData) do
+                    if destroyGrabLineEvent and data.hrp then
+                        pcall(function() destroyGrabLineEvent:FireServer(data.hrp) end)
+                    end
+                end
+                task.wait(0.3)
+            end
+            task.spawn(function()
+                for _ = 1, 20 do
+                    for _, data in ipairs(playerData) do
+                        if setNetworkOwnerEvent and data.hrp then
+                            pcall(function() setNetworkOwnerEvent:FireServer(data.hrp, data.hrp.CFrame) end)
+                        end
+                    end
+                    task.wait(0.05)
+                end
+            end)
+            OrionLib:MakeNotification({Title = "Destroy", Content = "サーバーラグを実行中です。", Time = 2})
+        end)
+    end
+})
+
+ServerTab:AddButton({
+    Name = "Stop Lag (ラグを止める)",
+    Callback = function()
+        stopLineLag()
+        OrionLib:MakeNotification({Title = "Lag", Content = "ラグ処理を停止しました。", Time = 2})
+    end
+})
+
+-- ============ タブ: スクリプト（青色） ============
+local ScriptTab = Window:MakeTab({
+    Name = "スクリプト",
+    Icon = "rbxassetid://4483345998",
+    PremiumOnly = false,
+    Color = Color3.fromRGB(0, 100, 255)
+})
+
+ScriptTab:AddButton({
+    Name = "Bloody",
+    Callback = function()
+        OrionLib:MakeNotification({Name = "Bloody", Content = "Bloody スクリプトを実行中...", Time = 2})
+        pcall(function()
+            loadstring(game:HttpGet("https://raw.githubusercontent.com/celestialteam/youhateme/refs/heads/main/BloodyPremiumCrack.lua"))()
+        end)
+    end
+})
+
+ScriptTab:AddButton({
+    Name = "YouTube",
+    Callback = function()
+        OrionLib:MakeNotification({Name = "YouTube", Content = "YouTube Music Player を実行中...", Time = 2})
+        pcall(function()
+            loadstring(game:HttpGet("https://rawscripts.net/raw/Universal-Script-YouTube-Music-Player-V8-236600"))()
+        end)
+    end
+})
+
+ScriptTab:AddButton({
+    Name = "クロスケvfly",
+    Callback = function()
+        OrionLib:MakeNotification({Name = "クロスケvfly", Content = "VFly スクリプトを実行中...", Time = 2})
+        pcall(function()
+            loadstring(game:HttpGet("https://rawscripts.net/raw/Universal-Script-VFly-gui-and-noclip-78112"))()
+        end)
+    end
+})
+
+ScriptTab:AddButton({
+    Name = "エモート",
+    Callback = function()
+        OrionLib:MakeNotification({Name = "エモート", Content = "Energize エモートメニューを実行中...", Time = 2})
+        pcall(function()
+            loadstring(game:HttpGet("https://pastefy.app/qFxXvLwJ/raw"))()
+        end)
+    end
+})
+
+OrionLib:Init()
