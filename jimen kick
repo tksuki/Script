@@ -1,0 +1,221 @@
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+
+local Window = Rayfield:CreateWindow({
+    Name = "ハブ",
+    LoadingTitle = "インターフェース",
+    LoadingSubtitle = "作成者:",
+    Theme = "Default",
+    DisableRayfieldPrompts = false,
+    DisableBuildWarnings = false,
+    ConfigurationSaving = {
+        Enabled = false,
+        FolderName = "GrabDetector",
+        FileName = "PlayerHubConfig"
+    },
+    Discord = {
+        Enabled = false,
+        Invite = "noinvitelink",
+        RememberJoins = true
+    },
+    KeySystem = false,
+})
+
+local BreakTab = Window:CreateTab("破壊機能", 16570630989)
+
+-- =========================================
+-- リモートイベント・関数の共通取得
+-- =========================================
+local SetNetworkOwner = nil
+local SpawnToyRemote = nil
+local DestroyToyRemote = nil
+
+for _, v in pairs(game:GetService("ReplicatedStorage"):GetDescendants()) do
+    if v:IsA("RemoteEvent") then
+        if v.Name == "SetNetworkOwner" then
+            SetNetworkOwner = v
+        elseif v.Name == "DestroyToy" then
+            DestroyToyRemote = v
+        end
+    elseif v:IsA("RemoteFunction") and v.Name == "SpawnToyRemoteFunction" then
+        SpawnToyRemote = v
+    end
+end
+
+local stickyEvent = game:GetService("ReplicatedStorage"):WaitForChild("PlayerEvents"):WaitForChild("StickyPartEvent")
+
+-- =========================================
+-- 手裏剣をスポーンして対象パーツを飛ばす共通関数 (オフセット変更済み)
+-- =========================================
+local function spawnAndBreakPart(targetPart, shurikenTable)
+    if not targetPart or targetPart:IsA("Terrain") then return end
+
+    task.spawn(function()
+        local plr = game.Players.LocalPlayer
+        local canSpawn = plr:WaitForChild("CanSpawnToy")
+        local hrp = plr.Character and plr.Character:FindFirstChild("HumanoidRootPart")
+        if not hrp then return end
+
+        -- コンテナ（手裏剣がスポーンする場所）の特定
+        local function CheckForHome()
+            if not workspace.PlotItems.PlayersInPlots:FindFirstChild(plr.Name) then return false end
+            for _, v in pairs(workspace.Plots:GetChildren()) do
+                local sign = v:FindFirstChild("PlotSign")
+                local owners = sign and sign:FindFirstChild("ThisPlotsOwners")
+                if owners then
+                    for _, b in pairs(owners:GetChildren()) do
+                        if b.Value == plr.Name then
+                            local folder = workspace.PlotItems:FindFirstChild(v.Name)
+                            if folder then return true, folder end
+                        end
+                    end
+                end
+            end
+            return false
+        end
+
+        local boolik, house = CheckForHome()
+        local inv = workspace:FindFirstChild(plr.Name.."SpawnedInToys")
+        local targetContainer = (boolik and house) or inv
+
+        -- スポーン前のコンテナ状態を記録
+        local preExisting = {}
+        if targetContainer then
+            for _, child in pairs(targetContainer:GetChildren()) do
+                if child.Name == "NinjaShuriken" then
+                    table.insert(preExisting, child)
+                end
+            end
+        end
+
+        -- 手裏剣をスポーン
+        if canSpawn.Value and SpawnToyRemote then
+            pcall(function()
+                SpawnToyRemote:InvokeServer("NinjaShuriken", hrp.CFrame * CFrame.new(0, 2, 8), Vector3.new(0,0,0))
+            end)
+
+            -- スポーンした手裏剣を検知
+            local newShuriken = nil
+            if targetContainer then
+                local searchStart = tick()
+                while tick() - searchStart < 2 do
+                    for _, child in pairs(targetContainer:GetChildren()) do
+                        if child.Name == "NinjaShuriken" and not table.find(preExisting, child) then
+                            newShuriken = child
+                            break
+                        end
+                    end
+                    if newShuriken then 
+                        -- ネットワークオーナーの取得
+                        if SetNetworkOwner then
+                            local soundPart = newShuriken:FindFirstChild("SoundPart") or newShuriken:WaitForChild("SoundPart", 0.1)
+                            if soundPart then
+                                pcall(function() SetNetworkOwner:FireServer(soundPart, soundPart.CFrame) end)
+                            end
+                        end
+                        break 
+                    end
+                    task.wait()
+                end
+            end
+
+            -- 対象パーツにアタッチして極限座標へ飛ばす（地面用にオフセットを0, -1000000000, 0に変更）
+            if newShuriken and newShuriken:FindFirstChild("StickyPart") then
+                table.insert(shurikenTable, newShuriken)
+                pcall(function()
+                    stickyEvent:FireServer(
+                        newShuriken.StickyPart,
+                        targetPart,
+                        CFrame.new(0, -1000000000, 0)  -- オフセット変更済み
+                    )
+                end)
+            end
+        end
+    end)
+end
+
+-- =========================================
+-- [2] 地面破壊セクション (オフセット変更済み)
+-- =========================================
+do
+    BreakTab:CreateSection("地面破壊")
+
+    local AutoGroundBreakEnabled = false
+    local groundSpawnedShurikens = {}
+
+    local function cleanupGroundShurikens()
+        if DestroyToyRemote then
+            for _, shuriken in pairs(groundSpawnedShurikens) do
+                if shuriken and shuriken.Parent then
+                    pcall(function() DestroyToyRemote:FireServer(shuriken) end)
+                end
+            end
+        end
+        groundSpawnedShurikens = {}
+    end
+
+    -- 足元の地面を自動で消すトグル
+    BreakTab:CreateToggle({
+        Name = "地面破壊 (自動)",
+        CurrentValue = false,
+        Flag = "AutoGroundBreak",
+        Callback = function(Value)
+            AutoGroundBreakEnabled = Value
+
+            if AutoGroundBreakEnabled then
+                task.spawn(function()
+                    local plr = game.Players.LocalPlayer
+                    while AutoGroundBreakEnabled do
+                        local character = plr.Character
+                        local hrp = character and character:FindFirstChild("HumanoidRootPart")
+
+                        if hrp then
+                            -- 足元へRayを飛ばして対象パーツを取得
+                            local rayOrigin = hrp.Position
+                            local rayDirection = Vector3.new(0, -10, 0)
+                            local rayParams = RaycastParams.new()
+                            rayParams.FilterDescendantsInstances = {character}
+                            rayParams.FilterType = Enum.RaycastFilterType.Exclude
+
+                            local rayResult = workspace:Raycast(rayOrigin, rayDirection, rayParams)
+                            local targetPart = rayResult and rayResult.Instance
+
+                            if targetPart and targetPart:IsA("BasePart") and not targetPart:IsA("Terrain") then
+                                spawnAndBreakPart(targetPart, groundSpawnedShurikens)
+                            end
+                        end
+                        task.wait(0.8)
+                    end
+                end)
+            else
+                cleanupGroundShurikens()
+            end
+        end
+    })
+
+    -- マウスクリックで任意のパーツを消すトグル
+    local clickConnection = nil
+    BreakTab:CreateToggle({
+        Name = "地面破壊 (クリック)",
+        CurrentValue = false,
+        Flag = "ClickDeleteGround",
+        Callback = function(Value)
+            local plr = game.Players.LocalPlayer
+            local mouse = plr:GetMouse()
+
+            if Value then
+                clickConnection = mouse.Button1Down:Connect(function()
+                    local targetPart = mouse.Target
+                    if targetPart and targetPart:IsA("BasePart") and not targetPart:IsA("Terrain") then
+                        spawnAndBreakPart(targetPart, groundSpawnedShurikens)
+                    end
+                end)
+            else
+                if clickConnection then
+                    clickConnection:Disconnect()
+                    clickConnection = nil
+                end
+                cleanupGroundShurikens()
+            end
+        end
+    })
+end
