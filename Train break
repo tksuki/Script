@@ -1,0 +1,1049 @@
+-- Rayfield UI Item Holder, Use & Drop Script with Train Support
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+
+local Window = Rayfield:CreateWindow({
+   Name = "Item Holder with Train",
+   LoadingTitle = "Item Holder + Train Script",
+   LoadingSubtitle = "by Rayfield - MODIFIED",
+   ConfigurationSaving = {
+      Enabled = true,
+      FolderName = nil,
+      FileName = "ItemHolderTrain"
+   },
+   Discord = {
+      Enabled = false,
+      Invite = "noinvitelink",
+      RememberJoins = true
+   },
+   KeySystem = false,
+   KeySettings = {
+      Title = "Untitled",
+      Subtitle = "Key System",
+      Note = "No method of obtaining the key is provided",
+      FileName = "Key",
+      SaveKey = true,
+      GrabKeyFromSite = false,
+      Key = {"Hello"}
+   }
+})
+
+-- Variables
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local LocalPlayer = Players.LocalPlayer
+local Workspace = game:GetService("Workspace")
+local UserInputService = game:GetService("UserInputService")
+
+-- 自動化設定
+local AutomationEnabled = false
+local AutomationConnection = nil
+local TargetItemName = "InstrumentWoodwindOcarina"
+local SecondItemName = "FoodMayonnaise"
+
+-- Seat検知設定
+local occupiedSeats = {}
+local seatConnections = {}
+local firstTimeRiders = {}
+local allSeats = {}
+
+-- Functions
+local function getAllItemsWithRemote()
+    local items = {}
+    
+    for _, obj in pairs(Workspace:GetDescendants()) do
+        if obj:IsA("RemoteFunction") and obj.Name == "HoldItemRemoteFunction" then
+            local holdPart = obj.Parent
+            if holdPart and holdPart.Name == "HoldPart" then
+                local item = holdPart.Parent
+                if item then
+                    local dropRemote = holdPart:FindFirstChild("DropItemRemoteFunction")
+                    
+                    table.insert(items, {
+                        Name = item.Name,
+                        Object = item,
+                        RemoteFunction = obj,
+                        DropRemoteFunction = dropRemote,
+                        Path = item:GetFullName()
+                    })
+                end
+            end
+        end
+    end
+    
+    return items
+end
+
+local function getPlayerCharacter()
+    local character = Workspace:FindFirstChild(LocalPlayer.Name .. "_sub")
+    if not character then
+        character = Workspace:FindFirstChild(LocalPlayer.Name)
+    end
+    if not character then
+        character = LocalPlayer.Character
+    end
+    return character
+end
+
+local function holdItem(itemData)
+    local success = pcall(function()
+        local playerCharacter = getPlayerCharacter()
+        if playerCharacter and itemData.RemoteFunction then
+            itemData.RemoteFunction:InvokeServer(itemData.Object, playerCharacter)
+        end
+    end)
+    return success
+end
+
+local function useItem(itemData)
+    local success = pcall(function()
+        local UseRemote = ReplicatedStorage:FindFirstChild("HoldEvents")
+        if UseRemote then
+            local Use = UseRemote:FindFirstChild("Use")
+            if Use then
+                Use:FireServer(itemData.Object)
+            end
+        end
+    end)
+    return success
+end
+
+local function dropItem(itemData)
+    local success = pcall(function()
+        if itemData.DropRemoteFunction then
+            local playerCharacter = getPlayerCharacter()
+            if playerCharacter then
+                local humanoidRootPart = playerCharacter:FindFirstChild("HumanoidRootPart")
+                if humanoidRootPart then
+                    local currentCFrame = humanoidRootPart.CFrame
+                    local dropPos = currentCFrame * CFrame.new(0, 300, 0)
+                    
+                    itemData.DropRemoteFunction:InvokeServer(
+                        itemData.Object,
+                        dropPos,
+                        Vector3.new(0, 300, 0)
+                    )
+                end
+            end
+        end
+    end)
+    return success
+end
+
+-- 列車自動化専用のドロップ関数（Y座標+900に捨てる）
+local function dropItemAtPlayer(itemData)
+    local success = pcall(function()
+        if itemData.DropRemoteFunction then
+            local playerCharacter = getPlayerCharacter()
+            if playerCharacter then
+                local humanoidRootPart = playerCharacter:FindFirstChild("HumanoidRootPart")
+                if humanoidRootPart then
+                    local currentCFrame = humanoidRootPart.CFrame
+                    -- Y座標+900に捨てる
+                    local dropPos = currentCFrame * CFrame.new(0, 900, 0)
+                    
+                    itemData.DropRemoteFunction:InvokeServer(
+                        itemData.Object,
+                        dropPos,
+                        Vector3.new(0, 900, 0)
+                    )
+                end
+            end
+        end
+    end)
+    return success
+end
+
+local function findTargetItem()
+    local items = getAllItemsWithRemote()
+    for _, item in pairs(items) do
+        if item.Name == TargetItemName then
+            return item
+        end
+    end
+    return nil
+end
+
+local function findSecondItem()
+    local items = getAllItemsWithRemote()
+    for _, item in pairs(items) do
+        if item.Name == SecondItemName then
+            return item
+        end
+    end
+    return nil
+end
+
+-- アイテムスポーン関数（Y座標+900）
+local function spawnItem(itemName)
+    pcall(function()
+        local Character = getPlayerCharacter()
+        if not Character then return end
+        
+        local RootPart = Character:FindFirstChild("HumanoidRootPart")
+        if not RootPart then return end
+        
+        -- 自分の位置のY座標+900にアイテムを出現させる
+        local SpawnPosition = RootPart.Position + Vector3.new(0, 900, 0)
+        local SpawnCFrame = CFrame.new(SpawnPosition)
+        
+        local SpawnToyRemote = ReplicatedStorage:FindFirstChild("MenuToys")
+        if SpawnToyRemote then
+            local SpawnFunc = SpawnToyRemote:FindFirstChild("SpawnToyRemoteFunction")
+            if SpawnFunc then
+                SpawnFunc:InvokeServer(
+                    itemName,
+                    SpawnCFrame,
+                    Vector3.new(0, 0, 0)
+                )
+            end
+        end
+    end)
+end
+
+local function performAutoAction(isFirstTime)
+    if isFirstTime then
+        -- 初めて乗る人: オカリナ+マヨ出現 → 待機(1秒) → オカリナ持つ → マヨ持つ → オカリナ使う → オカリナ捨てる → マヨ捨てる
+        local targetItem = findTargetItem()
+        if not targetItem then
+            spawnItem(TargetItemName)
+        end
+        
+        local secondItem = findSecondItem()
+        if not secondItem then
+            spawnItem(SecondItemName)
+        end
+        
+        task.wait(1.0)
+        
+        -- 再取得
+        targetItem = findTargetItem()
+        secondItem = findSecondItem()
+        
+        -- オカリナを持つ
+        if targetItem then
+            holdItem(targetItem)
+            task.wait(0.1)
+        end
+        
+        -- マヨを持つ
+        if secondItem then
+            holdItem(secondItem)
+            task.wait(0.1)
+        end
+        
+        -- オカリナを使う
+        if targetItem then
+            useItem(targetItem)
+            task.wait(0.1)
+        end
+        
+        -- オカリナを捨てる
+        if targetItem then
+            dropItemAtPlayer(targetItem)
+            task.wait(0.1)
+        end
+        
+        -- マヨを捨てる
+        if secondItem then
+            dropItemAtPlayer(secondItem)
+        end
+    else
+        -- 2回目以降: オカリナがなければ出現 → 待機(1秒) → オカリナ持つ → 捨てる
+        local targetItem = findTargetItem()
+        if not targetItem then
+            spawnItem(TargetItemName)
+            task.wait(1.0)
+            targetItem = findTargetItem()
+        end
+        
+        if targetItem then
+            if holdItem(targetItem) then
+                task.wait(0.3)
+                dropItemAtPlayer(targetItem)
+            end
+        end
+    end
+end
+
+local function checkAllSeats()
+    local count = 0
+    for seat, player in pairs(occupiedSeats) do
+        if seat.Occupant then
+            count = count + 1
+        end
+    end
+    print("現在座っている人数: " .. count)
+end
+
+local function onSeatOccupied(seat, player)
+    occupiedSeats[seat] = player
+    
+    local isFirstTimeRider = not firstTimeRiders[player.UserId]
+    if isFirstTimeRider then
+        firstTimeRiders[player.UserId] = true
+        
+        if AutomationEnabled then
+            performAutoAction(true)
+        end
+    else
+        if AutomationEnabled then
+            performAutoAction(false)
+        end
+    end
+    
+    checkAllSeats()
+end
+
+local function onSeatLeft(seat, player)
+    occupiedSeats[seat] = nil
+    checkAllSeats()
+    
+    if AutomationEnabled then
+        performAutoAction(false)
+    end
+end
+
+local function setupSeat(seat)
+    local connection = seat:GetPropertyChangedSignal("Occupant"):Connect(function()
+        local humanoid = seat.Occupant
+        
+        if humanoid then
+            local character = humanoid.Parent
+            local player = game.Players:GetPlayerFromCharacter(character)
+            
+            if player then
+                onSeatOccupied(seat, player)
+            end
+            
+            local sitConnection
+            sitConnection = humanoid:GetPropertyChangedSignal("Sit"):Connect(function()
+                if not humanoid.Sit and player then
+                    onSeatLeft(seat, player)
+                    if sitConnection then
+                        sitConnection:Disconnect()
+                    end
+                end
+            end)
+        end
+    end)
+    
+    seatConnections[seat] = connection
+    table.insert(allSeats, seat)
+end
+
+local function startSeatDetection()
+    for _, obj in pairs(Workspace:GetDescendants()) do
+        if obj:IsA("Seat") and obj.Name == "Seat" then
+            setupSeat(obj)
+            print("Seatを検知: " .. obj:GetFullName())
+        end
+    end
+    
+    Workspace.DescendantAdded:Connect(function(obj)
+        if obj:IsA("Seat") and obj.Name == "Seat" then
+            setupSeat(obj)
+            print("新しいSeatを検知: " .. obj:GetFullName())
+        end
+    end)
+end
+
+local function sitOnRandomEmptySeat()
+    local emptySeats = {}
+    
+    for _, seat in pairs(allSeats) do
+        if seat and seat.Parent and seat:IsA("Seat") and not seat.Occupant then
+            table.insert(emptySeats, seat)
+        end
+    end
+    
+    if #emptySeats == 0 then
+        Rayfield:Notify({
+            Title = "座席がありません",
+            Content = "空いている座席が見つかりませんでした",
+            Duration = 2,
+            Image = 4483345998,
+        })
+        return
+    end
+    
+    local randomSeat = emptySeats[math.random(1, #emptySeats)]
+    
+    local character = getPlayerCharacter()
+    if character then
+        local humanoid = character:FindFirstChildOfClass("Humanoid")
+        local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
+        
+        if humanoid and humanoidRootPart then
+            humanoid.Sit = false
+            task.wait(0.2)
+            
+            humanoidRootPart.CFrame = randomSeat.CFrame + Vector3.new(0, 3, 0)
+            task.wait(0.2)
+            
+            randomSeat:Sit(humanoid)
+            
+            Rayfield:Notify({
+                Title = "座席に座りました",
+                Content = "ランダムな空席に座りました",
+                Duration = 2,
+                Image = 4483345998,
+            })
+        end
+    end
+end
+
+local function startAutomation()
+    if AutomationConnection then
+        AutomationConnection:Disconnect()
+    end
+    
+    local character = getPlayerCharacter()
+    if not character then return end
+    
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    if not humanoid then return end
+    
+    AutomationConnection = humanoid.Seated:Connect(function(active, seat)
+        if AutomationEnabled then
+            if active then
+                -- 自分が乗った時（初めて乗る扱い：オカリナ+マヨを出す）
+                task.wait(0.1)
+                performAutoAction(true)
+            else
+                -- 降りた時も2回目以降扱い
+                task.wait(0.1)
+                performAutoAction(false)
+            end
+        end
+    end)
+    
+    -- 既に座っている場合は実行（初めて乗る扱い）
+    if AutomationEnabled and humanoid.SeatPart then
+        performAutoAction(true)
+    end
+end
+
+local function stopAutomation()
+    if AutomationConnection then
+        AutomationConnection:Disconnect()
+        AutomationConnection = nil
+    end
+end
+
+local function holdAllItems()
+    local items = getAllItemsWithRemote()
+    for i, item in pairs(items) do
+        holdItem(item)
+        task.wait(0.1)
+    end
+end
+
+local function useAllItems()
+    local items = getAllItemsWithRemote()
+    for i, item in pairs(items) do
+        useItem(item)
+        task.wait(0.1)
+    end
+end
+
+local function dropAllItems()
+    local items = getAllItemsWithRemote()
+    for i, item in pairs(items) do
+        dropItem(item)
+        task.wait(0.1)
+    end
+end
+
+local function holdAndUseAllItems()
+    local items = getAllItemsWithRemote()
+    for i, item in pairs(items) do
+        if holdItem(item) then
+            task.wait(0.2)
+            useItem(item)
+        end
+        task.wait(0.1)
+    end
+end
+
+local function holdAndDropAllItems()
+    local items = getAllItemsWithRemote()
+    for i, item in pairs(items) do
+        if holdItem(item) then
+            task.wait(0.2)
+            dropItem(item)
+        end
+        task.wait(0.1)
+    end
+end
+
+-- Main Tab
+local MainTab = Window:CreateTab("メイン", 4483345998)
+
+MainTab:CreateButton({
+   Name = "全て持つ",
+   Callback = function()
+       holdAllItems()
+   end,
+})
+
+MainTab:CreateButton({
+   Name = "全て使う",
+   Callback = function()
+       useAllItems()
+   end,
+})
+
+MainTab:CreateButton({
+   Name = "全て落とす",
+   Callback = function()
+       dropAllItems()
+   end,
+})
+
+MainTab:CreateButton({
+   Name = "持つ→使う",
+   Callback = function()
+       holdAndUseAllItems()
+   end,
+})
+
+MainTab:CreateButton({
+   Name = "持つ→落とす",
+   Callback = function()
+       holdAndDropAllItems()
+   end,
+})
+
+-- Individual Tab
+local ItemTab = Window:CreateTab("個別", 4483345998)
+
+local itemIndex = 1
+
+ItemTab:CreateSlider({
+   Name = "アイテム番号",
+   Range = {1, 100},
+   Increment = 1,
+   CurrentValue = 1,
+   Flag = "ItemIndexSlider",
+   Callback = function(value)
+       itemIndex = value
+   end,
+})
+
+ItemTab:CreateButton({
+   Name = "持つ",
+   Callback = function()
+       local items = getAllItemsWithRemote()
+       if itemIndex > 0 and itemIndex <= #items then
+           holdItem(items[itemIndex])
+       end
+   end,
+})
+
+ItemTab:CreateButton({
+   Name = "使う",
+   Callback = function()
+       local items = getAllItemsWithRemote()
+       if itemIndex > 0 and itemIndex <= #items then
+           useItem(items[itemIndex])
+       end
+   end,
+})
+
+ItemTab:CreateButton({
+   Name = "落とす",
+   Callback = function()
+       local items = getAllItemsWithRemote()
+       if itemIndex > 0 and itemIndex <= #items then
+           dropItem(items[itemIndex])
+       end
+   end,
+})
+
+ItemTab:CreateButton({
+   Name = "持つ→使う",
+   Callback = function()
+       local items = getAllItemsWithRemote()
+       if itemIndex > 0 and itemIndex <= #items then
+           if holdItem(items[itemIndex]) then
+               task.wait(0.2)
+               useItem(items[itemIndex])
+           end
+       end
+   end,
+})
+
+ItemTab:CreateButton({
+   Name = "持つ→落とす",
+   Callback = function()
+       local items = getAllItemsWithRemote()
+       if itemIndex > 0 and itemIndex <= #items then
+           if holdItem(items[itemIndex]) then
+               task.wait(0.2)
+               dropItem(items[itemIndex])
+           end
+       end
+   end,
+})
+
+-- 板割り当てタブ
+local PalletTab = Window:CreateTab("板割り当て", 4483345998)
+
+local PalletConfig = {
+    ToyName = "PalletLightBrown",
+    DistanceInFront = 0.5,
+    PCEnabled = false,
+    PCKeyCode = Enum.KeyCode.K,
+    MobileGUIEnabled = false,
+    MobileGUILocked = false,
+    MobileGUISize = {Width = 200, Height = 150}
+}
+
+local function SpawnPallet()
+    pcall(function()
+        local Character = getPlayerCharacter()
+        if not Character then return end
+        
+        local RootPart = Character:FindFirstChild("HumanoidRootPart")
+        if not RootPart then return end
+        
+        local Camera = workspace.CurrentCamera
+        local CameraLookVector = Camera.CFrame.LookVector
+        
+        local SpawnPosition = RootPart.Position + (CameraLookVector * PalletConfig.DistanceInFront)
+        local SpawnCFrame = CFrame.new(SpawnPosition) * (Camera.CFrame - Camera.CFrame.Position)
+        
+        local SpawnToyRemote = ReplicatedStorage:FindFirstChild("MenuToys")
+        if SpawnToyRemote then
+            local SpawnFunc = SpawnToyRemote:FindFirstChild("SpawnToyRemoteFunction")
+            if SpawnFunc then
+                SpawnFunc:InvokeServer(
+                    PalletConfig.ToyName,
+                    SpawnCFrame,
+                    Vector3.new(0, 89, 0)
+                )
+            end
+        end
+    end)
+end
+
+local PCSection = PalletTab:CreateSection("PC版")
+
+PalletTab:CreateToggle({
+    Name = "PC版を有効化",
+    CurrentValue = false,
+    Flag = "PCPalletToggle",
+    Callback = function(value)
+        PalletConfig.PCEnabled = value
+    end,
+})
+
+local currentKeyConnection = nil
+
+PalletTab:CreateInput({
+    Name = "キー設定 (現在: K)",
+    PlaceholderText = "キーを押してください...",
+    RemoveTextAfterFocusLost = true,
+    Callback = function(text)
+        Rayfield:Notify({
+            Title = "キー設定モード",
+            Content = "設定したいキーを押してください",
+            Duration = 3,
+            Image = 4483345998,
+        })
+        
+        if currentKeyConnection then
+            currentKeyConnection:Disconnect()
+        end
+        
+        currentKeyConnection = UserInputService.InputBegan:Connect(function(input, gameProcessed)
+            if gameProcessed then return end
+            
+            if input.UserInputType == Enum.UserInputType.Keyboard then
+                PalletConfig.PCKeyCode = input.KeyCode
+                
+                local keyName = input.KeyCode.Name
+                
+                Rayfield:Notify({
+                    Title = "キー設定完了",
+                    Content = "キー: " .. keyName,
+                    Duration = 2,
+                    Image = 4483345998,
+                })
+                
+                if currentKeyConnection then
+                    currentKeyConnection:Disconnect()
+                    currentKeyConnection = nil
+                end
+            end
+        end)
+    end,
+})
+
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if not PalletConfig.PCEnabled then return end
+    
+    if input.KeyCode == PalletConfig.PCKeyCode then
+        SpawnPallet()
+    end
+end)
+
+local MobileSection = PalletTab:CreateSection("モバイル版")
+
+local MobileGUI = nil
+
+local function CreateMobileGUI()
+    if MobileGUI then
+        MobileGUI:Destroy()
+    end
+    
+    local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+    
+    local ScreenGui = Instance.new("ScreenGui")
+    ScreenGui.Name = "PalletSpawnerMobileGUI"
+    ScreenGui.ResetOnSpawn = false
+    ScreenGui.Parent = PlayerGui
+    
+    local MainFrame = Instance.new("Frame")
+    MainFrame.Name = "MainFrame"
+    MainFrame.Size = UDim2.new(0, PalletConfig.MobileGUISize.Width, 0, PalletConfig.MobileGUISize.Height)
+    MainFrame.Position = UDim2.new(0.5, -PalletConfig.MobileGUISize.Width/2, 0.5, -PalletConfig.MobileGUISize.Height/2)
+    MainFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+    MainFrame.BorderSizePixel = 2
+    MainFrame.BorderColor3 = Color3.fromRGB(255, 255, 255)
+    MainFrame.Active = true
+    MainFrame.Parent = ScreenGui
+    
+    local Corner = Instance.new("UICorner")
+    Corner.CornerRadius = UDim.new(0, 8)
+    Corner.Parent = MainFrame
+    
+    local Title = Instance.new("TextLabel")
+    Title.Size = UDim2.new(1, 0, 0, 30)
+    Title.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+    Title.BorderSizePixel = 0
+    Title.Text = "板スポナー"
+    Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+    Title.TextSize = 16
+    Title.Font = Enum.Font.GothamBold
+    Title.Parent = MainFrame
+    
+    local TitleCorner = Instance.new("UICorner")
+    TitleCorner.CornerRadius = UDim.new(0, 8)
+    TitleCorner.Parent = Title
+    
+    local SpawnButton = Instance.new("TextButton")
+    SpawnButton.Size = UDim2.new(0.9, 0, 0, 35)
+    SpawnButton.Position = UDim2.new(0.05, 0, 0, 40)
+    SpawnButton.BackgroundColor3 = Color3.fromRGB(0, 170, 127)
+    SpawnButton.BorderSizePixel = 0
+    SpawnButton.Text = "板をスポーン"
+    SpawnButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    SpawnButton.TextSize = 14
+    SpawnButton.Font = Enum.Font.GothamBold
+    SpawnButton.Parent = MainFrame
+    
+    local SpawnCorner = Instance.new("UICorner")
+    SpawnCorner.CornerRadius = UDim.new(0, 6)
+    SpawnCorner.Parent = SpawnButton
+    
+    local LockButton = Instance.new("TextButton")
+    LockButton.Size = UDim2.new(0.9, 0, 0, 30)
+    LockButton.Position = UDim2.new(0.05, 0, 0, 85)
+    LockButton.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
+    LockButton.BorderSizePixel = 0
+    LockButton.Text = "GUI固定: オフ"
+    LockButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    LockButton.TextSize = 12
+    LockButton.Font = Enum.Font.Gotham
+    LockButton.Parent = MainFrame
+    
+    local LockCorner = Instance.new("UICorner")
+    LockCorner.CornerRadius = UDim.new(0, 6)
+    LockCorner.Parent = LockButton
+    
+    local SizeLabel = Instance.new("TextLabel")
+    SizeLabel.Size = UDim2.new(0.9, 0, 0, 20)
+    SizeLabel.Position = UDim2.new(0.05, 0, 1, -45)
+    SizeLabel.BackgroundTransparency = 1
+    SizeLabel.Text = "GUIサイズ (幅,高さ):"
+    SizeLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+    SizeLabel.TextSize = 10
+    SizeLabel.Font = Enum.Font.Gotham
+    SizeLabel.TextXAlignment = Enum.TextXAlignment.Left
+    SizeLabel.Parent = MainFrame
+    
+    local SizeInput = Instance.new("TextBox")
+    SizeInput.Size = UDim2.new(0.9, 0, 0, 25)
+    SizeInput.Position = UDim2.new(0.05, 0, 1, -25)
+    SizeInput.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+    SizeInput.BorderSizePixel = 1
+    SizeInput.BorderColor3 = Color3.fromRGB(100, 100, 100)
+    SizeInput.Text = PalletConfig.MobileGUISize.Width .. "," .. PalletConfig.MobileGUISize.Height
+    SizeInput.PlaceholderText = "例: 200,150"
+    SizeInput.TextColor3 = Color3.fromRGB(255, 255, 255)
+    SizeInput.TextSize = 12
+    SizeInput.Font = Enum.Font.Gotham
+    SizeInput.ClearTextOnFocus = false
+    SizeInput.Parent = MainFrame
+    
+    local InputCorner = Instance.new("UICorner")
+    InputCorner.CornerRadius = UDim.new(0, 4)
+    InputCorner.Parent = SizeInput
+    
+    SpawnButton.MouseButton1Click:Connect(function()
+        SpawnPallet()
+    end)
+    
+    LockButton.MouseButton1Click:Connect(function()
+        PalletConfig.MobileGUILocked = not PalletConfig.MobileGUILocked
+        LockButton.Text = PalletConfig.MobileGUILocked and "GUI固定: オン" or "GUI固定: オフ"
+        LockButton.BackgroundColor3 = PalletConfig.MobileGUILocked and Color3.fromRGB(170, 70, 70) or Color3.fromRGB(70, 70, 70)
+        MainFrame.Active = not PalletConfig.MobileGUILocked
+    end)
+    
+    SizeInput.FocusLost:Connect(function()
+        local input = SizeInput.Text
+        local width, height = input:match("(%d+)%s*,%s*(%d+)")
+        
+        if width and height then
+            width = tonumber(width)
+            height = tonumber(height)
+            
+            if width and height then
+                PalletConfig.MobileGUISize.Width = width
+                PalletConfig.MobileGUISize.Height = height
+                MainFrame.Size = UDim2.new(0, width, 0, height)
+            end
+        end
+    end)
+    
+    local dragging = false
+    local dragStart = nil
+    local startPos = nil
+    
+    MainFrame.InputBegan:Connect(function(input)
+        if PalletConfig.MobileGUILocked then return end
+        
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            dragStart = input.Position
+            startPos = MainFrame.Position
+            
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    dragging = false
+                end
+            end)
+        end
+    end)
+    
+    UserInputService.InputChanged:Connect(function(input)
+        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+            local delta = input.Position - dragStart
+            MainFrame.Position = UDim2.new(
+                startPos.X.Scale,
+                startPos.X.Offset + delta.X,
+                startPos.Y.Scale,
+                startPos.Y.Offset + delta.Y
+            )
+        end
+    end)
+    
+    MobileGUI = ScreenGui
+end
+
+PalletTab:CreateToggle({
+    Name = "モバイルGUI表示",
+    CurrentValue = false,
+    Flag = "MobileGUIToggle",
+    Callback = function(value)
+        PalletConfig.MobileGUIEnabled = value
+        if value then
+            CreateMobileGUI()
+        else
+            if MobileGUI then
+                MobileGUI:Destroy()
+                MobileGUI = nil
+            end
+        end
+    end,
+})
+
+PalletTab:CreateToggle({
+    Name = "GUI固定",
+    CurrentValue = false,
+    Flag = "MobileGUILockToggle",
+    Callback = function(value)
+        PalletConfig.MobileGUILocked = value
+        if MobileGUI then
+            local MainFrame = MobileGUI:FindFirstChild("MainFrame")
+            if MainFrame then
+                local LockButton = MainFrame:FindFirstChild("LockButton")
+                if LockButton then
+                    LockButton.Text = value and "GUI固定: オン" or "GUI固定: オフ"
+                    LockButton.BackgroundColor3 = value and Color3.fromRGB(170, 70, 70) or Color3.fromRGB(70, 70, 70)
+                end
+                MainFrame.Active = not value
+            end
+        end
+    end,
+})
+
+PalletTab:CreateInput({
+    Name = "GUIサイズ (幅,高さ)",
+    PlaceholderText = "例: 200,150",
+    RemoveTextAfterFocusLost = false,
+    Callback = function(text)
+        local width, height = text:match("(%d+)%s*,%s*(%d+)")
+        
+        if width and height then
+            width = tonumber(width)
+            height = tonumber(height)
+            
+            if width and height then
+                PalletConfig.MobileGUISize.Width = width
+                PalletConfig.MobileGUISize.Height = height
+                
+                if MobileGUI then
+                    local MainFrame = MobileGUI:FindFirstChild("MainFrame")
+                    if MainFrame then
+                        MainFrame.Size = UDim2.new(0, width, 0, height)
+                    end
+                end
+                
+                Rayfield:Notify({
+                    Title = "サイズ変更完了",
+                    Content = "幅: " .. width .. ", 高さ: " .. height,
+                    Duration = 2,
+                    Image = 4483345998,
+                })
+            end
+        end
+    end,
+})
+
+-- 列車タブ
+local TrainTab = Window:CreateTab("列車", 4483345998)
+
+TrainTab:CreateSection("座席操作")
+
+TrainTab:CreateButton({
+   Name = "座席ランダムに乗る",
+   Callback = function()
+       sitOnRandomEmptySeat()
+   end,
+})
+
+TrainTab:CreateSection("自動化設定")
+
+TrainTab:CreateToggle({
+    Name = "自動化を有効化",
+    CurrentValue = false,
+    Flag = "AutomationToggle",
+    Callback = function(value)
+        AutomationEnabled = value
+        if value then
+            startAutomation()
+            startSeatDetection()
+            Rayfield:Notify({
+                Title = "自動化が有効になりました",
+                Content = "乗車/降車時に" .. TargetItemName .. "を自動操作します",
+                Duration = 3,
+                Image = 4483345998,
+            })
+        else
+            stopAutomation()
+            Rayfield:Notify({
+                Title = "自動化が無効になりました",
+                Content = "自動操作を停止しました",
+                Duration = 2,
+                Image = 4483345998,
+            })
+        end
+    end,
+})
+
+TrainTab:CreateParagraph({
+    Title = "自動化の動作",
+    Content = "有効にすると、列車やシートに乗った時/降りた時に自動で " .. TargetItemName .. " を「出現→持つ→使う→捨てる」します。初めて乗る人は " .. SecondItemName .. " も一緒に出現させて捨てます。"
+})
+
+TrainTab:CreateSection("PC用 列車操作")
+
+TrainTab:CreateButton({
+    Name = "vFly GUI表示",
+    Callback = function()
+        pcall(function()
+            loadstring(game:HttpGet('https://raw.githubusercontent.com/makkurokurosukescript/VFly-gui/refs/heads/main/VFly%20gui'))()
+            Rayfield:Notify({
+                Title = "vFly GUI起動",
+                Content = "vFly GUIが起動しました",
+                Duration = 2,
+                Image = 4483345998,
+            })
+        end)
+    end,
+})
+
+TrainTab:CreateParagraph({
+    Title = "vFly GUIについて",
+    Content = "別ウィンドウでvFly GUIを起動します。WASD+QEで飛行、Noclip機能も使えます。"
+})
+
+-- アンチ爆発機能
+local antiExplosionConnection
+
+local function setupAntiExplosion(character)
+    if not character then return end
+    
+    local humanoid = character:WaitForChild("Humanoid", 5)
+    if not humanoid then return end
+    
+    local ragdolled = humanoid:FindFirstChild("Ragdolled")
+    
+    if ragdolled and ragdolled:IsA("BoolValue") then
+        if antiExplosionConnection then
+            antiExplosionConnection:Disconnect()
+        end
+        
+        antiExplosionConnection = ragdolled:GetPropertyChangedSignal("Value"):Connect(function()
+            if ragdolled.Value then
+                for _, part in ipairs(character:GetChildren()) do
+                    if part:IsA("BasePart") then
+                        part.Anchored = true
+                    end
+                end
+            else
+                for _, part in ipairs(character:GetChildren()) do
+                    if part:IsA("BasePart") then
+                        part.Anchored = false
+                    end
+                end
+            end
+        end)
+    end
+end
+
+-- CharacterAdded時に自動化を再設定
+LocalPlayer.CharacterAdded:Connect(function()
+    task.wait(1)
+    if AutomationEnabled then
+        startAutomation()
+        startSeatDetection()
+    end
+    setupAntiExplosion(LocalPlayer.Character)
+end)
+
+-- 初回起動時の自動化設定とSeat検知
+task.spawn(function()
+    task.wait(1)
+    startSeatDetection()
+    if AutomationEnabled then
+        startAutomation()
+    end
+    if LocalPlayer.Character then
+        setupAntiExplosion(LocalPlayer.Character)
+    end
+end)
