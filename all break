@@ -342,42 +342,6 @@ BreakTab:CreateDropdown({
 
 BreakTab:CreateSection("Target Stick Features")
 
-BreakTab:CreateButton({
-    Name = "Stick to Selected UFO",
-    Callback = function()
-        task.spawn(function()
-            StickToUFO(SelectedUFO)
-        end)
-    end,
-})
-
-BreakTab:CreateButton({
-    Name = "Stick to Selected Rocks",
-    Callback = function()
-        task.spawn(function()
-            StickToRock()
-        end)
-    end,
-})
-
-BreakTab:CreateButton({
-    Name = "Stick to CaveCart",
-    Callback = function()
-        task.spawn(function()
-            StickToCaveCart()
-        end)
-    end,
-})
-
-BreakTab:CreateButton({
-    Name = "Stick to Train",
-    Callback = function()
-        task.spawn(function()
-            StickToTrain()
-        end)
-    end,
-})
-
 BreakTab:CreateToggle({
     Name = "Stick to UFO",
     CurrentValue = false,
