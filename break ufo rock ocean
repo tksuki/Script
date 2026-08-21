@@ -1,15 +1,12 @@
----- services ----
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 local RunService = game:GetService("RunService")
 local Camera = Workspace.CurrentCamera
 
----- players ----
 local LocalPlayer = Players.LocalPlayer
 local Mouse = LocalPlayer:GetMouse()
 
----- replicated storage / remotes ----
 local PlayerEvents = ReplicatedStorage:WaitForChild("PlayerEvents")
 local StickyEvent = PlayerEvents:WaitForChild("StickyPartEvent")
 
@@ -20,11 +17,9 @@ local DestroyToyRemote = MenuToys:FindFirstChild("DestroyToy")
 local GrabEvents = ReplicatedStorage:WaitForChild("GrabEvents")
 local SetNetworkOwner = GrabEvents:WaitForChild("SetNetworkOwner")
 
----- Rayfield UI Load ----
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
----- 共通変数 & 関数 ----
-local SelectedToy = "ToolPickaxe" -- ドロップダウンで選択されているツール
+local SelectedToy = "ToolPickaxe"
 
 local function Char()
     local Character = LocalPlayer.Character
@@ -94,12 +89,11 @@ local function SpawnToy(ToyName)
     return spawnedObject
 end
 
----- UFO / Rock 用 ----
 local function processNormalTargets(targetBodies, rootContainers)
     if #targetBodies == 0 then return end
 
     for i = 1, 12 do
-        local toy = SpawnToy(SelectedToy) -- 選択されたツールをスポーン
+        local toy = SpawnToy(SelectedToy)
         if toy then
             local stickyPart = toy:FindFirstChild("StickyPart")
             if stickyPart then
@@ -132,7 +126,6 @@ local function processNormalTargets(targetBodies, rootContainers)
     end
 end
 
----- Ocean用 ターゲット取得 ----
 local function getOceanTargetObject()
     local map = Workspace:FindFirstChild("Map")
     if not map then return nil end
@@ -156,7 +149,6 @@ local function getOceanTargetObject()
     return nil
 end
 
----- Targeting 機能関数 ----
 local function GetTarget()
     if Mouse and Mouse.Target then return Mouse.Target end
 
@@ -177,7 +169,7 @@ end
 local function BreakPart(Part)
     if not Part or not Part:IsA('BasePart') or not DestroyToyRemote then return end
 
-    local toy = SpawnToy(SelectedToy) -- 選択されたツールをスポーン
+    local toy = SpawnToy(SelectedToy)
     local StickyPart = toy and toy:WaitForChild("StickyPart", 0.5)
     
     if not StickyPart then return end
@@ -190,7 +182,6 @@ local function BreakPart(Part)
     StickyEvent:FireServer(StickyPart, Part, CFrame.new(1e15, 1e15, 1e15))
 end
 
----- Window 作成 ----
 local Window = Rayfield:CreateWindow({
     Name = "UFOといわと海 Ultimate Hub",
     LoadingTitle = "Loading Script...",
@@ -201,15 +192,11 @@ local Window = Rayfield:CreateWindow({
     KeySystem = false
 })
 
----- タブ作成 ----
 local BreakTab = Window:CreateTab("Break", 4483362458)
 local GrabTab = Window:CreateTab("Grab", 4483345998)
 
-
----- [1] Break タブ要素 ----
 BreakTab:CreateSection("Tool Settings")
 
--- 新機能：ドロップダウンでツールを選択
 BreakTab:CreateDropdown({
     Name = "Select Toy",
     Options = {"ToolPickaxe", "NinjaShuriken"},
@@ -301,7 +288,7 @@ BreakTab:CreateToggle({
                 end)
 
                 for i = 1, 12 do
-                    local toy = SpawnToy(SelectedToy) -- 選択されたツールをスポーン
+                    local toy = SpawnToy(SelectedToy)
                     if toy then
                         local sp = toy:FindFirstChild("StickyPart")
                         if sp then
@@ -360,7 +347,6 @@ BreakTab:CreateButton({
             if not playerFolder or not DestroyToyRemote then return end
 
             for _, toy in ipairs(playerFolder:GetChildren()) do
-                -- 選択中のツールを一括削除
                 if toy.Name == SelectedToy then
                     pcall(function()
                         DestroyToyRemote:FireServer(toy)
@@ -371,8 +357,6 @@ BreakTab:CreateButton({
     end,
 })
 
-
----- [2] Grab タブ要素 ----
 GrabTab:CreateSection("Grab Tweaks")
 
 local GrabVars = {
@@ -425,5 +409,4 @@ GrabTab:CreateToggle({
     end
 })
 
----- Load Complete ----
 Rayfield:LoadConfiguration()
