@@ -1,0 +1,429 @@
+---- services ----
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
+local RunService = game:GetService("RunService")
+local Camera = Workspace.CurrentCamera
+
+---- players ----
+local LocalPlayer = Players.LocalPlayer
+local Mouse = LocalPlayer:GetMouse()
+
+---- replicated storage / remotes ----
+local PlayerEvents = ReplicatedStorage:WaitForChild("PlayerEvents")
+local StickyEvent = PlayerEvents:WaitForChild("StickyPartEvent")
+
+local MenuToys = ReplicatedStorage:WaitForChild("MenuToys")
+local SpawnToyRemoteFunction = MenuToys:WaitForChild("SpawnToyRemoteFunction")
+local DestroyToyRemote = MenuToys:FindFirstChild("DestroyToy")
+
+local GrabEvents = ReplicatedStorage:WaitForChild("GrabEvents")
+local SetNetworkOwner = GrabEvents:WaitForChild("SetNetworkOwner")
+
+---- Rayfield UI Load ----
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+
+---- 共通変数 & 関数 ----
+local SelectedToy = "ToolPickaxe" -- ドロップダウンで選択されているツール
+
+local function Char()
+    local Character = LocalPlayer.Character
+    if not Character then return end
+    return Character, Character:FindFirstChild("HumanoidRootPart"), Character:FindFirstChild("Humanoid")
+end
+
+local function getHRP()
+    local _, hrp = Char()
+    return hrp or LocalPlayer.CharacterAdded:Wait():WaitForChild("HumanoidRootPart")
+end
+
+local function getTargetBody(model)
+    if not model then return nil end
+    if model:FindFirstChild("Body") then return model.Body end
+    if model:IsA("BasePart") then return model end
+    return model:FindFirstChildWhichIsA("BasePart", true)
+end
+
+local function sno(part)
+    if part then
+        SetNetworkOwner:FireServer(part, part.CFrame)
+    end
+end
+
+local function SpawnToy(ToyName)
+    local InPlot = LocalPlayer:FindFirstChild("InPlot")
+    local InOwnedPlot = LocalPlayer:FindFirstChild("InOwnedPlot")
+    local CanSpawnToy = LocalPlayer:FindFirstChild("CanSpawnToy")
+
+    if InPlot and InPlot.Value and InOwnedPlot and not InOwnedPlot.Value then
+        InPlot:GetPropertyChangedSignal("Value"):Wait()
+    end
+    if CanSpawnToy and not CanSpawnToy.Value then
+        CanSpawnToy:GetPropertyChangedSignal("Value"):Wait()
+    end
+
+    local hrp = getHRP()
+    if not hrp then return nil end
+    
+    local SpawnCF = hrp.CFrame * CFrame.new(0, 14, 20)
+    local Container = Workspace:FindFirstChild(LocalPlayer.Name .. "SpawnedInToys")
+
+    if not Container then return nil end
+
+    local spawnedObject = nil
+    local conn
+    conn = Container.ChildAdded:Connect(function(child)
+        if child.Name == ToyName then
+            spawnedObject = child
+            conn:Disconnect()
+        end
+    end)
+
+    task.spawn(function()
+        pcall(function()
+            SpawnToyRemoteFunction:InvokeServer(ToyName, SpawnCF, Vector3.new(0, 0, 0))
+        end)
+    end)
+
+    local start = tick()
+    repeat task.wait(0.05) until spawnedObject or (tick() - start) > 3
+
+    if conn then
+        pcall(function() conn:Disconnect() end)
+    end
+    return spawnedObject
+end
+
+---- UFO / Rock 用 ----
+local function processNormalTargets(targetBodies, rootContainers)
+    if #targetBodies == 0 then return end
+
+    for i = 1, 12 do
+        local toy = SpawnToy(SelectedToy) -- 選択されたツールをスポーン
+        if toy then
+            local stickyPart = toy:FindFirstChild("StickyPart")
+            if stickyPart then
+                sno(stickyPart)
+                task.wait(0.1)
+                
+                for _, targetBody in ipairs(targetBodies) do
+                    pcall(function()
+                        StickyEvent:FireServer(stickyPart, targetBody, CFrame.new())
+                    end)
+                end
+            end
+        end
+        task.wait(0.15)
+    end
+    
+    for _, container in ipairs(rootContainers) do
+        if container then
+            for _, desc in ipairs(container:GetDescendants()) do
+                if desc.Name == "FollowThisPart" then
+                    if desc:FindFirstChild("AlignOrientation") then
+                        desc.AlignOrientation.Enabled = false
+                    end
+                    if desc:FindFirstChild("AlignPosition") then
+                        desc.AlignPosition.Enabled = false
+                    end
+                end
+            end
+        end
+    end
+end
+
+---- Ocean用 ターゲット取得 ----
+local function getOceanTargetObject()
+    local map = Workspace:FindFirstChild("Map")
+    if not map then return nil end
+    local alwaysHere = map:FindFirstChild("AlwaysHereTweenedObjects")
+    if not alwaysHere then return nil end
+    local ocean = alwaysHere:FindFirstChild("Ocean")
+    if not ocean then return nil end
+    local object = ocean:FindFirstChild("Object")
+    if not object then return nil end
+    local objectModel = object:FindFirstChild("ObjectModel")
+    if not objectModel then return nil end
+
+    local children = objectModel:GetChildren()
+    local index = 17
+    if index <= #children then
+        local target = children[index]
+        if target and target:IsA("BasePart") then
+            return target, ocean
+        end
+    end
+    return nil
+end
+
+---- Targeting 機能関数 ----
+local function GetTarget()
+    if Mouse and Mouse.Target then return Mouse.Target end
+
+    local size = Camera.ViewportSize
+    local ray = Camera:ViewportPointToRay(size.X / 2, size.Y / 2)
+    local params = RaycastParams.new()
+    params.FilterType = Enum.RaycastFilterType.Exclude
+
+    local character = Char()
+    if character then
+        params.FilterDescendantsInstances = {character}
+    end
+
+    local result = Workspace:Raycast(ray.Origin, ray.Direction * 1000, params)
+    return result and result.Instance
+end
+
+local function BreakPart(Part)
+    if not Part or not Part:IsA('BasePart') or not DestroyToyRemote then return end
+
+    local toy = SpawnToy(SelectedToy) -- 選択されたツールをスポーン
+    local StickyPart = toy and toy:WaitForChild("StickyPart", 0.5)
+    
+    if not StickyPart then return end
+    sno(StickyPart)
+
+    local Start = tick()
+    repeat task.wait() until (StickyPart:FindFirstChild("PartOwner") and StickyPart.PartOwner.Value == LocalPlayer.Name) or (tick() - Start) > 0.5
+
+    if (tick() - Start) > 0.5 then return DestroyToyRemote:FireServer(toy) end
+    StickyEvent:FireServer(StickyPart, Part, CFrame.new(1e15, 1e15, 1e15))
+end
+
+---- Window 作成 ----
+local Window = Rayfield:CreateWindow({
+    Name = "UFOといわと海 Ultimate Hub",
+    LoadingTitle = "Loading Script...",
+    LoadingSubtitle = "All features combined",
+    ConfigurationSaving = {
+        Enabled = false
+    },
+    KeySystem = false
+})
+
+---- タブ作成 ----
+local BreakTab = Window:CreateTab("Break", 4483362458)
+local GrabTab = Window:CreateTab("Grab", 4483345998)
+
+
+---- [1] Break タブ要素 ----
+BreakTab:CreateSection("Tool Settings")
+
+-- 新機能：ドロップダウンでツールを選択
+BreakTab:CreateDropdown({
+    Name = "Select Toy",
+    Options = {"ToolPickaxe", "NinjaShuriken"},
+    CurrentOption = {"ToolPickaxe"},
+    MultipleOptions = false,
+    Flag = "ToolDropdown",
+    Callback = function(Option)
+        SelectedToy = Option[1]
+    end
+})
+
+BreakTab:CreateSection("Target Stick Features")
+
+BreakTab:CreateToggle({
+    Name = "Stick to UFO",
+    CurrentValue = false,
+    Flag = "UfoTgl",
+    Callback = function(Value)
+        if not Value then return end
+        task.spawn(function()
+            local ufos = {
+                Workspace.Map.AlwaysHereTweenedObjects:FindFirstChild("InnerUFO"),
+                Workspace.Map.AlwaysHereTweenedObjects:FindFirstChild("OuterUFO")
+            }
+            local targets = {}
+            local containers = {}
+            
+            for _, ufo in ipairs(ufos) do
+                if ufo and ufo:FindFirstChild("Object") and ufo.Object:FindFirstChild("ObjectModel") then
+                    local body = getTargetBody(ufo.Object.ObjectModel)
+                    if body then
+                        table.insert(targets, body)
+                        table.insert(containers, ufo)
+                    end
+                end
+            end
+            processNormalTargets(targets, containers)
+            Rayfield.Flags["UfoTgl"]:Set(false)
+        end)
+    end
+})
+
+BreakTab:CreateToggle({
+    Name = "Stick to Rock",
+    CurrentValue = false,
+    Flag = "RockTgl",
+    Callback = function(Value)
+        if not Value then return end
+        task.spawn(function()
+            local smlDebris = Workspace.Map.AlwaysHereTweenedObjects:FindFirstChild("SmlDebris")
+            if smlDebris then
+                local rock = smlDebris:FindFirstChild("Rock", true)
+                if rock then
+                    local body = getTargetBody(rock)
+                    if body then processNormalTargets({body}, {smlDebris}) end
+                end
+            end
+
+            task.wait(0.5)
+
+            local lrgDebris = Workspace.Map.AlwaysHereTweenedObjects:FindFirstChild("LrgDebris")
+            if lrgDebris then
+                local objModel = lrgDebris:FindFirstChild("ObjectModel", true)
+                if objModel then
+                    local rock = objModel:FindFirstChild("Rock")
+                    if rock then
+                        local body = getTargetBody(rock)
+                        if body then processNormalTargets({body}, {lrgDebris}) end
+                    end
+                end
+            end
+            Rayfield.Flags["RockTgl"]:Set(false)
+        end)
+    end
+})
+
+BreakTab:CreateToggle({
+    Name = "Stick to Ocean (Crash CFrame)",
+    CurrentValue = false,
+    Flag = "OceanTgl",
+    Callback = function(Value)
+        if not Value then return end
+        task.spawn(function()
+            local targetObject, oceanObject = getOceanTargetObject()
+            if targetObject then
+                targetObject.Anchored = false
+                local anchorConn = targetObject:GetPropertyChangedSignal("Anchored"):Connect(function()
+                    if targetObject.Anchored then pcall(function() targetObject.Anchored = false end) end
+                end)
+
+                for i = 1, 12 do
+                    local toy = SpawnToy(SelectedToy) -- 選択されたツールをスポーン
+                    if toy then
+                        local sp = toy:FindFirstChild("StickyPart")
+                        if sp then
+                            sno(sp)
+                            local bp = Instance.new("BodyPosition")
+                            bp.Position = Vector3.new(math.random(-100, 100), 1e3, math.random(-100, 100))
+                            bp.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+                            bp.Parent = sp
+
+                            task.wait(0.1)
+                            pcall(function()
+                                StickyEvent:FireServer(sp, targetObject, CFrame.new(0, -2.14748365e+09, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1))
+                            end)
+                        end
+                    end
+                    task.wait(0.15)
+                end
+
+                task.wait(0.5)
+                if oceanObject then pcall(function() oceanObject.Collision = false end) end
+                if anchorConn then anchorConn:Disconnect() end
+            end
+            Rayfield.Flags["OceanTgl"]:Set(false)
+        end)
+    end
+})
+
+BreakTab:CreateSection("Custom Targeting")
+
+BreakTab:CreateButton({
+    Name = "Break Part (Crash CFrame)",
+    Callback = function()
+        local target = GetTarget()
+        BreakPart(target)
+    end,
+})
+
+BreakTab:CreateKeybind({
+    Name = "Break Part Key",
+    CurrentKeybind = "E",
+    HoldToInteract = false,
+    Flag = "BreakPartKeybind",
+    Callback = function(Keybind)
+        local target = GetTarget()
+        BreakPart(target)
+    end,
+})
+
+BreakTab:CreateSection("Cleanup")
+
+BreakTab:CreateButton({
+    Name = "Remove Current Tool All",
+    Callback = function()
+        task.spawn(function()
+            local playerFolder = Workspace:FindFirstChild(LocalPlayer.Name .. "SpawnedInToys")
+            if not playerFolder or not DestroyToyRemote then return end
+
+            for _, toy in ipairs(playerFolder:GetChildren()) do
+                -- 選択中のツールを一括削除
+                if toy.Name == SelectedToy then
+                    pcall(function()
+                        DestroyToyRemote:FireServer(toy)
+                    end)
+                end
+            end
+        end)
+    end,
+})
+
+
+---- [2] Grab タブ要素 ----
+GrabTab:CreateSection("Grab Tweaks")
+
+local GrabVars = {
+    Toggle = false,
+    Sens = 200,
+    Conn = nil
+}
+
+GrabTab:CreateSlider({
+    Name = "Massless Sensitivity",
+    Range = {10, 1000},
+    Increment = 10,
+    Suffix = "",
+    CurrentValue = 200,
+    Flag = "MasslessSens",
+    Callback = function(Value)
+        GrabVars.Sens = Value
+    end
+})
+
+GrabTab:CreateToggle({
+    Name = "Massless Grab",
+    CurrentValue = false,
+    Flag = "MasslessToggle",
+    Callback = function(Value)
+        GrabVars.Toggle = Value
+        if GrabVars.Conn then GrabVars.Conn:Disconnect() GrabVars.Conn = nil end
+        if not Value then return end
+        
+        GrabVars.Conn = RunService.Heartbeat:Connect(function()
+            if not GrabVars.Toggle then return end
+            local gp = Workspace:FindFirstChild("GrabParts")
+            if not gp then return end
+            local dp = gp:FindFirstChild("DragPart")
+            if not dp then return end
+            
+            local ap = dp:FindFirstChild("AlignPosition")
+            local ao = dp:FindFirstChild("AlignOrientation")
+            
+            if ap then
+                ap.Responsiveness = GrabVars.Sens
+                ap.MaxForce = math.huge
+                ap.MaxVelocity = math.huge
+            end
+            if ao then
+                ao.Responsiveness = GrabVars.Sens
+                ao.MaxTorque = math.huge
+            end
+        end)
+    end
+})
+
+---- Load Complete ----
+Rayfield:LoadConfiguration()
