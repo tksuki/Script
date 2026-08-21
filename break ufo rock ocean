@@ -183,7 +183,7 @@ local function BreakPart(Part)
 end
 
 local Window = Rayfield:CreateWindow({
-    Name = "UFOといわと海 Ultimate Hub",
+    Name = "UFOといわと海",
     LoadingTitle = "Loading Script...",
     LoadingSubtitle = "All features combined",
     ConfigurationSaving = {
@@ -274,7 +274,7 @@ BreakTab:CreateToggle({
 })
 
 BreakTab:CreateToggle({
-    Name = "Stick to Ocean (Crash CFrame)",
+    Name = "Stick to Ocean",
     CurrentValue = false,
     Flag = "OceanTgl",
     Callback = function(Value)
@@ -319,7 +319,7 @@ BreakTab:CreateToggle({
 BreakTab:CreateSection("Custom Targeting")
 
 BreakTab:CreateButton({
-    Name = "Break Part (Crash CFrame)",
+    Name = "Break Part",
     Callback = function()
         local target = GetTarget()
         BreakPart(target)
