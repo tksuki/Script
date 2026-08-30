@@ -1,0 +1,34 @@
+-- ★ 高速 Jerk Off スタンドアロン版 ★
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local LocalPlayer = Players.LocalPlayer
+
+local jerkOffAnimTrack = nil
+local playJerkOffActive = false
+local jerkOffConnection = nil
+
+local function StartJerkOff()
+    local char = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if not hum then return end
+    local animator = hum:FindFirstChildOfClass("Animator") or Instance.new("Animator", hum)
+    local anim = Instance.new("Animation")
+    anim.AnimationId = "rbxassetid://168268306"
+    jerkOffAnimTrack = animator:LoadAnimation(anim)
+    jerkOffAnimTrack.Priority = Enum.AnimationPriority.Action
+    jerkOffAnimTrack:Play()
+    playJerkOffActive = true
+
+    jerkOffConnection = RunService.Heartbeat:Connect(function()
+        if not playJerkOffActive then
+            jerkOffConnection:Disconnect()
+            jerkOffConnection = nil
+            return
+        end
+        if jerkOffAnimTrack and jerkOffAnimTrack.IsPlaying then
+            jerkOffAnimTrack.TimePosition = 0.3
+        end
+    end)
+end
+
+StartJerkOff()
