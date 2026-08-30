@@ -1,4 +1,4 @@
--- ★ 高速 Jerk Off スタンドアロン版 ★
+-- ★ Jerk Off スタンドアロン版 (速度調整済み) ★
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local LocalPlayer = Players.LocalPlayer
@@ -19,14 +19,12 @@ local function StartJerkOff()
     jerkOffAnimTrack:Play()
     playJerkOffActive = true
 
-    jerkOffConnection = RunService.Heartbeat:Connect(function()
-        if not playJerkOffActive then
-            jerkOffConnection:Disconnect()
-            jerkOffConnection = nil
-            return
-        end
-        if jerkOffAnimTrack and jerkOffAnimTrack.IsPlaying then
-            jerkOffAnimTrack.TimePosition = 0.3
+    task.spawn(function()
+        while playJerkOffActive do
+            task.wait(0.05)  -- ← ここを変えて速度調整 (大きいほど遅い)
+            if jerkOffAnimTrack and jerkOffAnimTrack.IsPlaying then
+                jerkOffAnimTrack.TimePosition = 0.3
+            end
         end
     end)
 end
