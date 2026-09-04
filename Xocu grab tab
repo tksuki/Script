@@ -177,7 +177,12 @@ do
         RagdollPallet = nil,
         RagdollSoundPart = nil,
         SeveralEnabled = false,
-        SeveralTargets = {}
+        SeveralTargets = {},
+
+        -- Pose Toggle State
+        PoseToggleEnabled = false,
+        PoseToggleConnection = nil,
+        PoseToggleTarget = nil,
     }
 
     FGM.Configuration = {
@@ -482,6 +487,108 @@ do
         end
     end
 
+    -- Pose Toggle: 選択プレイヤーの真下にTPして処理し元に戻る
+    function FGM.TogglePoseToggle(enabled)
+        FGM.State.PoseToggleEnabled = enabled
+
+        if FGM.State.PoseToggleConnection then
+            FGM.State.PoseToggleConnection:Disconnect()
+            FGM.State.PoseToggleConnection = nil
+        end
+
+        if not enabled then return end
+
+        local targetPlayer = FGM.State.PoseToggleTarget
+        if not targetPlayer then
+            notify("Pose Toggle", "プレイヤーを選択してください", 3)
+            FGM.State.PoseToggleEnabled = false
+            return
+        end
+
+        FGM.State.PoseToggleConnection = FGM.RunService.Heartbeat:Connect(function()
+            if not FGM.State.PoseToggleEnabled then return end
+
+            local myChar = FGM.LocalPlayer.Character
+            local myHRP = myChar and myChar:FindFirstChild("HumanoidRootPart")
+            if not myHRP then return end
+
+            local targetChar = targetPlayer.Character
+            local targetHRP = targetChar and targetChar:FindFirstChild("HumanoidRootPart")
+            local targetTorso = targetChar and targetChar:FindFirstChild("Torso")
+            if not targetHRP or not targetTorso then return end
+
+            -- 元の位置を保存
+            local originalCFrame = myHRP.CFrame
+
+            -- ターゲットの真下8スタッドにTP
+            local belowCFrame = CFrame.new(targetHRP.Position - Vector3.new(0, 8, 0))
+            myHRP.CFrame = belowCFrame
+
+            -- Figure Grab処理
+            local BodyParts = {"Head", "Left Arm", "Right Arm", "Left Leg", "Right Leg"}
+            for _, partName in pairs(BodyParts) do
+                local p = targetChar:FindFirstChild(partName)
+                if p then
+                    p.Anchored = false
+                    p.CanCollide = true
+                    p.Massless = true
+                end
+            end
+
+            local holdCFrame = myHRP.CFrame * CFrame.new(
+                FGM.Configuration.HoldPosition.X,
+                FGM.Configuration.HoldPosition.Y,
+                FGM.Configuration.HoldPosition.Z
+            )
+
+            targetTorso.CFrame = holdCFrame * CFrame.Angles(
+                math.rad(FGM.Configuration.HoldRotation.X),
+                math.rad(FGM.Configuration.HoldRotation.Y),
+                math.rad(FGM.Configuration.HoldRotation.Z)
+            )
+            targetTorso.Velocity = FGM.State.VectorZero
+            targetTorso.RotVelocity = FGM.State.VectorZero
+
+            for _, partName in pairs(BodyParts) do
+                local p = targetChar:FindFirstChild(partName)
+                if p and p ~= targetTorso then
+                    local posKey = string.gsub(partName, " ", "") .. "Position"
+                    local rotKey = string.gsub(partName, " ", "") .. "Rotation"
+                    if FGM.Configuration[posKey] and FGM.Configuration[rotKey] then
+                        p.CFrame = targetTorso.CFrame * CFrame.new(
+                            FGM.Configuration[posKey].X, FGM.Configuration[posKey].Y, FGM.Configuration[posKey].Z
+                        ) * CFrame.Angles(
+                            math.rad(FGM.Configuration[rotKey].X), math.rad(FGM.Configuration[rotKey].Y), math.rad(FGM.Configuration[rotKey].Z)
+                        )
+                        p.Velocity = FGM.State.VectorZero
+                        p.RotVelocity = FGM.State.VectorZero
+                    end
+                end
+            end
+
+            FGM.SetNetworkOwner:FireServer(targetHRP, holdCFrame)
+
+            -- 0.2秒待って元の場所に戻る
+            task.wait(0.2)
+            if myHRP and myHRP.Parent then
+                myHRP.CFrame = originalCFrame
+            end
+        end)
+    end
+
+    -- プレイヤーリストのドロップダウン選択肢を生成
+    function FGM.GetPlayerOptions()
+        local options = {}
+        for _, p in ipairs(FGM.Players:GetPlayers()) do
+            if p ~= FGM.LocalPlayer then
+                local displayName = p.DisplayName
+                local userName = p.Name
+                table.insert(options, displayName .. " (" .. userName .. ")")
+            end
+        end
+        return options
+    end
+
     function FGM.UpdateConfig(section, axis, value)
         if FGM.Configuration[section] and FGM.Configuration[section][axis] ~= nil then
             FGM.Configuration[section][axis] = value
@@ -490,6 +597,58 @@ do
 
 
     -- // UI Elements (XOCU) \\ --
+
+    -- プレイヤー選択ドロップダウン
+    local playerDropdown = FigureMain:CreateDropdown({
+        Name = "ターゲットプレイヤー",
+        Flag = "FG_TargetPlayerDropdown",
+        Options = FGM.GetPlayerOptions(),
+        Default = "",
+        Callback = function(Value)
+            -- "DisplayName (UserName)" から対象プレイヤーを特定
+            for _, p in ipairs(FGM.Players:GetPlayers()) do
+                if p ~= FGM.LocalPlayer then
+                    local label = p.DisplayName .. " (" .. p.Name .. ")"
+                    if label == Value then
+                        FGM.State.PoseToggleTarget = p
+                        -- Pose Toggleが起動中なら対象を更新
+                        if FGM.State.PoseToggleEnabled then
+                            FGM.TogglePoseToggle(false)
+                            task.wait(0.05)
+                            FGM.TogglePoseToggle(true)
+                        end
+                        notify("Target", p.DisplayName .. " を選択しました", 3)
+                        break
+                    end
+                end
+            end
+        end,
+    })
+
+    -- 入退室でドロップダウンを更新
+    FGM.Players.PlayerAdded:Connect(function()
+        task.wait(1)
+        playerDropdown:Refresh(FGM.GetPlayerOptions())
+    end)
+    FGM.Players.PlayerRemoving:Connect(function(p)
+        if FGM.State.PoseToggleTarget == p then
+            FGM.State.PoseToggleTarget = nil
+            FGM.TogglePoseToggle(false)
+            notify("Target", "選択中のプレイヤーが退室しました", 3)
+        end
+        task.wait(0.5)
+        playerDropdown:Refresh(FGM.GetPlayerOptions())
+    end)
+
+    -- ポーズトグル
+    FigureMain:CreateToggle({
+        Name = "Pose Toggle",
+        Flag = "FG_PoseToggle",
+        Default = false,
+        Callback = function(Value)
+            FGM.TogglePoseToggle(Value)
+        end,
+    })
 
     FigureMain:CreateKeybind({
         Name = "Toggle Figure Grab (Aim at target)",
