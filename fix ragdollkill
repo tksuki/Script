@@ -1,0 +1,782 @@
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
+
+-- Rayfield UIの読み込み
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+
+local Window = Rayfield:CreateWindow({
+    Name = "Two Hub - Ragdoll & Item",
+    LoadingTitle = "Two Hub is Loading...",
+    LoadingSubtitle = "by Siroo",
+    ConfigurationSaving = {
+        Enabled = false,
+        FolderName = "TwoHubConfigs",
+        FileName = "Config"
+    },
+    KeySystem = false,
+})
+
+local Tab = Window:CreateTab("Ragdoll", "hammer")
+local RagdollGroup = Tab:CreateSection("Ragdoll & Item Control")
+
+local selectedPlayer = nil
+local selectedItem = "Banana"
+local isLooping = false
+local loopConnection = nil
+local monitorConnection = nil
+local currentBanana = nil
+local isTargetDead = false
+
+-- Ragdoll Kill用
+local isRagdollActive = false
+local ragdollMonitorTask = nil
+local respawnConn = nil -- リスポーン検知用のコネクション
+
+-- 雪玉用
+local snowballRagdollActive = false
+local snowballLoopTask = nil
+local MainToggle = nil -- トグルの参照用
+
+local function getLocalChar()
+    return LocalPlayer.Character
+end
+
+local function getHumanoidRootPart()
+    local char = getLocalChar()
+    if char then
+        return char:FindFirstChild("HumanoidRootPart")
+    end
+    return nil
+end
+
+local function getSpawnedToysFolder()
+    return Workspace:FindFirstChild(LocalPlayer.Name .. "SpawnedInToys")
+end
+
+-- ============================================================
+-- Ragdoll Kill 関数 (鉛筆)
+-- ============================================================
+local function destroyAllPencils()
+    local folder = getSpawnedToysFolder()
+    if not folder then return end
+    local destroyToy = ReplicatedStorage:FindFirstChild("MenuToys") and ReplicatedStorage.MenuToys:FindFirstChild("DestroyToy")
+    if not destroyToy then return end
+    for _, child in pairs(folder:GetChildren()) do
+        if child.Name == "ToolPencil" then
+            pcall(function()
+                destroyToy:FireServer(child)
+            end)
+        end
+    end
+end
+
+local function countPencils()
+    local folder = getSpawnedToysFolder()
+    if not folder then return 0 end
+    local count = 0
+    for _, child in pairs(folder:GetChildren()) do
+        if child.Name == "ToolPencil" then
+            count = count + 1
+        end
+    end
+    return count
+end
+
+local function isPencilWeldedToTarget()
+    local folder = getSpawnedToysFolder()
+    if not folder then return false end
+    
+    local target = Players:FindFirstChild(selectedPlayer)
+    if not target or not target.Character then return false end
+    local targetHead = target.Character:FindFirstChild("Head")
+    if not targetHead then return false end
+    
+    for _, child in pairs(folder:GetChildren()) do
+        if child.Name == "ToolPencil" then
+            local stickyPart = child:FindFirstChild("StickyPart")
+            if stickyPart then
+                local weld = stickyPart:FindFirstChild("StickyWeld")
+                if weld and weld.Part1 == targetHead then
+                    return true
+                end
+            end
+        end
+    end
+    return false
+end
+
+local function spawnToolPencil()
+    local hrp = getHumanoidRootPart()
+    if not hrp then return nil end
+    
+    local spawnPos = hrp.CFrame * CFrame.new(0, 14, 20)
+    local menuToys = ReplicatedStorage:FindFirstChild("MenuToys")
+    if not menuToys then return nil end
+    
+    local spawnRemote = menuToys:FindFirstChild("SpawnToyRemoteFunction")
+    if not spawnRemote then return nil end
+    
+    local spawned = nil
+    local folder = getSpawnedToysFolder()
+    if not folder then return nil end
+    
+    local conn
+    conn = folder.ChildAdded:Connect(function(child)
+        if child.Name == "ToolPencil" then
+            spawned = child
+            conn:Disconnect()
+        end
+    end)
+    
+    task.spawn(function()
+        pcall(function()
+            spawnRemote:InvokeServer("ToolPencil", spawnPos, Vector3.zero)
+        end)
+    end)
+    
+    local start = tick()
+    repeat
+        task.wait() -- 待ち時間を極限まで短縮
+    until spawned or (tick() - start) > 3
+    
+    if conn then
+        pcall(function() conn:Disconnect() end)
+    end
+    
+    return spawned
+end
+
+local function setNetworkOwnerPencil(part)
+    if not part then return end
+    local grabEvents = ReplicatedStorage:FindFirstChild("GrabEvents")
+    if not grabEvents then return end
+    local setNet = grabEvents:FindFirstChild("SetNetworkOwner")
+    if not setNet then return end
+    
+    pcall(function()
+        for i = 1, 5 do
+            setNet:FireServer(part, part.CFrame)
+        end
+    end)
+end
+
+local function doSticky()
+    if not selectedPlayer or selectedPlayer == "" then return false end
+    
+    local target = Players:FindFirstChild(selectedPlayer)
+    if not target or not target.Character then return false end
+    
+    -- ターゲットが死んでいる場合は処理しない(リスポーンを待つ)
+    local hum = target.Character:FindFirstChildOfClass("Humanoid")
+    if not hum or hum.Health <= 0 then return false end
+    
+    local targetHead = target.Character:FindFirstChild("Head")
+    if not targetHead then return false end
+    
+    destroyAllPencils()
+    task.wait() -- 待ち時間短縮
+    
+    local pencil = spawnToolPencil()
+    if not pencil then return false end
+    
+    local soundPart = pencil:FindFirstChild("SoundPart")
+    local stickyPart = pencil:FindFirstChild("StickyPart")
+    
+    if soundPart then
+        setNetworkOwnerPencil(soundPart)
+    end
+    
+    task.wait() -- 待ち時間短縮
+    
+    if stickyPart then
+        local stickyEvent = ReplicatedStorage:FindFirstChild("PlayerEvents") and ReplicatedStorage.PlayerEvents:FindFirstChild("StickyPartEvent")
+        if stickyEvent then
+            pcall(function()
+                stickyEvent:FireServer(stickyPart, targetHead, CFrame.new(0, 0/0, 0))
+                stickyEvent:FireServer(stickyPart, targetHead, CFrame.new(0, 0/0, 0))
+            end)
+            
+            task.wait(0.15) -- 0.5から0.15に大幅短縮（サーバー同期のための最低限の猶予）
+            
+            if not isPencilWeldedToTarget() then
+                destroyAllPencils()
+                task.wait()
+                doSticky()
+            end
+            
+            return true
+        end
+    end
+    return false
+end
+
+local function RagdollRespawnMonitor()
+    local target = Players:FindFirstChild(selectedPlayer)
+    if not target then return end
+    
+    if respawnConn then
+        respawnConn:Disconnect()
+        respawnConn = nil
+    end
+    
+    -- リスポーン時に確実に最速で発動させるためのイベント
+    respawnConn = target.CharacterAdded:Connect(function(char)
+        if isRagdollActive then
+            -- 頭パーツが読み込まれるのを待機（最大3秒）して読み込まれた瞬間に刺す
+            char:WaitForChild("Head", 3)
+            doSticky()
+        end
+    end)
+end
+
+local function PencilMonitor()
+    while isRagdollActive do
+        local target = Players:FindFirstChild(selectedPlayer)
+        -- ターゲットが生存しているときのみ監視して刺し直す
+        if target and target.Character then
+            local hum = target.Character:FindFirstChildOfClass("Humanoid")
+            if hum and hum.Health > 0 then
+                local count = countPencils()
+                
+                if count == 0 then
+                    doSticky()
+                elseif count >= 2 then
+                    destroyAllPencils()
+                    task.wait()
+                    doSticky()
+                elseif count == 1 then
+                    if not isPencilWeldedToTarget() then
+                        destroyAllPencils()
+                        task.wait()
+                        doSticky()
+                    end
+                end
+            end
+        end
+        task.wait(0.05)
+    end
+end
+
+-- ============================================================
+-- バナナ 関数
+-- ============================================================
+local function setNetworkOwner(part)
+    if not part then return end
+    local grabEvents = ReplicatedStorage:FindFirstChild("GrabEvents")
+    if not grabEvents then return end
+    local setNet = grabEvents:FindFirstChild("SetNetworkOwner")
+    if not setNet then return end
+    
+    pcall(function()
+        setNet:FireServer(part, part.CFrame)
+    end)
+end
+
+local function destroyGrabLine(part)
+    if not part then return end
+    local grabEvents = ReplicatedStorage:FindFirstChild("GrabEvents")
+    if not grabEvents then return end
+    local destroyLine = grabEvents:FindFirstChild("DestroyGrabLine")
+    if not destroyLine then return end
+    
+    pcall(function()
+        destroyLine:FireServer(part)
+    end)
+end
+
+local function destroyBanana(banana)
+    if not banana then return end
+    local menuToys = ReplicatedStorage:FindFirstChild("MenuToys")
+    if not menuToys then return end
+    local destroyToy = menuToys:FindFirstChild("DestroyToy")
+    if not destroyToy then return end
+    
+    pcall(function()
+        destroyToy:FireServer(banana)
+    end)
+end
+
+local function spawnBanana()
+    local hrp = getHumanoidRootPart()
+    if not hrp then return nil end
+    
+    local spawnPos = hrp.CFrame * CFrame.new(0, 14, 20)
+    local menuToys = ReplicatedStorage:FindFirstChild("MenuToys")
+    if not menuToys then return nil end
+    
+    local spawnRemote = menuToys:FindFirstChild("SpawnToyRemoteFunction")
+    if not spawnRemote then return nil end
+    
+    local spawned = nil
+    local folder = getSpawnedToysFolder()
+    if not folder then return nil end
+    
+    local conn
+    conn = folder.ChildAdded:Connect(function(child)
+        if child.Name == "FoodBanana" then
+            spawned = child
+            conn:Disconnect()
+        end
+    end)
+    
+    task.spawn(function()
+        pcall(function()
+            spawnRemote:InvokeServer("FoodBanana", spawnPos, Vector3.zero)
+        end)
+    end)
+    
+    local start = tick()
+    repeat
+        task.wait(0.05)
+    until spawned or (tick() - start) > 3
+    
+    if conn then
+        pcall(function() conn:Disconnect() end)
+    end
+    
+    return spawned
+end
+
+local function holdBanana(banana)
+    if not banana then return end
+    local holdPart = banana:FindFirstChild("HoldPart")
+    if not holdPart then return end
+    
+    local holdRemote = holdPart:FindFirstChild("HoldItemRemoteFunction")
+    if not holdRemote then return end
+    
+    local char = getLocalChar()
+    if not char then return end
+    
+    local success = false
+    for i = 1, 5 do
+        if not banana or not banana.Parent then break end
+        local result = pcall(function()
+            return holdRemote:InvokeServer(banana, char)
+        end)
+        if result then
+            success = true
+            break
+        end
+        task.wait(0.08)
+    end
+    return success
+end
+
+local function useBanana(banana)
+    if not banana then return end
+    local useEvent = ReplicatedStorage:FindFirstChild("HoldEvents") and ReplicatedStorage.HoldEvents:FindFirstChild("Use")
+    if not useEvent then return end
+    
+    pcall(function()
+        useEvent:FireServer(banana)
+    end)
+end
+
+local function dropBanana(banana)
+    if not banana then return end
+    local holdPart = banana:FindFirstChild("HoldPart")
+    if not holdPart then return end
+    local dropRemote = holdPart:FindFirstChild("DropItemRemoteFunction")
+    if not dropRemote then return end
+    local hrp = getHumanoidRootPart()
+    if not hrp then return end
+    
+    local dropPos = hrp.CFrame * CFrame.new(0, 15, 0)
+    pcall(function()
+        dropRemote:InvokeServer(banana, dropPos, dropPos)
+    end)
+end
+
+local function getTargetLeg()
+    if not selectedPlayer then return nil end
+    local target = Players:FindFirstChild(selectedPlayer)
+    if not target or not target.Character then return nil end
+    return target.Character:FindFirstChild("Left Leg") or target.Character:FindFirstChild("LeftUpperLeg")
+end
+
+local function getTargetHealth()
+    if not selectedPlayer then return 0 end
+    local target = Players:FindFirstChild(selectedPlayer)
+    if not target or not target.Character then return 0 end
+    local hum = target.Character:FindFirstChildOfClass("Humanoid")
+    if not hum then return 0 end
+    return hum.Health
+end
+
+local function fullBananaCycle()
+    if not selectedPlayer or selectedPlayer == "" then return false end
+    
+    local banana = spawnBanana()
+    if not banana then return false end
+    
+    holdBanana(banana)
+    task.wait(0.08)
+    holdBanana(banana)
+    task.wait(0.08)
+    
+    task.wait(0.5)
+    useBanana(banana)
+    task.wait(2.3)
+    
+    dropBanana(banana)
+    task.wait(0.08)
+    dropBanana(banana)
+    task.wait(0.3)
+    
+    return banana
+end
+
+local function stopLoop()
+    isLooping = false
+    if loopConnection then
+        loopConnection:Disconnect()
+        loopConnection = nil
+    end
+    if monitorConnection then
+        monitorConnection:Disconnect()
+        monitorConnection = nil
+    end
+    
+    if currentBanana then
+        destroyBanana(currentBanana)
+        currentBanana = nil
+    end
+    
+    local folder = getSpawnedToysFolder()
+    if folder then
+        for _, child in pairs(folder:GetChildren()) do
+            if child.Name == "FoodBanana" then
+                destroyBanana(child)
+            end
+        end
+    end
+end
+
+local function restartLoop(banana)
+    if loopConnection then
+        loopConnection:Disconnect()
+        loopConnection = nil
+    end
+    
+    currentBanana = banana
+    local hitboxPart = banana:FindFirstChild("HitboxPart")
+    if not hitboxPart then return end
+    
+    loopConnection = RunService.Heartbeat:Connect(function()
+        if not isLooping then
+            stopLoop()
+            return 
+        end
+        
+        if not currentBanana or not currentBanana.Parent then
+            return 
+        end
+        
+        local hrp = getHumanoidRootPart()
+        if not hrp then return end
+        
+        local targetPos, targetCFrame
+        local health = getTargetHealth()
+        
+        if health <= 0 then
+            isTargetDead = true
+            targetPos = hrp.CFrame * CFrame.new(0, 7, 0)
+            targetCFrame = CFrame.new(targetPos.Position)
+        else
+            isTargetDead = false
+            local leg = getTargetLeg()
+            if leg then
+                targetPos = leg.CFrame * CFrame.new(0, 0.5, 0)
+                targetCFrame = leg.CFrame
+            else
+                targetPos = hrp.CFrame * CFrame.new(0, 7, 0)
+                targetCFrame = CFrame.new(targetPos.Position)
+            end
+        end
+        
+        setNetworkOwner(hitboxPart)
+        destroyGrabLine(hitboxPart)
+        
+        local bp = hitboxPart:FindFirstChild("BodyPosition")
+        if not bp then
+            bp = Instance.new("BodyPosition")
+            bp.P = 10000
+            bp.D = 100
+            bp.MaxForce = Vector3.new(1e9, 1e9, 1e9)
+            bp.Parent = hitboxPart
+        end
+        bp.Position = targetPos.Position
+        
+        local bg = hitboxPart:FindFirstChild("BodyGyro")
+        if not bg then
+            bg = Instance.new("BodyGyro")
+            bg.P = 10000
+            bg.D = 100
+            bg.MaxTorque = Vector3.new(1e9, 1e9, 1e9)
+            bg.Parent = hitboxPart
+        end
+        bg.CFrame = targetCFrame
+    end)
+end
+
+local function startLoop()
+    if isLooping then return end
+    if not selectedPlayer or selectedPlayer == "" then return end
+    
+    isLooping = true
+    isTargetDead = false
+    
+    local banana = fullBananaCycle()
+    if banana then
+        restartLoop(banana)
+    end
+    
+    monitorConnection = RunService.Heartbeat:Connect(function()
+        if not isLooping then return end
+        
+        local folder = getSpawnedToysFolder()
+        local bananaExists = false
+        if folder then
+            for _, child in pairs(folder:GetChildren()) do
+                if child.Name == "FoodBanana" then
+                    bananaExists = true
+                    break
+                end
+            end
+        end
+        
+        if not bananaExists then
+            if loopConnection then
+                loopConnection:Disconnect()
+                loopConnection = nil
+            end
+            task.wait(0.05)
+            local newBanana = fullBananaCycle()
+            if newBanana then
+                restartLoop(newBanana)
+            end
+        end
+    end)
+end
+
+-- ============================================================
+-- 雪玉 関数 
+-- ============================================================
+local function countSnowballs()
+    local folder = getSpawnedToysFolder()
+    if not folder then return 0 end
+    local count = 0
+    for _, child in pairs(folder:GetChildren()) do
+        if child.Name == "BallSnowball" then
+            count = count + 1
+        end
+    end
+    return count
+end
+
+local function destroyAllSnowballs()
+    local folder = getSpawnedToysFolder()
+    if not folder then return end
+    local destroyToy = ReplicatedStorage:FindFirstChild("MenuToys") and ReplicatedStorage.MenuToys:FindFirstChild("DestroyToy")
+    if not destroyToy then return end
+    for _, child in pairs(folder:GetChildren()) do
+        if child.Name == "BallSnowball" then
+            pcall(function()
+                destroyToy:FireServer(child)
+            end)
+        end
+    end
+end
+
+local function SnowballLoop()
+    while snowballRagdollActive do
+        -- ▼ここが追加ポイント：鉛筆が有効なのにまだ刺さっていない場合は雪玉処理を待機する
+        if isRagdollActive and not isPencilWeldedToTarget() then
+            task.wait(0.05)
+        else
+            local target = Players:FindFirstChild(selectedPlayer)
+            
+            if target and target.Character then
+                local character = target.Character
+                local humanoid = character:FindFirstChildOfClass("Humanoid")
+                
+                -- 対象が生存しているときのみ雪玉を操作・生成する
+                if humanoid and humanoid.Health > 0 then
+                    local targetPart = character:FindFirstChild("HumanoidRootPart") 
+                        or character:FindFirstChild("UpperTorso") 
+                        or character:FindFirstChild("Torso")
+                    
+                    if targetPart then
+                        -- 雪玉の数が2個未満の時だけ新しく生成
+                        local currentSnowballs = countSnowballs()
+                        if currentSnowballs < 2 then
+                            task.spawn(function()
+                                pcall(function()
+                                    local offset = Vector3.new(
+                                        math.random(-30, 30) / 100,
+                                        math.random(-30, 30) / 100,
+                                        math.random(-30, 30) / 100
+                                    )
+                                    local spawnCFrame = targetPart.CFrame * CFrame.new(offset)
+                                    local SpawnRemote = ReplicatedStorage:WaitForChild("MenuToys"):WaitForChild("SpawnToyRemoteFunction")
+                                    SpawnRemote:InvokeServer("BallSnowball", spawnCFrame, Vector3.zero)
+                                end)
+                            end)
+                        end
+                        
+                        -- 出ている雪玉を全てターゲットにまとわりつかせる
+                        local folder = getSpawnedToysFolder()
+                        if folder then
+                            for _, snowball in pairs(folder:GetChildren()) do
+                                if snowball.Name == "BallSnowball" and snowball.Parent then
+                                    local part = snowball.PrimaryPart or snowball:FindFirstChildWhichIsA("BasePart")
+                                    if part then
+                                        local offset = Vector3.new(
+                                            math.random(-30, 30) / 100,
+                                            math.random(-30, 30) / 100,
+                                            math.random(-30, 30) / 100
+                                        )
+                                        part.CFrame = targetPart.CFrame * CFrame.new(offset)
+                                        part.AssemblyLinearVelocity = Vector3.zero
+                                        part.AssemblyAngularVelocity = Vector3.zero
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+            task.wait(0.05)
+        end
+    end
+end
+
+-- ============================================================
+-- Rayfield UI の構築
+-- ============================================================
+local function GetPlayerList()
+    local list = {}
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer then
+            table.insert(list, player.Name .. " (" .. player.DisplayName .. ")")
+        end
+    end
+    return list
+end
+
+local playerDropdown = Tab:CreateDropdown({
+    Name = "Select Player",
+    Options = GetPlayerList(),
+    CurrentOption = "",
+    Flag = "TargetSelect",
+    Callback = function(Option)
+        local name = string.match(Option[1], "^(.-) %(")
+        if name then
+            selectedPlayer = name
+        else
+            selectedPlayer = Option[1]
+        end
+    end,
+})
+
+local itemDropdown = Tab:CreateDropdown({
+    Name = "Select Item",
+    Options = {"Banana", "Snowball"},
+    CurrentOption = {"Banana"},
+    MultipleOptions = false,
+    Flag = "ItemSelect",
+    Callback = function(Option)
+        selectedItem = Option[1]
+    end,
+})
+
+-- プレイヤーリストの自動更新
+Players.PlayerAdded:Connect(function()
+    playerDropdown:Refresh(GetPlayerList())
+end)
+
+Players.PlayerRemoving:Connect(function(player)
+    playerDropdown:Refresh(GetPlayerList())
+    if selectedPlayer == player.Name and MainToggle then
+        MainToggle:Set(false)
+        Rayfield:Notify({Title = "Target Left", Content = "ターゲットが退出したため、処理を停止しました。", Duration = 3})
+    end
+end)
+
+-- 一括制御トグル（鉛筆 ＋ 選択されたアイテム）
+MainToggle = Tab:CreateToggle({
+    Name = "Combined Kill (Pencil + Item)",
+    CurrentValue = false,
+    Flag = "CombinedKillToggle",
+    Callback = function(Value)
+        if Value then
+            if not selectedPlayer or selectedPlayer == "" then
+                Rayfield:Notify({Title = "Error", Content = "プレイヤーが選択されていません！", Duration = 3})
+                MainToggle:Set(false)
+                return
+            end
+            
+            -- 1. 共通: 鉛筆 (Ragdoll Kill) を有効化
+            isRagdollActive = true
+            doSticky()
+            RagdollRespawnMonitor()
+            if not ragdollMonitorTask then
+                ragdollMonitorTask = task.spawn(PencilMonitor)
+            end
+            
+            -- 2. アイテムに応じて処理を分岐
+            if selectedItem == "Banana" then
+                task.delay(0.05, function()
+                    if isRagdollActive then
+                        stopLoop()
+                        startLoop()
+                    end
+                end)
+            elseif selectedItem == "Snowball" then
+                task.delay(0.05, function() -- 1秒から短縮（雪玉ループ内で鉛筆が刺さるまで待機するため）
+                    if isRagdollActive then
+                        snowballRagdollActive = true
+                        if snowballLoopTask then
+                            task.cancel(snowballLoopTask)
+                        end
+                        snowballLoopTask = task.spawn(SnowballLoop)
+                        Rayfield:Notify({Title = "Activated", Content = "雪玉のループを開始しました。(最大2個)", Duration = 2})
+                    end
+                end)
+            end
+        else
+            -- 両方一括停止・クリーンアップ
+            isRagdollActive = false
+            
+            if respawnConn then
+                respawnConn:Disconnect()
+                respawnConn = nil
+            end
+            
+            if ragdollMonitorTask then
+                task.cancel(ragdollMonitorTask)
+                ragdollMonitorTask = nil
+            end
+            destroyAllPencils()
+            
+            -- バナナの停止
+            if isLooping or selectedItem == "Banana" then
+                stopLoop()
+            end
+            
+            -- 雪玉の停止
+            snowballRagdollActive = false
+            if snowballLoopTask then
+                task.cancel(snowballLoopTask)
+                snowballLoopTask = nil
+            end
+            destroyAllSnowballs()
+        end
+    end,
+})
+
+Rayfield:LoadConfiguration()
