@@ -1,0 +1,843 @@
+local HttpService = game:GetService("HttpService")
+local CoreGui = game:GetService("CoreGui")
+local Players = game:GetService("Players")
+
+local LocalPlayer = Players.LocalPlayer
+
+local signboardLanguage = "ja"
+local chatLanguage = "en"
+
+
+-- ========================================
+-- 既存のGUIを削除
+-- ========================================
+
+if CoreGui:FindFirstChild("V4T") then
+    CoreGui.V4T:Destroy()
+end
+
+
+-- ========================================
+-- 翻訳処理
+-- ========================================
+
+local function translate(text, targetLanguage)
+    if not text or text == "" then
+        return text
+    end
+
+    local url =
+        "https://translate.googleapis.com/translate_a/single"
+        .. "?client=gtx"
+        .. "&sl=auto"
+        .. "&tl=" .. HttpService:UrlEncode(targetLanguage)
+        .. "&dt=t"
+        .. "&q=" .. HttpService:UrlEncode(text)
+
+    local success, response = pcall(function()
+        if request then
+            local result = request({
+                Url = url,
+                Method = "GET"
+            })
+
+            return result.Body
+        else
+            return game:HttpGet(url)
+        end
+    end)
+
+    if not success or not response then
+        warn("翻訳リクエストに失敗しました:", response)
+        return text
+    end
+
+    -- JSONをデコード
+    local decodeSuccess, data = pcall(function()
+        return HttpService:JSONDecode(response)
+    end)
+
+    if not decodeSuccess or not data then
+        warn("翻訳レスポンスの解析に失敗しました:", response)
+        return text
+    end
+
+    local translatedText = ""
+
+    -- 翻訳結果を結合
+    if data[1] then
+        for _, segment in ipairs(data[1]) do
+            if segment[1] then
+                translatedText ..= segment[1]
+            end
+        end
+    end
+
+    if translatedText ~= "" then
+        return translatedText
+    end
+
+    return text
+end
+
+
+-- ========================================
+-- Instance作成用ヘルパー
+-- ========================================
+
+local function createInstance(className, parent, properties)
+    local instance = Instance.new(className)
+
+    for property, value in pairs(properties) do
+        instance[property] = value
+    end
+
+    instance.Parent = parent
+
+    return instance
+end
+
+
+-- ========================================
+-- メインGUI
+-- ========================================
+
+local MainGui = createInstance("ScreenGui", CoreGui, {
+    Name = "V4T"
+})
+
+
+local MainFrame = createInstance("Frame", MainGui, {
+    Size = UDim2.new(0, 350, 0, 250),
+    Position = UDim2.new(0.5, -175, 0.5, -125),
+
+    BackgroundColor3 = Color3.fromRGB(
+        20,
+        20,
+        20
+    ),
+
+    Active = true,
+    Draggable = true
+})
+
+
+createInstance("UICorner", MainFrame, {
+    CornerRadius = UDim.new(0, 6)
+})
+
+
+-- ========================================
+-- タイトルバー
+-- ========================================
+
+local TitleBar = createInstance("Frame", MainFrame, {
+    Size = UDim2.new(1, 0, 0, 30),
+
+    BackgroundColor3 = Color3.fromRGB(
+        25,
+        25,
+        25
+    )
+})
+
+
+local Title = createInstance("TextLabel", TitleBar, {
+    Text = "やじゅうはぶ",
+
+    Size = UDim2.new(
+        1,
+        -40,
+        1,
+        0
+    ),
+
+    TextXAlignment = Enum.TextXAlignment.Left,
+
+    Position = UDim2.new(
+        0,
+        10,
+        0,
+        0
+    ),
+
+    TextColor3 = Color3.fromRGB(
+        0,
+        200,
+        255
+    ),
+
+    Font = Enum.Font.GothamBold,
+
+    BackgroundTransparency = 1
+})
+
+
+local MinimizeButton = createInstance("TextButton", TitleBar, {
+    Text = "-",
+
+    Size = UDim2.new(
+        0,
+        30,
+        0,
+        30
+    ),
+
+    Position = UDim2.new(
+        1,
+        -30,
+        0,
+        0
+    ),
+
+    BackgroundTransparency = 1,
+
+    TextColor3 = Color3.new(
+        1,
+        1,
+        1
+    )
+})
+
+
+-- ========================================
+-- タブ
+-- ========================================
+
+local TabBar = createInstance("Frame", MainFrame, {
+    Size = UDim2.new(1, 0, 0, 35),
+
+    Position = UDim2.new(
+        0,
+        0,
+        0,
+        30
+    ),
+
+    BackgroundColor3 = Color3.fromRGB(
+        30,
+        30,
+        30
+    )
+})
+
+
+local ChatPage = createInstance("Frame", MainFrame, {
+    Size = UDim2.new(
+        1,
+        0,
+        1,
+        -65
+    ),
+
+    Position = UDim2.new(
+        0,
+        0,
+        0,
+        65
+    ),
+
+    BackgroundTransparency = 1,
+    Visible = true
+})
+
+
+local SignboardPage = createInstance("Frame", MainFrame, {
+    Size = UDim2.new(
+        1,
+        0,
+        1,
+        -65
+    ),
+
+    Position = UDim2.new(
+        0,
+        0,
+        0,
+        65
+    ),
+
+    BackgroundTransparency = 1,
+    Visible = false
+})
+
+
+-- ========================================
+-- タブボタン
+-- ========================================
+
+local ChatTab = createInstance("TextButton", TabBar, {
+    Size = UDim2.new(
+        0.5,
+        0,
+        1,
+        0
+    ),
+
+    Text = "チャット",
+
+    BackgroundTransparency = 0.5,
+
+    BackgroundColor3 = Color3.fromRGB(
+        0,
+        150,
+        255
+    ),
+
+    TextColor3 = Color3.new(
+        1,
+        1,
+        1
+    ),
+
+    Font = Enum.Font.GothamBold
+})
+
+
+local SignboardTab = createInstance("TextButton", TabBar, {
+    Size = UDim2.new(
+        0.5,
+        0,
+        1,
+        0
+    ),
+
+    Position = UDim2.new(
+        0.5,
+        0,
+        0,
+        0
+    ),
+
+    Text = "看板",
+
+    BackgroundTransparency = 1,
+
+    BackgroundColor3 = Color3.fromRGB(
+        0,
+        150,
+        255
+    ),
+
+    TextColor3 = Color3.new(
+        1,
+        1,
+        1
+    ),
+
+    Font = Enum.Font.GothamBold
+})
+
+
+-- ========================================
+-- チャットタブ
+-- ========================================
+
+ChatTab.MouseButton1Click:Connect(function()
+    ChatPage.Visible = true
+    SignboardPage.Visible = false
+
+    ChatTab.BackgroundTransparency = 0.5
+    SignboardTab.BackgroundTransparency = 1
+end)
+
+
+-- ========================================
+-- 看板タブ
+-- ========================================
+
+SignboardTab.MouseButton1Click:Connect(function()
+    ChatPage.Visible = false
+    SignboardPage.Visible = true
+
+    ChatTab.BackgroundTransparency = 1
+    SignboardTab.BackgroundTransparency = 0.5
+end)
+
+
+-- ========================================
+-- 言語一覧
+-- ========================================
+
+local languages = {
+    {
+        "日本語",
+        "ja"
+    },
+
+    {
+        "英語",
+        "en"
+    },
+
+    {
+        "韓国語",
+        "ko"
+    },
+
+    {
+        "アラビア語",
+        "ar"
+    },
+
+    {
+        "中国語",
+        "zh-CN"
+    }
+}
+
+
+-- ========================================
+-- 各ページのセットアップ
+-- ========================================
+
+local function setupPage(page, pageType)
+
+    -- ------------------------------
+    -- 言語選択部分
+    -- ------------------------------
+
+    local languageFrame = createInstance("Frame", page, {
+        Size = UDim2.new(
+            0,
+            330,
+            0,
+            35
+        ),
+
+        Position = UDim2.new(
+            0,
+            10,
+            0,
+            10
+        ),
+
+        BackgroundColor3 = Color3.fromRGB(
+            35,
+            35,
+            35
+        )
+    })
+
+
+    local languageButton = createInstance("TextButton", languageFrame, {
+        Size = UDim2.new(
+            1,
+            0,
+            1,
+            0
+        ),
+
+        Text =
+            pageType == "C"
+            and "送信用: 英語"
+            or "看板用: 日本語",
+
+        BackgroundTransparency = 1,
+
+        TextColor3 = Color3.new(
+            1,
+            1,
+            1
+        )
+    })
+
+
+    local languageList = createInstance("Frame", languageFrame, {
+        Size = UDim2.new(
+            1,
+            0,
+            0,
+            175
+        ),
+
+        Position = UDim2.new(
+            0,
+            0,
+            1,
+            5
+        ),
+
+        Visible = false,
+
+        ZIndex = 20,
+
+        BackgroundColor3 = Color3.fromRGB(
+            25,
+            25,
+            25
+        )
+    })
+
+
+    -- ------------------------------
+    -- 言語選択肢
+    -- ------------------------------
+
+    for index, language in ipairs(languages) do
+
+        local option = createInstance("TextButton", languageList, {
+            Size = UDim2.new(
+                1,
+                0,
+                0,
+                35
+            ),
+
+            Position = UDim2.new(
+                0,
+                0,
+                0,
+                (index - 1) * 35
+            ),
+
+            Text = language[1],
+
+            BackgroundTransparency = 1,
+
+            TextColor3 = Color3.new(
+                1,
+                1,
+                1
+            ),
+
+            ZIndex = 21
+        })
+
+
+        option.MouseButton1Click:Connect(function()
+
+            if pageType == "C" then
+                chatLanguage = language[2]
+            else
+                signboardLanguage = language[2]
+            end
+
+
+            languageButton.Text =
+                (
+                    pageType == "C"
+                    and "送信用: "
+                    or "看板用: "
+                )
+                .. language[1]
+
+
+            languageList.Visible = false
+        end)
+    end
+
+
+    -- ------------------------------
+    -- 言語リスト開閉
+    -- ------------------------------
+
+    languageButton.MouseButton1Click:Connect(function()
+        languageList.Visible = not languageList.Visible
+    end)
+
+
+    -- ------------------------------
+    -- 入力欄
+    -- ------------------------------
+
+    local inputBox = createInstance("TextBox", page, {
+        Size = UDim2.new(
+            0,
+            330,
+            0,
+            40
+        ),
+
+        Position = UDim2.new(
+            0,
+            10,
+            0,
+            55
+        ),
+
+        PlaceholderText = "文章を入力...",
+
+        BackgroundColor3 = Color3.fromRGB(
+            35,
+            35,
+            35
+        ),
+
+        TextColor3 = Color3.new(
+            1,
+            1,
+            1
+        )
+    })
+
+
+    -- ------------------------------
+    -- 実行ボタン
+    -- ------------------------------
+
+    local executeButton = createInstance("TextButton", page, {
+        Size = UDim2.new(
+            0,
+            330,
+            0,
+            45
+        ),
+
+        Position = UDim2.new(
+            0,
+            10,
+            0,
+            105
+        ),
+
+        Text =
+            pageType == "C"
+            and "翻訳して送信"
+            or "看板を更新",
+
+        BackgroundColor3 = Color3.fromRGB(
+            0,
+            pageType == "C" and 150 or 200,
+            255
+        ),
+
+        TextColor3 = Color3.new(
+            1,
+            1,
+            1
+        ),
+
+        Font = Enum.Font.GothamBold
+    })
+
+
+    createInstance("UICorner", executeButton, {})
+
+
+    -- ========================================
+    -- 実行処理
+    -- ========================================
+
+    executeButton.MouseButton1Click:Connect(function()
+
+        if inputBox.Text == "" then
+            return
+        end
+
+
+        executeButton.Text = "翻訳中..."
+
+
+        local targetLanguage =
+            pageType == "C"
+            and chatLanguage
+            or signboardLanguage
+
+
+        local translatedText = translate(
+            inputBox.Text,
+            targetLanguage
+        )
+
+
+        -- ====================================
+        -- チャット送信
+        -- ====================================
+
+        if pageType == "C" then
+
+            local TextChatService =
+                game:GetService("TextChatService")
+
+
+            if TextChatService.ChatVersion
+                == Enum.ChatVersion.TextChatService then
+
+                local TextChannels =
+                    TextChatService:FindFirstChild("TextChannels")
+
+
+                local GeneralChannel =
+                    TextChannels
+                    and TextChannels:FindFirstChild("RBXGeneral")
+
+
+                if GeneralChannel then
+
+                    GeneralChannel:SendAsync(
+                        translatedText
+                    )
+
+                else
+
+                    warn("RBXGeneralが見つかりません。")
+
+                end
+
+            else
+
+                local ReplicatedStorage =
+                    game:GetService("ReplicatedStorage")
+
+
+                local SayMessageRequest =
+                    ReplicatedStorage:FindFirstChild(
+                        "SayMessageRequest",
+                        true
+                    )
+
+
+                if SayMessageRequest then
+
+                    SayMessageRequest:FireServer(
+                        translatedText,
+                        "All"
+                    )
+
+                else
+
+                    warn(
+                        "SayMessageRequestが見つかりません。"
+                    )
+
+                end
+            end
+
+
+        -- ====================================
+        -- 看板更新
+        -- ====================================
+
+        else
+
+            local character =
+                LocalPlayer.Character
+
+
+            local tool =
+                character
+                and character:FindFirstChildWhichIsA("Tool")
+
+
+            if tool then
+
+                for _, object in ipairs(
+                    tool:GetDescendants()
+                ) do
+
+                    if object:IsA("TextBox")
+                        or object:IsA("TextLabel") then
+
+                        object.Text = translatedText
+                    end
+                end
+
+            else
+
+                warn("Toolが見つかりません。")
+
+            end
+        end
+
+
+        inputBox.Text = ""
+
+
+        executeButton.Text =
+            pageType == "C"
+            and "翻訳して送信"
+            or "看板を更新"
+    end)
+end
+
+
+-- ========================================
+-- ページ作成
+-- ========================================
+
+setupPage(
+    ChatPage,
+    "C"
+)
+
+setupPage(
+    SignboardPage,
+    "S"
+)
+
+
+-- ========================================
+-- 最小化時に表示するボタン
+-- ========================================
+
+local ToggleButton = createInstance("TextButton", MainGui, {
+    Size = UDim2.new(
+        0,
+        140,
+        0,
+        28
+    ),
+
+    Position = UDim2.new(
+        0.5,
+        -70,
+        0,
+        8
+    ),
+
+    Text = "やじゅうはぶ | 開く",
+
+    Visible = false,
+
+    BackgroundColor3 = Color3.fromRGB(
+        20,
+        20,
+        20
+    ),
+
+    TextColor3 = Color3.fromRGB(
+        0,
+        200,
+        255
+    ),
+
+    Active = true,
+    Draggable = true
+})
+
+
+createInstance("UIStroke", ToggleButton, {
+    Color = Color3.fromRGB(
+        0,
+        200,
+        255
+    )
+})
+
+
+createInstance("UICorner", ToggleButton, {})
+
+
+-- ========================================
+-- 最小化
+-- ========================================
+
+MinimizeButton.MouseButton1Click:Connect(function()
+
+    MainFrame.Visible = false
+    ToggleButton.Visible = true
+
+end)
+
+
+-- ========================================
+-- 再表示
+-- ========================================
+
+ToggleButton.MouseButton1Click:Connect(function()
+
+    MainFrame.Visible = true
+    ToggleButton.Visible = false
+
+end)
