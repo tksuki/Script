@@ -1,0 +1,325 @@
+-- LocalScript (StarterPlayerScripts など)
+-- GlassBox Spawner
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local LocalPlayer = Players.LocalPlayer
+local PlayerName  = LocalPlayer.Name
+
+local RayField = loadstring(game:HttpGet(
+    "https://sirius.menu/rayfield"
+))()
+
+local Window = RayField:CreateWindow({
+    Name = "GlassBox Spawner",
+    LoadingTitle = "GlassBox Spawner",
+    LoadingSubtitle = "by " .. PlayerName,
+    Theme = "Default",
+    DisableRayfieldPrompts = false,
+    DisableBuildWarnings = false,
+})
+
+local MainTab = Window:CreateTab("メイン", 4483362458)
+MainTab:CreateSection("設定")
+
+------------------------------------------------------------
+-- 変数・リモート取得関数
+------------------------------------------------------------
+local toggleEnabled   = false
+local selectedPlayer  = nil
+local playerMap       = {} -- ["表示名 (@ユーザ名)"] = Playerオブジェクト
+
+local function getGrabEvents()
+    return ReplicatedStorage:FindFirstChild("GrabEvents")
+end
+
+local function getSetNetworkOwner()
+    local ge = getGrabEvents()
+    return ge and ge:FindFirstChild("SetNetworkOwner")
+end
+
+local function getDestroyGrabLine()
+    local ge = getGrabEvents()
+    return ge and ge:FindFirstChild("DestroyGrabLine")
+end
+
+local function getMenuToys()
+    return ReplicatedStorage:FindFirstChild("MenuToys")
+end
+
+local function getSpawnToyRF()
+    local mt = getMenuToys()
+    return mt and mt:FindFirstChild("SpawnToyRemoteFunction")
+end
+
+local function getDestroyToy()
+    local mt = getMenuToys()
+    return mt and mt:FindFirstChild("DestroyToy")
+end
+
+local function getToysFolder()
+    local folder = workspace:FindFirstChild(PlayerName .. "SpawnedInToys")
+    if folder then return folder end
+    for _, child in ipairs(workspace:GetChildren()) do
+        if child:IsA("Folder") and child.Name:find("SpawnedInToys") then
+            return child
+        end
+    end
+    return nil
+end
+
+------------------------------------------------------------
+-- プレイヤー ドロップダウン設定 & 更新処理
+------------------------------------------------------------
+local function getPlayerFormatString(player)
+    return string.format("%s (@%s)", player.DisplayName, player.Name)
+end
+
+local function getPlayerList()
+    local list = {}
+    playerMap = {}
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= LocalPlayer then
+            local formattedName = getPlayerFormatString(p)
+            table.insert(list, formattedName)
+            playerMap[formattedName] = p
+        end
+    end
+    if #list == 0 then
+        table.insert(list, "対象プレイヤーなし")
+    end
+    return list
+end
+
+local PlayerDropdown = MainTab:CreateDropdown({
+    Name = "対象プレイヤー選択",
+    Options = getPlayerList(),
+    CurrentOption = getPlayerList()[1] or "対象プレイヤーなし",
+    MultipleOptions = false,
+    Flag = "TargetPlayerDropdown",
+    Callback = function(Option)
+        local selectedStr = type(Option) == "table" and Option[1] or Option
+        selectedPlayer = playerMap[selectedStr]
+    end,
+})
+
+-- 初期の選択状態を更新
+local initialOptions = getPlayerList()
+if #initialOptions > 0 and initialOptions[1] ~= "対象プレイヤーなし" then
+    selectedPlayer = playerMap[initialOptions[1]]
+end
+
+local function refreshDropdown()
+    local currentOptions = getPlayerList()
+    PlayerDropdown:Refresh(currentOptions)
+    
+    local currentSelectedStr = PlayerDropdown.CurrentOption
+    if type(currentSelectedStr) == "table" then
+        currentSelectedStr = currentSelectedStr[1]
+    end
+    
+    if currentSelectedStr and playerMap[currentSelectedStr] then
+        selectedPlayer = playerMap[currentSelectedStr]
+    else
+        if #currentOptions > 0 and currentOptions[1] ~= "対象プレイヤーなし" then
+            selectedPlayer = playerMap[currentOptions[1]]
+            PlayerDropdown:Set({currentOptions[1]})
+        else
+            selectedPlayer = nil
+        end
+    end
+end
+
+Players.PlayerAdded:Connect(function(player)
+    refreshDropdown()
+    player:GetPropertyChangedSignal("DisplayName"):Connect(refreshDropdown)
+end)
+
+Players.PlayerRemoving:Connect(function(player)
+    refreshDropdown()
+end)
+
+for _, player in ipairs(Players:GetPlayers()) do
+    if player ~= LocalPlayer then
+        player:GetPropertyChangedSignal("DisplayName"):Connect(refreshDropdown)
+    end
+end
+
+------------------------------------------------------------
+-- 箱処理関数
+------------------------------------------------------------
+local function processBox()
+    local character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+    local myHrp = character:WaitForChild("HumanoidRootPart", 10)
+    if not myHrp then return end
+
+    local targetPlayer = selectedPlayer
+    if not targetPlayer or not targetPlayer.Parent then
+        warn("[GlassBox] 選択されたプレイヤーが無効です")
+        return
+    end
+
+    local targetChar = targetPlayer.Character
+    if not targetChar then
+        warn("[GlassBox] ターゲットのキャラクターが存在しません")
+        return
+    end
+
+    local targetHrp = targetChar:FindFirstChild("HumanoidRootPart")
+    local targetTorso = targetChar:FindFirstChild("Torso") or targetChar:FindFirstChild("UpperTorso")
+
+    if not targetHrp or not targetTorso then
+        warn("[GlassBox] ターゲットのPartが見つかりません")
+        return
+    end
+
+    local SpawnToyRF = getSpawnToyRF()
+    local SetNetworkOwner = getSetNetworkOwner()
+    local DestroyGrabLine = getDestroyGrabLine()
+    local DestroyToy = getDestroyToy()
+
+    if not SpawnToyRF or not SetNetworkOwner or not DestroyGrabLine or not DestroyToy then
+        warn("[GlassBox] リモートイベントの取得に失敗しました")
+        return
+    end
+
+    -- 1. 箱を1つ作成
+    local spawnCFrame = myHrp.CFrame * CFrame.new(0, 0, -4)
+    local toysFolder = getToysFolder()
+    local existingModels = {}
+    if toysFolder then
+        for _, child in ipairs(toysFolder:GetChildren()) do
+            existingModels[child] = true
+        end
+    end
+
+    SpawnToyRF:InvokeServer("GlassBoxGray", spawnCFrame, Vector3.new(0, -13, 0))
+    
+    task.wait(0.09)
+    if not toggleEnabled then return end
+
+    -- 生成された箱を取得
+    toysFolder = getToysFolder()
+    local boxModel = nil
+    if toysFolder then
+        for _, child in ipairs(toysFolder:GetChildren()) do
+            if not existingModels[child] and child.Name == "GlassBoxGray" then
+                boxModel = child
+                break
+            end
+        end
+    end
+
+    if not boxModel then
+        warn("[GlassBox] 箱の取得に失敗しました")
+        return
+    end
+
+    local boxPart = boxModel:FindFirstChild("SoundPart") 
+                 or boxModel.PrimaryPart 
+                 or boxModel:FindFirstChildWhichIsA("BasePart")
+
+    if not boxPart then return end
+
+    -- 2. 真上150スタッドの位置を設定（向きを正常・水平にリセットしたCFrame）
+    local targetPosition = myHrp.Position + Vector3.new(0, 150, 0)
+    local targetBoxCFrame = CFrame.new(targetPosition) -- 回転なし（正面向き）
+    
+    SetNetworkOwner:FireServer(boxPart, targetBoxCFrame)
+
+    if boxModel:IsA("Model") and boxModel.PrimaryPart then
+        boxModel:SetPrimaryPartCFrame(targetBoxCFrame)
+    else
+        boxPart.CFrame = targetBoxCFrame
+    end
+
+    -- 【箱を正しい向き・位置で固定する】
+    local fixInstances = {}
+    for _, part in ipairs(boxModel:GetDescendants()) do
+        if part:IsA("BasePart") then
+            -- 既存の制御インスタンスをクリア
+            local oldBp = part:FindFirstChildOfClass("BodyPosition")
+            local oldBg = part:FindFirstChildOfClass("BodyGyro")
+            if oldBp then oldBp:Destroy() end
+            if oldBg then oldBg:Destroy() end
+
+            local bp = Instance.new("BodyPosition")
+            bp.Position = part.Position
+            bp.MaxForce = Vector3.new(1e6, 1e6, 1e6)
+            bp.P = 1e5
+            bp.D = 1000
+            bp.Parent = part
+
+            local bg = Instance.new("BodyGyro")
+            bg.CFrame = CFrame.new() -- 回転のない標準の向きに補正
+            bg.MaxTorque = Vector3.new(1e6, 1e6, 1e6)
+            bg.P = 1e5
+            bg.D = 1000
+            bg.Parent = part
+
+            table.insert(fixInstances, {bp = bp, bg = bg})
+        end
+    end
+
+    task.wait(0.5)
+    if not toggleEnabled then return end
+
+    -- 3. プレイヤー処理（箱に入れる）
+    local originalMyCF = myHrp.CFrame
+    myHrp.CFrame = targetHrp.CFrame * CFrame.new(0, 0, 2)
+    task.wait(0.3)
+
+    for _ = 1, 5 do
+        SetNetworkOwner:FireServer(targetTorso, CFrame.new(targetTorso.Position))
+        task.wait(0.1)
+    end
+
+    -- プレイヤーを箱の上部へ移動（TP）
+    local boxTopCFrame = CFrame.new(targetBoxCFrame.Position + Vector3.new(0, 3, 0))
+    targetHrp.CFrame = boxTopCFrame
+
+    -- すぐに DestroyGrabLine を送信
+    DestroyGrabLine:FireServer(targetTorso)
+
+    -- 自分の位置を元に戻す
+    myHrp.CFrame = originalMyCF
+
+    -- ★ 箱は真上150スタッドで固定したまま 0.5 秒待機
+    task.wait(1.8)
+
+    -- 4. 0.5秒経過後に固定位置を更新し、高速で40スタッド下へ下げる
+    local dropOffset = Vector3.new(0, -100, 0)
+    for _, item in ipairs(fixInstances) do
+        if item.bp and item.bp.Parent then
+            item.bp.Position = item.bp.Position + dropOffset
+            item.bp.P = 5e5
+        end
+    end
+
+    -- 5. 落下中に0.8秒待機
+    task.wait(1.2)
+
+    -- 6. 箱を消す
+    DestroyToy:FireServer(boxModel)
+    
+    task.wait(0.5)
+end
+
+------------------------------------------------------------
+-- メイン機能トグル
+------------------------------------------------------------
+MainTab:CreateToggle({
+    Name = "メイン機能",
+    CurrentValue = false,
+    Flag = "MainToggle",
+    Callback = function(Value)
+        toggleEnabled = Value
+
+        if Value then
+            task.spawn(function()
+                pcall(processBox)
+            end)
+        end
+    end,
+})
