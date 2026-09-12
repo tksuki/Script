@@ -1,0 +1,1194 @@
+このコードのloopgrab[kick]のコードの最初のプレイヤーのところにtpしてプレイヤーを自分の真上に持ってくる処理をloopgrab[kick v2]の機能に移植してほしい、あとv2の固定も普通のkickと全く同じに修正して
+--[[
+    Target Loops Only Script (完全版 - Kick v2 重力無効化・固定強化対応)
+    - LoopGrab [NEAR]
+    - LoopGrab [KICK]
+    - LoopGrab [KICK v2]  ← 重力無効化（BodyForce）＆強力な位置固定・Sit処理を実装
+    - Loop Banana Ragdoll
+    - LoopBLOB [LOCK]
+    - LoopKick [INIT + PINGY]
+    - LoopKill [BLOB]
+    - LoopKill [SNO]
+]]
+
+-- ============ Services ============
+local Players = game:GetService("Players")
+local RS = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local UIS = game:GetService("UserInputService")
+local Debris = game:GetService("Debris")
+
+local plr = Players.LocalPlayer
+local mouse = plr:GetMouse()
+local char = plr.Character or plr.CharacterAdded:Wait()
+local hum = char:FindFirstChild("Humanoid") or char:WaitForChild("Humanoid")
+local hrp = char:FindFirstChild("HumanoidRootPart") or char:WaitForChild("HumanoidRootPart")
+local head = char:FindFirstChild("Head") or char:WaitForChild("Head")
+
+local IsHeld = plr.IsHeld
+local CanSpawnToy = plr.CanSpawnToy
+local InPlot = plr.InPlot
+local InOwnedPlot = plr.InOwnedPlot
+local inv = workspace:FindFirstChild(plr.Name.."SpawnedInToys") or workspace:WaitForChild(plr.Name.."SpawnedInToys")
+
+-- ============ Remotes ============
+local SetNetworkOwner = RS.GrabEvents:FindFirstChild("SetNetworkOwner") or RS.GrabEvents:WaitForChild("SetNetworkOwner")
+local StickyEvent = RS.PlayerEvents:FindFirstChild("StickyPartEvent") or RS.PlayerEvents:WaitForChild("StickyPartEvent")
+local DestroyToy = RS.MenuToys:FindFirstChild("DestroyToy") or RS.MenuToys:WaitForChild("DestroyToy")
+local CreateGrabLine = RS.GrabEvents:FindFirstChild("CreateGrabLine") or RS.GrabEvents:WaitForChild("CreateGrabLine")
+local DestroyGrabLine = RS.GrabEvents:FindFirstChild("DestroyGrabLine") or RS.GrabEvents:WaitForChild("DestroyGrabLine")
+local SpawnToyRemote = RS.MenuToys:FindFirstChild("SpawnToyRemoteFunction") or RS.MenuToys:WaitForChild("SpawnToyRemoteFunction")
+local RagdollRemote = RS.CharacterEvents:FindFirstChild("RagdollRemote") or RS.CharacterEvents:WaitForChild("RagdollRemote")
+
+-- ============ State ============
+local bool = {}
+local int = {}
+local cons = {}
+local etc = {
+    TargetPLR = nil,
+    Root = nil,
+    Head = nil,
+    Hum = nil,
+}
+
+-- ============ Helper functions ============
+local function GetMagnitude(Part1, Part2)
+    return (Part1.Position - Part2.Position).Magnitude
+end
+
+local function FWD(parent, part, time)
+    return parent:FindFirstChild(part) or parent:WaitForChild(part, time)
+end
+
+local function CFP(parent, part)
+    return parent:FindFirstChild(part) ~= nil
+end
+
+local function Huge()
+    return math.huge, math.huge, math.huge
+end
+
+function cons:disc(con)
+    if cons[con] then
+        cons[con]:Disconnect()
+        cons[con] = nil
+    end
+end
+
+function cons:discAll()
+    for _, v in pairs(cons) do
+        v:Disconnect()
+    end
+    cons = {}
+end
+
+function cons:cancel(coroutine)
+    if cons[coroutine] then
+        task.cancel(cons[coroutine])
+        cons[coroutine] = nil
+    end
+end
+
+local function sno(part) SetNetworkOwner:FireServer(part, part.CFrame) end
+local function unsno(part) DestroyGrabLine:FireServer(part) end
+
+local function SNO_UNSNO_COMBO(part)
+    for i = 1, 2 do
+        SetNetworkOwner:FireServer(part, part.CFrame)
+        DestroyGrabLine:FireServer(part)
+    end
+end
+
+local function CheckNetworkOwnerOnPart(Part)
+    return CFP(Part, "PartOwner") and Part["PartOwner"].Value == plr.Name
+end
+
+local function CheckForPartOwner(Head)
+    local PartOwner = Head:FindFirstChild("PartOwner")
+    return PartOwner and PartOwner.Value == plr.Name
+end
+
+local function StopAllVelocity(parent)
+    local ToStopPart = parent.PrimaryPart or parent
+    if ToStopPart then
+        ToStopPart.AssemblyLinearVelocity = Vector3.zero
+        ToStopPart.AssemblyAngularVelocity = Vector3.zero
+    end
+end
+
+local function ChangeCollision(obj, val)
+    for _, v in pairs(obj:GetChildren()) do
+        if v:IsA("BasePart") and v.Name ~= "GrabParts" then
+            v.CanCollide = val
+        end
+    end
+end
+
+local function FindBlob()
+    if etc["LastBlob"] == nil or not CFP(etc["LastBlob"], "VehicleSeat") or etc["LastBlob"].VehicleSeat.Occupant ~= hum then
+        etc["LastBlob"] = hum.SeatPart and hum.SeatPart:FindFirstAncestor("CreatureBlobman")
+    end
+    return etc["LastBlob"]
+end
+
+local function CheckForHome()
+    if etc["LastHouse"] == nil or etc["LastPlotOwner"] == nil or etc["LastPlotOwner"].Parent == nil then
+        for i = 1, 5 do
+            local Plot = workspace.Plots["Plot"..i]
+            for _, v in pairs(Plot.PlotSign["ThisPlotsOwners"]:GetChildren()) do
+                if v.Value == plr.Name then
+                    etc["LastHouse"] = workspace.PlotItems["Plot"..i]
+                    etc["LastPlotOwner"] = v
+                    return etc["LastHouse"]
+                end
+            end
+        end
+    end
+    return etc["LastHouse"]
+end
+
+local function SpawnToy(ToyName)
+    if InPlot.Value and not InOwnedPlot.Value then
+        InPlot:GetPropertyChangedSignal("Value"):Wait()
+    end
+    if not CanSpawnToy.Value then
+        CanSpawnToy:GetPropertyChangedSignal("Value"):Wait()
+    end
+
+    local SpawnCF = hrp.CFrame * CFrame.new(0, 14, 20)
+    local Container = InOwnedPlot.Value and CheckForHome() or inv
+    if not Container then return nil end
+
+    local spawnedObject = nil
+    local connection
+    connection = Container.ChildAdded:Connect(function(child)
+        if child.Name == ToyName then
+            spawnedObject = child
+        end
+    end)
+
+    task.spawn(function()
+        pcall(function()
+            SpawnToyRemote:InvokeServer(ToyName, SpawnCF, Vector3.zero)
+        end)
+    end)
+
+    local start = tick()
+    repeat task.wait() until spawnedObject or (tick() - start) > 2.5
+
+    connection:Disconnect()
+    return spawnedObject
+end
+
+local function RenameInShop(Instance, OriginalName, ToRename)
+    local index = nil
+    local ToCheckName = Instance.Name or Instance
+    for i, v in pairs(inv:GetChildren()) do if v.Name == ToCheckName then index = i end end
+    if index == nil then return end
+    local contents = plr.PlayerGui.MenuGui.Menu.TabContents.ToyDestroy.Contents
+    for i, v in ipairs(contents:GetChildren()) do
+        if v.Name == OriginalName and i == index then
+            local view = v.ViewItemButton
+            view.Text = ToRename
+            view.TextScaled = true
+            view.LowResImage.Image = ""
+        end
+    end
+end
+
+local function getHRP(character)
+    return character and character:FindFirstChild("HumanoidRootPart")
+end
+
+-- ============ UI (OrionLib) ============
+local OrionLib = loadstring(game:HttpGet('https://raw.githubusercontent.com/CoolBoogie/MyScript/refs/heads/main/OrionLibTest'))()
+
+local Window = OrionLib:MakeWindow({
+    Name = "Target Loops",
+    HidePremium = false,
+    SaveConfig = true,
+    ConfigFolder = "NNhubLoops",
+    IntroEnabled = false,
+    Keybind = "K",
+    FreeMouse = true,
+})
+
+local TarTab = Window:MakeTab({
+    Name = "<font size=\"18\">Loops</font>",
+    Icon = "crosshair",
+    PremiumOnly = false
+})
+
+-- ============ Target selector ============
+local selectedPlrName = nil
+
+local function BuildPlayerOptions()
+    local options = {}
+    local map = {}
+    for _, player in ipairs(Players:GetPlayers()) do
+        local display = string.format(
+            '<font color="rgb(255,0,0)"><b>%s</b></font> <b><i>(%s)</i></b>',
+            player.Name,
+            player.DisplayName
+        )
+        table.insert(options, display)
+        map[display] = player
+    end
+    return options, map
+end
+
+local options, playerMap = BuildPlayerOptions()
+local Dropdown1 = TarTab:AddDropdown({
+    Name = "Target",
+    Default = "",
+    Options = options,
+    Callback = function(Value)
+        local chosenPlayer = playerMap[Value]
+        selectedPlrName = chosenPlayer and chosenPlayer.Name or nil
+    end
+})
+
+TarTab:AddTextbox({
+    Name = "Find By Nick[PARTIAL]",
+    Default = "",
+    TextDisappear = true,
+    Callback = function(Value)
+        if Value == "" then return end
+        Value = Value:lower()
+        for _, plr1 in pairs(game.Players:GetPlayers()) do
+            local nameMatch = string.sub(plr1.Name:lower(), 1, #Value) == Value
+            local displayMatch = string.sub(plr1.DisplayName:lower(), 1, #Value) == Value
+            if nameMatch or displayMatch then
+                local displayString = string.format(
+                    '<font color="rgb(255,0,0)"><b>%s</b></font> <b><i>(%s)</i></b>',
+                    plr1.Name,
+                    plr1.DisplayName
+                )
+                selectedPlrName = plr1.Name
+                Dropdown1:Set(displayString)
+                break
+            end
+        end
+    end
+})
+
+Players.PlayerAdded:Connect(function()
+    options, playerMap = BuildPlayerOptions()
+    Dropdown1:Refresh(options, true)
+end)
+Players.PlayerRemoving:Connect(function()
+    options, playerMap = BuildPlayerOptions()
+    Dropdown1:Refresh(options, true)
+end)
+
+-- ============ LoopGrab Type ============
+TarTab:AddDropdown({
+    Name = "LoopGrab Type",
+    Default = "[Ragdoll]",
+    Options = { "[Ragdoll]", "[UnRagdoll]" },
+    Save = true,
+    Flag = "LoopGrabType",
+    Callback = function(Value)
+        bool.DoRagdoll = (Value == "[Ragdoll]")
+    end
+})
+
+-- ============ LoopGrab [NEAR] ============
+TarTab:AddToggle({
+    Name = "LoopGrab<font color=\"rgb(255, 0, 255)\"><b>[NEAR]</b></font>",
+    Default = false,
+    Callback = function(Value)
+        bool.LoopGrabNear = Value
+        if bool.LoopGrabNear then
+            etc.TargetPLR = selectedPlrName and game.Players:FindFirstChild(selectedPlrName)
+            etc.Head = etc.TargetPLR and etc.TargetPLR.Character and etc.TargetPLR.Character:FindFirstChild("Head")
+            etc.Root = etc.TargetPLR and etc.TargetPLR.Character and etc.TargetPLR.Character:FindFirstChild("HumanoidRootPart")
+            local Pallete
+            local function SpawnPallete()
+                Pallete = SpawnToy("PalletLightBrown")
+                if not Pallete then return end
+                local SoundPart = FWD(Pallete, "SoundPart")
+                repeat sno(SoundPart) task.wait(0.05) until CFP(SoundPart, "PartOwner") or not bool.LoopGrabNear
+                for _, v in pairs(Pallete:GetDescendants()) do
+                    if v:IsA("BasePart") then
+                        v.CanCollide = false
+                        v.Transparency = 0.8
+                    end
+                end
+                Pallete.Name = "RagdollPalete"
+                task.delay(1, RenameInShop, Pallete, "PalletLightBrown", "Ragdoll")
+                local bv = Instance.new("BodyVelocity")
+                bv.MaxForce = Vector3.new(0, math.huge, 0)
+                bv.Velocity = Vector3.new(0, 900, 0)
+                bv.Parent = Pallete.SoundPart
+                return Pallete
+            end
+            if etc.TargetPLR then
+                if bool.DoRagdoll then
+                    Pallete = inv:FindFirstChild("RagdollPalete")
+                    if not Pallete then
+                        Pallete = SpawnPallete()
+                    end
+                end
+                local oldCF = hrp.CFrame
+                local BodyPos
+                task.spawn(function()
+                    while bool.LoopGrabNear and RunService.RenderStepped:Wait() do
+                        etc.TargetPLR = selectedPlrName and game.Players:FindFirstChild(selectedPlrName)
+                        if not etc.TargetPLR then continue end
+                        etc.Head = etc["TargetPLR"].Character and etc["TargetPLR"].Character:FindFirstChild("Head")
+                        etc.Root = etc["TargetPLR"].Character and etc["TargetPLR"].Character:FindFirstChild("HumanoidRootPart")
+                        etc.Hum = etc["TargetPLR"].Character and etc["TargetPLR"].Character:FindFirstChild("Humanoid")
+                        BodyPos = etc.Root and etc.Root:FindFirstChild("BodyPosition")
+                        if not (BodyPos) and (etc.Root) then
+                            BodyPos = Instance.new("BodyPosition")
+                            BodyPos.MaxForce = Vector3.new(Huge())
+                            BodyPos.Parent = etc.Root
+                            BodyPos.P = 45000
+                            BodyPos.D = 500
+                            BodyPos.Position = hrp.Position + Vector3.new(0, 1, 10)
+                        end
+                        if (etc.Head and etc.Hum and etc.Root and etc.Hum.Health ~= 0) and GetMagnitude(hrp, etc["Root"]) <= 30 then
+                            sno(etc["Root"])
+                            RunService.RenderStepped:Wait()
+                            if bool.DoRagdoll then
+                                Pallete = inv:FindFirstChild("RagdollPalete")
+                                if not Pallete then
+                                    Pallete = SpawnPallete()
+                                end
+                                if CFP(etc["Hum"], "Ragdolled") and not (etc["Hum"].Ragdolled.Value) then
+                                    Pallete.SoundPart.Position = etc["Root"].Position
+                                end
+                            end
+                            sno(etc["Root"])
+                        else
+                            if not etc["Head"] or not etc["Hum"] or etc["Hum"].Health == 0 then
+                                etc.TargetPLR.CharacterAdded:Wait()
+                                etc.Head = FWD(etc.TargetPLR.Character, "Head", 5)
+                                etc.Hum = FWD(etc.TargetPLR.Character, "Humanoid", 5)
+                                BodyPos = Instance.new("BodyPosition")
+                                BodyPos.MaxForce = Vector3.new(Huge())
+                                BodyPos.Parent = etc.Root
+                                BodyPos.P = 10000
+                                BodyPos.D = 100
+                                BodyPos.Position = hrp.Position + Vector3.new(0, 1, 10)
+                            end
+                            oldCF = hrp.CFrame
+                            while (etc["Head"] and etc["Hum"] and etc['Hum'].Health ~= 0) and task.wait(0.01) and bool.LoopGrabNear do
+                                etc["TargetPLR"] = selectedPlrName and Players:FindFirstChild(selectedPlrName)
+                                if not etc["TargetPLR"] then continue end
+                                if etc["TargetPLR"].InPlot.Value then continue end
+                                etc["Head"] = etc["TargetPLR"].Character and etc["TargetPLR"].Character:FindFirstChild("Head")
+                                etc["Hum"] = etc["TargetPLR"].Character and etc["TargetPLR"].Character:FindFirstChild("Humanoid")
+                                if not (etc["Head"]) or not (etc["Hum"]) then break end
+                                char:PivotTo(etc["Head"].CFrame * CFrame.new(0, 10, 0))
+                                sno(etc["Head"])
+                                if CheckForPartOwner(etc["Head"]) then
+                                    break
+                                end
+                            end
+                            hrp.CFrame = oldCF
+                            if etc.Head and CheckForPartOwner(etc["Head"]) then
+                                for _, v in pairs(etc.TargetPLR.Character:GetChildren()) do
+                                    if v:IsA("BasePart") then
+                                        v.CFrame = CFrame.new(BodyPos.Position)
+                                    end
+                                end
+                            end
+                        end
+                    end
+                    if etc["Root"] then
+                        for _, v in pairs(etc["Root"]:GetChildren()) do
+                            if v.Name == "BodyPosition" then
+                                v:Destroy()
+                            end
+                        end
+                    end
+                end)
+            end
+        end
+    end
+})
+
+-- ============ LoopGrab [KICK] ============
+TarTab:AddToggle({
+    Name = "LoopGrab<font color=\"rgb(100, 255, 200)\"><b>[KICK]</b></font>",
+    Default = false,
+    Callback = function(Value)
+        bool.LoopGrabKick = Value
+        if bool.LoopGrabKick then
+            task.spawn(function()
+                etc.TargetPLR = selectedPlrName and game.Players:FindFirstChild(selectedPlrName)
+                etc.Head = etc.TargetPLR and etc.TargetPLR.Character and etc.TargetPLR.Character:FindFirstChild("Head")
+                etc.Root = etc.TargetPLR and etc.TargetPLR.Character and etc.TargetPLR.Character:FindFirstChild("HumanoidRootPart")
+                local Pallete = inv:FindFirstChild("RagdollPalete")
+                local function SpawnPallete()
+                    Pallete = SpawnToy("PalletLightBrown")
+                    if not Pallete then return end
+                    local SoundPart = FWD(Pallete, "SoundPart")
+                    repeat sno(SoundPart) task.wait(0.05) until CFP(SoundPart, "PartOwner") or not bool.LoopGrabNear
+                    for _, v in pairs(Pallete:GetDescendants()) do
+                        if v:IsA("BasePart") then
+                            v.CanCollide = false
+                            v.Transparency = 0.8
+                        end
+                    end
+                    Pallete.Name = "RagdollPalete"
+                    task.delay(1, RenameInShop, Pallete, "PalletLightBrown", "Ragdoll")
+                    local bv = Instance.new("BodyVelocity")
+                    bv.MaxForce = Vector3.new(0, math.huge, 0)
+                    bv.Velocity = Vector3.new(0, 900, 0)
+                    bv.Parent = Pallete.SoundPart
+                    return Pallete
+                end
+                if not (Pallete) and bool.DoRagdoll then
+                    Pallete = SpawnPallete()
+                end
+                while bool.LoopGrabKick and RunService.RenderStepped:Wait() do
+                    etc.TargetPLR = selectedPlrName and game.Players:FindFirstChild(selectedPlrName)
+                    if not etc.TargetPLR then continue end
+                    etc.Head = etc["TargetPLR"].Character and etc["TargetPLR"].Character:FindFirstChild("Head")
+                    etc.Root = etc["TargetPLR"].Character and etc["TargetPLR"].Character:FindFirstChild("HumanoidRootPart")
+                    etc.Hum = etc["TargetPLR"].Character and etc["TargetPLR"].Character:FindFirstChild("Humanoid")
+                    local BodyPos = etc.Root and etc.Root:FindFirstChild("BodyPosition")
+                    if (etc.Head and etc.Hum and etc.Root and etc.Hum.Health ~= 0) and GetMagnitude(hrp, etc["Root"]) <= 30 then
+                        if not (BodyPos) then
+                            BodyPos = Instance.new("BodyPosition")
+                            BodyPos.MaxForce = Vector3.new(Huge())
+                            BodyPos.Parent = etc.Root
+                            BodyPos.P = 75000
+                            BodyPos.D = 12000
+                            BodyPos.Position = hrp.Position + Vector3.new(0, 15, 0)
+                        end
+                        BodyPos.Position = hrp.Position + Vector3.new(0, 15, 0)
+                        if (etc.Root.Position.Y <= hrp.Position.Y + 15) and etc["TargetPLR"].IsHeld.Value then
+                            for _, v in pairs(etc.TargetPLR.Character:GetChildren()) do
+                                if v:IsA("Part") then
+                                    v.CFrame = hrp.CFrame * CFrame.new(0, 15, 0)
+                                end
+                            end
+                        end
+                        etc["Root"].AssemblyAngularVelocity, etc["Root"].AssemblyLinearVelocity = Vector3.zero, Vector3.zero
+                        etc.Hum.PlatformStand = true
+                        sno(etc["Root"])
+                        RunService.RenderStepped:Wait()
+                        sno(etc["Root"])
+                        unsno(etc["Root"])
+                        RunService.RenderStepped:Wait()
+                        sno(etc["Root"])
+                        if bool.DoRagdoll then
+                            Pallete = inv:FindFirstChild("RagdollPalete")
+                            if not Pallete then
+                                Pallete = SpawnPallete()
+                            end
+                            if CFP(etc["Hum"], "Ragdolled") and not (etc["Hum"].Ragdolled.Value) then
+                                Pallete.SoundPart.Position = etc["Root"].Position
+                            end
+                        end
+                        RunService.RenderStepped:Wait()
+                        unsno(etc["Root"])
+                    else
+                        if not etc["Head"] or not etc["Hum"] or etc["Hum"].Health == 0 then
+                            etc.TargetPLR.CharacterAdded:Wait()
+                            etc.Head = FWD(etc.TargetPLR.Character, "Head", 5)
+                            etc.Hum = FWD(etc.TargetPLR.Character, "Humanoid", 5)
+                            BodyPos = Instance.new("BodyPosition")
+                            BodyPos.MaxForce = Vector3.new(Huge())
+                            BodyPos.Parent = etc.Root
+                            BodyPos.P = 75000
+                            BodyPos.D = 12000
+                            BodyPos.Position = hrp.Position + Vector3.new(0, 15, 0)
+                        end
+                        local oldCF = hrp.CFrame
+                        while (etc["Head"] and etc["Hum"] and etc['Hum'].Health ~= 0) and task.wait(0.01) and bool.LoopGrabKick do
+                            etc["TargetPLR"] = selectedPlrName and Players:FindFirstChild(selectedPlrName)
+                            if not etc["TargetPLR"] then break end
+                            if etc["TargetPLR"].InPlot.Value then continue end
+                            etc["Head"] = etc["TargetPLR"].Character and etc["TargetPLR"].Character:FindFirstChild("Head")
+                            etc["Hum"] = etc["TargetPLR"].Character and etc["TargetPLR"].Character:FindFirstChild("Humanoid")
+                            if not (etc["Head"]) or not (etc["Hum"]) then break end
+                            char:PivotTo(etc["Head"].CFrame * CFrame.new(0, 10, 0))
+                            sno(etc["Head"])
+                            if CheckForPartOwner(etc["Head"]) then
+                                break
+                            end
+                        end
+                        hrp.CFrame = oldCF
+                        if etc.Head and CheckForPartOwner(etc.Head) then
+                            for _, v in pairs(etc.TargetPLR.Character:GetChildren()) do
+                                if v:IsA("BasePart") then
+                                    v.CFrame = hrp.CFrame * CFrame.new(0, 15, 0)
+                                end
+                            end
+                        end
+                    end
+                end
+                if etc["Root"] then
+                    for _, v in pairs(etc["Root"]:GetChildren()) do
+                        if v.Name == "BodyPosition" then
+                            v:Destroy()
+                        end
+                    end
+                end
+            end)
+        end
+    end
+})
+
+-- ============ LoopGrab [KICK v2] (重力無効化・完全固定強化版) ============
+TarTab:AddToggle({
+    Name = "LoopGrab<font color=\"rgb(255, 100, 0)\"><b>[KICK v2]</b></font>",
+    Default = false,
+    Callback = function(Value)
+        bool.LoopGrabKickV2 = Value
+        if bool.LoopGrabKickV2 then
+            task.spawn(function()
+                etc.TargetPLR = selectedPlrName and game.Players:FindFirstChild(selectedPlrName)
+                etc.Head = etc.TargetPLR and etc.TargetPLR.Character and etc.TargetPLR.Character:FindFirstChild("Head")
+                etc.Root = etc.TargetPLR and etc.TargetPLR.Character and etc.TargetPLR.Character:FindFirstChild("HumanoidRootPart")
+                local Pallete = inv:FindFirstChild("RagdollPalete")
+
+                local function SpawnPallete()
+                    Pallete = SpawnToy("PalletLightBrown")
+                    if not Pallete then return end
+                    local SoundPart = FWD(Pallete, "SoundPart")
+                    repeat sno(SoundPart) task.wait(0.05) until CFP(SoundPart, "PartOwner") or not bool.LoopGrabKickV2
+                    for _, v in pairs(Pallete:GetDescendants()) do
+                        if v:IsA("BasePart") then
+                            v.CanCollide = false
+                            v.Transparency = 0.8
+                        end
+                    end
+                    Pallete.Name = "RagdollPalete"
+                    task.delay(1, RenameInShop, Pallete, "PalletLightBrown", "Ragdoll")
+                    local bv = Instance.new("BodyVelocity")
+                    bv.MaxForce = Vector3.new(0, math.huge, 0)
+                    bv.Velocity = Vector3.new(0, 900, 0)
+                    bv.Parent = Pallete.SoundPart
+                    return Pallete
+                end
+
+                if not (Pallete) and bool.DoRagdoll then
+                    Pallete = SpawnPallete()
+                end
+
+                while bool.LoopGrabKickV2 and RunService.RenderStepped:Wait() do
+                    etc.TargetPLR = selectedPlrName and game.Players:FindFirstChild(selectedPlrName)
+                    if not etc.TargetPLR then continue end
+                    etc.Head = etc["TargetPLR"].Character and etc["TargetPLR"].Character:FindFirstChild("Head")
+                    etc.Root = etc["TargetPLR"].Character and etc["TargetPLR"].Character:FindFirstChild("HumanoidRootPart")
+                    etc.Hum = etc["TargetPLR"].Character and etc["TargetPLR"].Character:FindFirstChild("Humanoid")
+                    local BodyPos = etc.Root and etc.Root:FindFirstChild("KickBodyPos")
+                    local BodyForce = etc.Root and etc.Root:FindFirstChild("KickAntiGravity")
+
+                    if (etc.Head and etc.Hum and etc.Root and etc.Hum.Health ~= 0) and GetMagnitude(hrp, etc["Root"]) <= 30 then
+                        if not (BodyPos) then
+                            BodyPos = Instance.new("BodyPosition")
+                            BodyPos.Name = "KickBodyPos"
+                            BodyPos.MaxForce = Vector3.new(Huge())
+                            BodyPos.Parent = etc.Root
+                            BodyPos.P = 300000
+                            BodyPos.D = 30000
+                            BodyPos.Position = hrp.Position + Vector3.new(0, 15, 0)
+                        end
+
+                        if not (BodyForce) then
+                            BodyForce = Instance.new("BodyForce")
+                            BodyForce.Name = "KickAntiGravity"
+                            BodyForce.Parent = etc.Root
+                        end
+
+                        local totalMass = 0
+                        for _, part in pairs(etc.TargetPLR.Character:GetDescendants()) do
+                            if part:IsA("BasePart") then
+                                totalMass = totalMass + part.AssemblyMass
+                            end
+                        end
+                        BodyForce.Force = Vector3.new(0, totalMass * workspace.Gravity, 0)
+
+                        BodyPos.Position = hrp.Position + Vector3.new(0, 15, 0)
+                        etc.Root.CFrame = hrp.CFrame * CFrame.new(0, 15, 0)
+
+                        if etc["TargetPLR"].IsHeld.Value then
+                            for _, v in pairs(etc.TargetPLR.Character:GetChildren()) do
+                                if v:IsA("Part") then
+                                    v.CFrame = hrp.CFrame * CFrame.new(0, 15, 0)
+                                end
+                            end
+                        end
+
+                        etc["Root"].AssemblyAngularVelocity, etc["Root"].AssemblyLinearVelocity = Vector3.zero, Vector3.zero
+                        etc.Hum.PlatformStand = true
+                        etc.Hum.Sit = true
+
+                        for i = 1, 4 do
+                            SetNetworkOwner:FireServer(etc["Root"], etc["Root"].CFrame)
+                            DestroyGrabLine:FireServer(etc["Root"])
+                        end
+
+                        if bool.DoRagdoll then
+                            Pallete = inv:FindFirstChild("RagdollPalete")
+                            if not Pallete then
+                                Pallete = SpawnPallete()
+                            end
+                            if CFP(etc["Hum"], "Ragdolled") and not (etc["Hum"].Ragdolled.Value) then
+                                Pallete.SoundPart.Position = etc["Root"].Position
+                            end
+                        end
+                    else
+                        if not etc["Head"] or not etc["Hum"] or etc["Hum"].Health == 0 then
+                            etc.TargetPLR.CharacterAdded:Wait()
+                            etc.Head = FWD(etc.TargetPLR.Character, "Head", 5)
+                            etc.Hum = FWD(etc.TargetPLR.Character, "Humanoid", 5)
+                            BodyPos = Instance.new("BodyPosition")
+                            BodyPos.Name = "KickBodyPos"
+                            BodyPos.MaxForce = Vector3.new(Huge())
+                            BodyPos.Parent = etc.Root
+                            BodyPos.P = 300000
+                            BodyPos.D = 30000
+                            BodyPos.Position = hrp.Position + Vector3.new(0, 15, 0)
+                        end
+
+                        local oldCF = hrp.CFrame
+                        while (etc["Head"] and etc["Hum"] and etc['Hum'].Health ~= 0) and task.wait(0.01) and bool.LoopGrabKickV2 do
+                            etc["TargetPLR"] = selectedPlrName and Players:FindFirstChild(selectedPlrName)
+                            if not etc["TargetPLR"] then break end
+                            if etc["TargetPLR"].InPlot.Value then continue end
+                            etc["Head"] = etc["TargetPLR"].Character and etc["TargetPLR"].Character:FindFirstChild("Head")
+                            etc["Hum"] = etc["TargetPLR"].Character and etc["TargetPLR"].Character:FindFirstChild("Humanoid")
+                            if not (etc["Head"]) or not (etc["Hum"]) then break end
+                            char:PivotTo(etc["Head"].CFrame * CFrame.new(0, 10, 0))
+                            SNO_UNSNO_COMBO(etc["Head"])
+                            if CheckForPartOwner(etc["Head"]) then
+                                break
+                            end
+                        end
+
+                        hrp.CFrame = oldCF
+
+                        if etc.Head and CheckForPartOwner(etc.Head) then
+                            for _, v in pairs(etc.TargetPLR.Character:GetChildren()) do
+                                if v:IsA("BasePart") then
+                                    v.CFrame = hrp.CFrame * CFrame.new(0, 15, 0)
+                                end
+                            end
+                        end
+                    end
+                end
+
+                if etc["Root"] then
+                    for _, v in pairs(etc["Root"]:GetChildren()) do
+                        if v.Name == "KickBodyPos" or v.Name == "KickAntiGravity" then
+                            v:Destroy()
+                        end
+                    end
+                end
+            end)
+        end
+    end
+})
+
+-- ============ Loop Banana Ragdoll ============
+local banana = nil
+local AlignPos = nil
+TarTab:AddToggle({
+    Name = "Loop Banana Ragdoll",
+    Default = false,
+    Callback = function(Value)
+        bool.LoopRagdoll = Value
+        if Value then
+            task.spawn(function()
+                local SoundPart
+                etc.TargetPLR = Players:FindFirstChild(selectedPlrName)
+                if not etc.TargetPLR then
+                    OrionLib:MakeNotification({
+                        Name = "Error",
+                        Content = "Target does not exist!",
+                        Image = "circle-x",
+                        Time = 5
+                    })
+                    return
+                end
+                etc.Root = etc.TargetPLR.Character and etc.TargetPLR.Character:FindFirstChild("Left Leg")
+                local AtachNew
+                while bool.LoopRagdoll and task.wait() do
+                    etc.Root = etc.TargetPLR and etc.TargetPLR.Character and etc.TargetPLR.Character:FindFirstChild("Left Leg")
+                    if not etc.Root then continue end
+                    banana = inv:FindFirstChild("FoodBanana")
+                    SoundPart = banana and banana:FindFirstChild("SoundPart")
+                    if not SoundPart then
+                        for _, v in pairs(inv:GetChildren()) do
+                            if v.Name == "FoodBanana" then
+                                DestroyToy:FireServer(v)
+                            end
+                        end
+                        banana = SpawnToy("FoodBanana")
+                        if not banana then continue end
+                        SoundPart = FWD(banana, "SoundPart", 5)
+                        if not SoundPart then continue end
+                        FWD(FWD(banana, "HoldPart"), "HoldItemRemoteFunction"):InvokeServer(banana, char)
+                        RS.HoldEvents.Use:FireServer(banana)
+                        while CFP(banana, "EdiblePart") do task.wait() end
+                        RS.HoldEvents.Use:FireServer(banana)
+                        FWD(FWD(banana, "HoldPart"), "DropItemRemoteFunction"):InvokeServer(banana, char:GetPivot() * CFrame.new(0, 15, -10), Vector3.zero)
+                        repeat
+                            task.wait(0.01)
+                            SoundPart = banana and banana:FindFirstChild("SoundPart")
+                            if not SoundPart then break end
+                            sno(SoundPart)
+                        until not SoundPart or CFP(SoundPart, "PartOwner")
+                        unsno(SoundPart)
+                        local Atach = Instance.new("Attachment")
+                        Atach.Parent = SoundPart
+                        AlignPos = Instance.new("AlignPosition")
+                        AlignPos.Responsiveness = 100
+                        AlignPos.Parent = SoundPart
+                        AlignPos.Attachment0 = Atach
+                    end
+                    for _, v in pairs(banana:GetChildren()) do
+                        if CFP(v, "PartOwner") and not CheckNetworkOwnerOnPart(v) then
+                            DestroyToy:FireServer(banana)
+                            banana = nil
+                            break
+                        end
+                    end
+                    if not banana then continue end
+                    AlignPos = SoundPart:FindFirstChild("AlignPosition")
+                    if not AlignPos then DestroyToy:FireServer(banana) banana = nil continue end
+                    AtachNew = etc.Root and etc.Root:FindFirstChild("LeftFootAttachment")
+                    if not AtachNew then continue end
+                    AlignPos.Attachment1 = AtachNew
+                end
+            end)
+        else
+            if banana then
+                if AlignPos then
+                    AlignPos:Destroy()
+                end
+                DestroyToy:FireServer(banana)
+            end
+        end
+    end
+})
+
+-- ============ LoopBLOB [LOCK] ============
+TarTab:AddDropdown({
+    Name = "LOCK TP SETTING",
+    Default = "[GRAB]",
+    Options = { "[GRAB]", "[WITHOUTGRAB]" },
+    Save = true,
+    Flag = "LockSettings",
+    Callback = function(Value)
+        int.selectedMode23 = Value
+    end
+})
+
+TarTab:AddToggle({
+    Name = "LoopBLOB<font color=\"rgb(255, 0, 255)\"><b>[LOCK]</b></font>",
+    Default = false,
+    Callback = function(Value)
+        bool.LoopKickMax2 = Value
+        if bool.LoopKickMax2 then
+            local blob = FindBlob()
+            local CreatureGrab, CreatureDrop, CreatureRelease = blob and blob.BlobmanSeatAndOwnerScript.CreatureGrab, blob and blob.BlobmanSeatAndOwnerScript.CreatureDrop, blob and blob.BlobmanSeatAndOwnerScript.CreatureRelease
+            local LeftDetector, RightDetector = blob and blob.LeftDetector, blob and blob.RightDetector
+            etc.TargetPLR = selectedPlrName and game.Players:FindFirstChild(selectedPlrName)
+            etc.Root = etc.TargetPLR and etc.TargetPLR.Character and etc.TargetPLR.Character:FindFirstChild("HumanoidRootPart")
+            etc.Head = etc.TargetPLR and etc.TargetPLR.Character and etc.TargetPLR.Character:FindFirstChild("Head")
+            local oldCF = char:GetPivot()
+            if not etc.Root or not etc.TargetPLR or not blob then return end
+            local BodyPos = etc.Root:FindFirstChild("KickBodyPos")
+            if BodyPos then
+                for _, v in pairs(etc.Root:GetChildren()) do
+                    if v.Name == "KickBodyPos" then
+                        v:Destroy()
+                    end
+                end
+            end
+            BodyPos = Instance.new("BodyPosition")
+            BodyPos.Name = "KickBodyPos"
+            BodyPos.MaxForce = Vector3.new(Huge())
+            BodyPos.Position = blob.LeftDetector.Position + Vector3.new(0, 0, -5)
+            BodyPos.Parent = etc.Root
+            BodyPos.P = 45000
+            BodyPos.D = 500
+            if int.selectedMode23 == "[GRAB]" then
+                repeat
+                    task.wait(0.01)
+                    if etc.TargetPLR.InPlot.Value then continue end
+                    etc.Root = etc.TargetPLR and etc.TargetPLR.Character and etc.TargetPLR.Character:FindFirstChild("HumanoidRootPart")
+                    if not etc.Root then
+                        break
+                    end
+                    char:PivotTo(etc.Root.CFrame * CFrame.new(etc.Root.AssemblyLinearVelocity * 0.1))
+                    sno(etc.Root)
+                until not (etc.Head or etc.Root) or (etc.Head:FindFirstChild("PartOwner") and etc.Head:FindFirstChild("PartOwner").Value == plr.Name) or not bool.LoopKickMax2 or not hum.SeatPart
+                char:PivotTo(oldCF)
+                if etc.Head and etc.Head:FindFirstChild("PartOwner") then
+                    task.defer(function()
+                        for i = 1, 10 do
+                            etc["Root"].CFrame = oldCF * CFrame.new(0, 0, -5)
+                            blob.HumanoidCreature.PlatformStand = false
+                            blob.HumanoidCreature:ChangeState(Enum.HumanoidStateType.GettingUp)
+                        end
+                    end)
+                end
+            end
+            if (etc.Head and etc.Root) and (CheckForPartOwner(etc.Head) or int.selectedMode23 ~= "[GRAB]") then
+                etc["Root"].CFrame = blob.LeftDetector.CFrame * CFrame.new(0, 0, -5)
+                task.defer(function()
+                    ChangeCollision(etc.TargetPLR.Character, false)
+                    StopAllVelocity(blob)
+                    StopAllVelocity(etc.TargetPLR.Character)
+                    BodyPos:Destroy()
+                end)
+                cons["LOCKTHREAD"] = RunService.Stepped:Connect(function()
+                    etc.Root = etc.TargetPLR.Character and etc.TargetPLR.Character:FindFirstChild("HumanoidRootPart")
+                    if not etc.Root then
+                        return
+                    end
+                    CreatureGrab:FireServer(LeftDetector, etc.Root, LeftDetector.LeftWeld)
+                    RunService.Heartbeat:Wait()
+                    CreatureRelease:FireServer(LeftDetector.LeftWeld, etc.Root)
+                    LeftDetector.LeftWeld.Attachment0 = etc["Root"].RootAttachment
+                end)
+            end
+        else
+            cons:disc("LOCKTHREAD")
+            if etc.Root then
+                if etc.Root:FindFirstChild("KickBodyPos") then
+                    etc.Root:FindFirstChild("KickBodyPos"):Destroy()
+                end
+            end
+        end
+    end
+})
+
+-- ============ LoopKick [INIT + PINGY] ============
+int.CounterOfSno = 0
+TarTab:AddToggle({
+    Name = "Use SNO to kick ?",
+    Default = false,
+    Callback = function(Value)
+        bool.UseSNO = Value
+    end
+})
+
+TarTab:AddToggle({
+    Name = "LoopKick<font color=\"rgb(255, 0, 0)\"><b>[INIT + PINGY]</b></font>",
+    Default = false,
+    Callback = function(Value)
+        bool.LoopKickMax1 = Value
+        if Value then
+            local blob = FindBlob()
+            local CreatureGrab, CreatureDrop, CreatureRelease = blob and blob.BlobmanSeatAndOwnerScript.CreatureGrab, blob and blob.BlobmanSeatAndOwnerScript.CreatureDrop, blob and blob.BlobmanSeatAndOwnerScript.CreatureRelease
+            local LeftDetector, RightDetector = blob and blob.LeftDetector, blob and blob.RightDetector
+            etc.TargetPLR = selectedPlrName and game.Players:FindFirstChild(selectedPlrName)
+            etc.Root = etc.TargetPLR and etc.TargetPLR.Character and etc.TargetPLR.Character:FindFirstChild("HumanoidRootPart")
+            etc.Head = etc.TargetPLR and etc.TargetPLR.Character and etc.TargetPLR.Character:FindFirstChild("Head")
+            etc.Hum = etc.TargetPLR and etc.TargetPLR.Character and etc.TargetPLR.Character:FindFirstChild("Humanoid")
+            local oldCF = hrp.CFrame
+            local function CREATEBODYPOS(Parent)
+                for _, v in pairs(Parent:GetChildren()) do
+                    if v.Name == "KickBodyPos1" then
+                        v:Destroy()
+                    end
+                end
+                local BodyPos = Instance.new("BodyPosition")
+                BodyPos.Name = "KickBodyPos1"
+                BodyPos.MaxForce = Vector3.new(Huge())
+                BodyPos.Position = oldCF.Position + Vector3.new(0, 25, 0)
+                BodyPos.Parent = Parent
+                BodyPos.P = 45000
+                BodyPos.D = 500
+            end
+            local IsPreparing = true
+            local IsFirst = true
+            if not etc.Root or not etc.TargetPLR or not blob then return end
+            cons["LoopKickINIT"] = task.spawn(function()
+                while RunService.Heartbeat:Wait() do
+                    etc.TargetPLR = selectedPlrName and game.Players:FindFirstChild(selectedPlrName)
+                    if not etc.TargetPLR then
+                        IsPreparing = true
+                        continue
+                    end
+                    etc.Root = etc.TargetPLR.Character and etc.TargetPLR.Character:FindFirstChild("HumanoidRootPart")
+                    etc.Head = etc.TargetPLR.Character and etc.TargetPLR.Character:FindFirstChild("Head")
+                    etc.Hum = etc.TargetPLR.Character and etc.TargetPLR.Character:FindFirstChild("Humanoid")
+                    if not etc.Root or not etc.Hum or etc.Hum.Health == 0 or IsFirst then
+                        IsPreparing = true
+                        if not IsFirst then
+                            etc["TargetPLR"].CharacterAdded:Wait()
+                        end
+                        IsFirst = false
+                        etc.Root = etc.TargetPLR and FWD(etc.TargetPLR.Character, "HumanoidRootPart", 5)
+                        etc.Hum = etc.TargetPLR and FWD(etc.TargetPLR.Character, "Humanoid", 5)
+                        oldCF = char:GetPivot()
+                        CREATEBODYPOS(etc.Root)
+                        repeat
+                            task.wait(0.01)
+                            etc.Root = etc.TargetPLR and etc.TargetPLR.Character and etc.TargetPLR.Character:FindFirstChild("HumanoidRootPart")
+                            etc.Head = etc.TargetPLR and etc.TargetPLR.Character and etc.TargetPLR.Character:FindFirstChild("Head")
+                            if etc["TargetPLR"].InPlot.Value then continue end
+                            if not etc.Root then break end
+                            blob:PivotTo(etc.Root.CFrame * CFrame.new(etc.Root.AssemblyLinearVelocity * 0.1))
+                            sno(etc.Root)
+                        until (not etc.Root or not etc.Head) or CheckForPartOwner(etc.Head) or not bool.LoopKickMax1 or not hum.SeatPart
+                        char:PivotTo(oldCF)
+                        IsPreparing = false
+                        StopAllVelocity(blob)
+                        StopAllVelocity(etc.TargetPLR.Character)
+                        for _, v in pairs(etc["TargetPLR"].Character:GetChildren()) do
+                            if v:IsA("BasePart") then
+                                v.CFrame = oldCF * CFrame.new(0, 20, 0)
+                            end
+                            blob.HumanoidCreature.PlatformStand = false
+                            blob.HumanoidCreature:ChangeState(Enum.HumanoidStateType.GettingUp)
+                        end
+                    end
+                end
+            end)
+            cons["LoopKickMain"] = RunService.Heartbeat:Connect(function()
+                if not bool.LoopKickMax1 or IsPreparing then return end
+                etc.Root = etc.TargetPLR.Character and etc.TargetPLR.Character:FindFirstChild("HumanoidRootPart")
+                if not etc.Root then return end
+                CreatureGrab:FireServer(RightDetector, etc.Root, RightDetector.RightWeld)
+                RunService.Heartbeat:Wait()
+                CreatureDrop:FireServer(RightDetector.RightWeld, etc.Root)
+                if bool.UseSNO then
+                    int.CounterOfSno += 1
+                    if int.CounterOfSno >= 100 then
+                        int.CounterOfSno = 0
+                        sno(etc.Root)
+                        unsno(etc.Root)
+                    end
+                end
+            end)
+        else
+            cons:cancel("LoopKickINIT")
+            cons:disc("LoopKickMain")
+            if etc.Root and etc.Root:FindFirstChild("KickBodyPos1") then
+                etc.Root:FindFirstChild("KickBodyPos1"):Destroy()
+            end
+        end
+    end
+})
+
+-- ============ LoopKill [BLOB] ============
+local function ForceDeathNotG(humanoid)
+    humanoid.BreakJointsOnDeath = false
+    humanoid:ChangeState(Enum.HumanoidStateType.Dead)
+    humanoid.Sit = false
+    humanoid.Jump = true
+end
+
+TarTab:AddToggle({
+    Name = "LoopKill<font color=\"rgb(255, 255, 0)\"><b>[BLOB]</b></font>",
+    Default = false,
+    Callback = function(Value)
+        bool.BypassAntiBlob1 = Value
+        if Value then
+            etc.TargetPLR = game.Players:FindFirstChild(selectedPlrName)
+            etc.Root = etc.TargetPLR and etc.TargetPLR.Character:FindFirstChild("HumanoidRootPart")
+            etc.Hum = etc.TargetPLR and etc.TargetPLR.Character:FindFirstChild("Humanoid")
+            local oldCF = char:GetPivot()
+            local blob = FindBlob() or SpawnToy("CreatureBlobman")
+            FWD(blob, "VehicleSeat"):Sit(hum)
+            local CreatureGrab = FWD(FWD(blob, "BlobmanSeatAndOwnerScript"), "CreatureGrab")
+            local CreatureRelease = FWD(FWD(blob, "BlobmanSeatAndOwnerScript"), "CreatureRelease")
+            local RightDetector = FWD(blob, "RightDetector")
+            local RightWeld = RightDetector and FWD(RightDetector, "RightWeld")
+            while not hum.SeatPart do task.wait() end
+            task.spawn(function()
+                while bool.BypassAntiBlob1 and task.wait() do
+                    oldCF = char:GetPivot()
+                    etc.Root = getHRP(etc.TargetPLR.Character)
+                    etc.Hum = etc.TargetPLR and etc.TargetPLR.Character:FindFirstChild("Humanoid")
+                    if (not etc.Root or not etc.Hum) or etc.Hum.Health == 0 then continue end
+                    while not RightWeld.Attachment0 and bool.BypassAntiBlob1 do
+                        task.wait(0.05)
+                        etc.Root = getHRP(etc.TargetPLR.Character)
+                        etc.Hum = etc.TargetPLR and etc.TargetPLR.Character:FindFirstChild("Humanoid")
+                        if (not etc.Root or not etc.Hum) or etc.Hum.Health == 0 then
+                            char:PivotTo(oldCF)
+                            break
+                        end
+                        if not hum.SeatPart then
+                            inv:FindFirstChild("CreatureBlobman").VehicleSeat:Sit(hum)
+                        end
+                        char:PivotTo(etc.Root.CFrame)
+                        hrp.AssemblyLinearVelocity = Vector3.zero
+                        hrp.AssemblyAngularVelocity = Vector3.zero
+                        CreatureGrab:FireServer(RightDetector, etc.Root, RightWeld)
+                    end
+                    CreatureRelease:FireServer(RightWeld, etc.Root)
+                    char:PivotTo(etc.Root.CFrame)
+                    for _ = 1, 10 do
+                        hrp.AssemblyLinearVelocity = Vector3.zero
+                        hrp.AssemblyAngularVelocity = Vector3.zero
+                        CreatureGrab:FireServer(RightDetector, etc.Root, RightWeld)
+                        CreatureRelease:FireServer(RightWeld, etc.Root)
+                        if isnetworkowner(etc.Root) then
+                            ForceDeathNotG(etc.Hum)
+                        end
+                        task.wait()
+                    end
+                    char:PivotTo(oldCF)
+                    hrp.AssemblyLinearVelocity = Vector3.zero
+                    hrp.AssemblyAngularVelocity = Vector3.zero
+                end
+            end)
+        end
+    end
+})
+
+-- ============ LoopKill [SNO] ============
+_G.LoopKill = false
+_G.LoopKillConnection = nil
+_G.SavedCFrame = nil
+_G.KillOffset = Vector3.new(5, -18.5, 0)
+_G.HeightLimit = 10000
+_G.KillDelay = 0.5
+
+function _G.IsAboveLimit(Player)
+    if Player and Player.Character and Player.Character:FindFirstChild("HumanoidRootPart") then
+        return Player.Character.HumanoidRootPart.Position.Y > _G.HeightLimit
+    end
+    return true
+end
+
+function _G.DisableCollisions(character)
+    for _, Desc in pairs(character:GetDescendants()) do
+        if Desc:IsA("BasePart") then
+            Desc.CanCollide = false
+        end
+    end
+end
+
+function _G.ForceDeath(Root, Humanoid)
+    for _, Part in pairs(Humanoid.Parent:GetChildren()) do
+        if Part:IsA("BasePart") then
+            Part.CFrame = CFrame.new(-999999999999, 9999999999999, -999999999999)
+        end
+    end
+    task.wait()
+    for _, Part2 in pairs(Humanoid.Parent:GetChildren()) do
+        if Part2:IsA("BasePart") then
+            Part2.CFrame = CFrame.new(-999999999999, 9999999999999, -999999999999)
+        end
+    end
+    local BV = Instance.new("BodyVelocity")
+    BV.Velocity = Vector3.new(0, 99999999999, 0)
+    BV.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+    BV.P = 100000075
+    BV.Parent = Root
+    Humanoid.Sit = false
+    Humanoid.Jump = true
+    Humanoid.BreakJointsOnDeath = false
+    Humanoid:ChangeState(Enum.HumanoidStateType.Dead)
+    task.delay(2, function()
+        if BV and BV.Parent then BV:Destroy() end
+        BV = nil
+    end)
+end
+
+function _G.ReturnToSavedPosition()
+    local Char = Players.LocalPlayer.Character
+    if Char and Char:FindFirstChild("HumanoidRootPart") and _G.SavedCFrame then
+        Char:PivotTo(_G.SavedCFrame)
+    end
+end
+
+function _G.ExecuteKill(Player)
+    if not _G.LoopKill or not Player or not Player.Character then return end
+    if workspace.PlotItems.PlayersInPlots:FindFirstChild(Player.Name) then return end
+
+    local Char = Player.Character
+    local Root = Char:FindFirstChild("HumanoidRootPart")
+    local Head = Char:FindFirstChild("Head")
+    local Humanoid = Char:FindFirstChild("Humanoid")
+    if not (Root and Head and Humanoid) or Humanoid.Health <= 0 or _G.IsAboveLimit(Player) then return end
+
+    local SelfChar = Players.LocalPlayer.Character
+    if not SelfChar or not SelfChar:FindFirstChild("HumanoidRootPart") then return end
+
+    pcall(function()
+        if not _G.LoopKill then return end
+        SelfChar:PivotTo(CFrame.new(Root.Position + _G.KillOffset))
+        _G.DisableCollisions(Char)
+        RS.GrabEvents.SetNetworkOwner:FireServer(Root, Root.CFrame)
+        task.wait()
+        _G.ReturnToSavedPosition()
+        task.wait(0.1)
+        RS.GrabEvents.DestroyGrabLine:FireServer(Root)
+        task.wait(0.1)
+        if Head:FindFirstChild("PartOwner") and Head.PartOwner.Value == Players.LocalPlayer.Name then
+            _G.ForceDeath(Root, Humanoid)
+        end
+    end)
+    task.wait(0.1)
+end
+
+function _G.LoopKillFunction()
+    local Char = Players.LocalPlayer.Character
+    if not Char or not Char:FindFirstChild("HumanoidRootPart") then return end
+    _G.SavedCFrame = Char:GetPivot()
+
+    if not _G.LoopKill then return end
+    local Player = Players:FindFirstChild(selectedPlrName)
+    if Player then
+        _G.ExecuteKill(Player)
+    end
+end
+
+function _G.StartLoopKill()
+    if _G.LoopKillConnection then _G.LoopKillConnection:Disconnect() end
+    _G.LoopKillConnection = RunService.Heartbeat:Connect(function()
+        if _G.LoopKill then
+            _G.LoopKillFunction()
+        else
+            if _G.LoopKillConnection then
+                _G.LoopKillConnection:Disconnect()
+                _G.LoopKillConnection = nil
+            end
+        end
+    end)
+end
+
+function _G.StopLoopKill()
+    _G.LoopKill = false
+    if _G.LoopKillConnection then
+        _G.LoopKillConnection:Disconnect()
+        _G.LoopKillConnection = nil
+    end
+    _G.SavedCFrame = nil
+end
+
+TarTab:AddToggle({
+    Name = "LoopKill<font color=\"rgb(0, 255, 0)\"><b>[SNO]</b></font>",
+    Default = false,
+    Callback = function(Value)
+        _G.LoopKill = Value
+        if Value then
+            _G.StartLoopKill()
+        else
+            _G.StopLoopKill()
+        end
+    end
+})
+
+-- ============ Character handling ============
+plr.CharacterAdded:Connect(function(character)
+    char = character
+    hum = char:WaitForChild("Humanoid")
+    hrp = char:WaitForChild("HumanoidRootPart")
+    head = char:WaitForChild("Head")
+end)
+
+OrionLib:Init()
+OrionLib:MakeNotification({
+    Name = "<b>Target Loops</b> loaded",
+    Content = "Select a target and use the Loops tab",
+    Image = "file-terminal",
+    Time = 5
+})
