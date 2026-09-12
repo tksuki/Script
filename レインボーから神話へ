@@ -1,0 +1,611 @@
+local OrionLib = loadstring(game:HttpGet(('https://raw.githubusercontent.com/jadpy/suki/refs/heads/main/orion')))()
+local Window = OrionLib:MakeWindow({Name = "Block Script", HidePremium = false, SaveConfig = true, ConfigFolder = "OrionConfig"})
+
+local BlockTab = Window:MakeTab({
+    Name = "ブロック",
+    Icon = "rbxassetid://4483345998",
+    PremiumOnly = false
+})
+
+local BossTab = Window:MakeTab({
+    Name = "ボス",
+    Icon = "rbxassetid://4483345998",
+    PremiumOnly = false
+})
+
+-- 状態管理の変数
+local loopEnabled = false
+local bowLoopEnabled = false
+local rapidFireEnabled = false
+local swordSpamEnabled = false
+local multiBowEnabled = false
+local staffRapidFireEnabled = false
+local directBossFireEnabled = false
+local playerBowEnabled = false -- 新しく追加
+local capturedArgs = nil
+local numBowPositions = 16
+local fireInterval = 0.000001
+local selectedPlayer = nil -- 選択されたプレイヤー
+local playerList = {} -- プレイヤーリスト
+local playerDropdown = nil -- ドロップダウンの参照
+
+-- プレイヤーリストを更新する関数
+local function updatePlayerList()
+    local players = {}
+    for _, player in ipairs(game.Players:GetPlayers()) do
+        if player ~= game.Players.LocalPlayer then
+            table.insert(players, player.DisplayName .. " (" .. player.Name .. ")")
+        end
+    end
+    playerList = players
+    
+    if playerDropdown then
+        playerDropdown:Refresh(playerList, true)
+    end
+end
+
+-- プレイヤー名からPlayerオブジェクトを取得する関数
+local function getPlayerFromDisplay(displayText)
+    for _, player in ipairs(game.Players:GetPlayers()) do
+        if player.DisplayName .. " (" .. player.Name .. ")" == displayText then
+            return player
+        end
+    end
+    return nil
+end
+
+-- 指定された名前のツールを検索して装備する関数
+local function equipItemByName(itemName)
+    local player = game.Players.LocalPlayer
+    if not player then return false end
+
+    local character = player.Character
+    if character then
+        local equipped = character:FindFirstChild(itemName)
+        if equipped and equipped:IsA("Tool") then
+            return true
+        end
+    end
+
+    local backpack = player:FindFirstChild("Backpack")
+    if backpack then
+        local tool = backpack:FindFirstChild(itemName)
+        if tool and tool:IsA("Tool") and character then
+            local humanoid = character:FindFirstChildOfClass("Humanoid")
+            if humanoid then
+                humanoid:EquipTool(tool)
+                return true
+            end
+        end
+    end
+
+    return false
+end
+
+-- 弓連射系が1つでもオンか確認する補助関数
+local function isAnyBowEnabled()
+    return bowLoopEnabled or rapidFireEnabled or multiBowEnabled or directBossFireEnabled or playerBowEnabled
+end
+
+-- 状況に応じた装備切り替え管理
+local function handleEquipForAttack()
+    local bowActive = isAnyBowEnabled()
+    local staffActive = staffRapidFireEnabled
+
+    if bowActive and staffActive then
+        equipItemByName("BasicCrossbow")
+        equipItemByName("MagicLauncher")
+    elseif bowActive then
+        equipItemByName("BasicCrossbow")
+    elseif staffActive then
+        equipItemByName("MagicLauncher")
+    end
+end
+
+local function executeBlockLoop()
+    while loopEnabled do
+        local player = game.Players.LocalPlayer
+        if player and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+            player.Character.HumanoidRootPart.CFrame = CFrame.new(53.4, 509.5, 7.7)
+            
+            wait(0.16)
+            
+            local placeBlockPivot = game.Workspace:FindFirstChild("ZonePlaceBlockPivot", true)
+            
+            if placeBlockPivot then
+                if placeBlockPivot:IsA("BasePart") then
+                    local pos = placeBlockPivot.CFrame.Position
+                    player.Character.HumanoidRootPart.CFrame = CFrame.new(pos.X, pos.Y - 3, pos.Z)
+                elseif placeBlockPivot:IsA("Model") then
+                    local targetPart = placeBlockPivot.PrimaryPart or placeBlockPivot:FindFirstChildWhichIsA("BasePart")
+                    if targetPart then
+                        local pos = targetPart.CFrame.Position
+                        player.Character.HumanoidRootPart.CFrame = CFrame.new(pos.X, pos.Y - 3, pos.Z)
+                    end
+                end
+            end
+        end
+        
+        wait(0.16)
+    end
+end
+
+local function executeBowLoop()
+    while bowLoopEnabled do
+        handleEquipForAttack()
+        local boss = workspace:FindFirstChild("Boss", true)
+        if boss then
+            local upperTorso = boss:FindFirstChild("UpperTorso", true)
+            if upperTorso then
+                local targetPos = upperTorso.Position
+                local targetCFrame = upperTorso.CFrame
+                local player = game.Players.LocalPlayer
+                local hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+                
+                if hrp then
+                    local playerPos = hrp.Position
+                    local playerCFrame = hrp.CFrame
+                    local direction = (targetPos - playerPos).Unit
+                    
+                    game:GetService("ReplicatedStorage").BowSystem.BowREEvent:FireServer(
+                        "shoot",
+                        0,
+                        targetCFrame,
+                        true,
+                        3.1,
+                        playerCFrame,
+                        targetPos,
+                        direction * 100,
+                        playerPos,
+                        game:GetService("Teams").Lobby
+                    )
+                end
+            end
+        end
+        
+        wait(fireInterval)
+    end
+end
+
+-- 選択したプレイヤーの座標から弓を放つ
+local function executePlayerBowLoop()
+    while playerBowEnabled do
+        handleEquipForAttack()
+        local boss = workspace:FindFirstChild("Boss", true)
+        if boss then
+            local upperTorso = boss:FindFirstChild("UpperTorso", true)
+            if upperTorso then
+                local targetPos = upperTorso.Position
+                local targetCFrame = upperTorso.CFrame
+                
+                -- 選択されたプレイヤーを取得
+                local targetPlayer = nil
+                if playerDropdown and playerDropdown.Value then
+                    targetPlayer = getPlayerFromDisplay(playerDropdown.Value)
+                end
+                
+                if targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                    local playerPos = targetPlayer.Character.HumanoidRootPart.Position
+                    local playerCFrame = targetPlayer.Character.HumanoidRootPart.CFrame
+                    local direction = (targetPos - playerPos).Unit
+                    
+                    game:GetService("ReplicatedStorage").BowSystem.BowREEvent:FireServer(
+                        "shoot",
+                        0,
+                        targetCFrame,
+                        true,
+                        3.1,
+                        playerCFrame,
+                        targetPos,
+                        direction * 100,
+                        playerPos,
+                        game:GetService("Teams").Lobby
+                    )
+                end
+            end
+        end
+        
+        wait(fireInterval)
+    end
+end
+
+-- ボスのヒューマノイドパーツを取得する関数
+local function getBossHumanoidParts(boss)
+    local humanoidParts = {}
+    
+    local humanoid = boss:FindFirstChildOfClass("Humanoid")
+    if not humanoid then
+        humanoid = boss:FindFirstChildWhichIsA("Humanoid", true)
+    end
+    
+    if humanoid then
+        local model = humanoid.Parent
+        if model then
+            for _, part in ipairs(model:GetDescendants()) do
+                if part:IsA("BasePart") then
+                    table.insert(humanoidParts, part)
+                end
+            end
+        end
+    end
+    
+    if #humanoidParts == 0 then
+        local alternativeParts = {
+            boss:FindFirstChild("HumanoidRootPart"),
+            boss:FindFirstChild("UpperTorso"),
+            boss:FindFirstChild("LowerTorso"),
+            boss:FindFirstChild("Torso"),
+            boss:FindFirstChild("Head")
+        }
+        
+        for _, part in ipairs(alternativeParts) do
+            if part then
+                table.insert(humanoidParts, part)
+            end
+        end
+        
+        if #humanoidParts == 0 then
+            for _, name in ipairs({"HumanoidRootPart", "UpperTorso", "LowerTorso", "Torso", "Head"}) do
+                local foundPart = boss:FindFirstChild(name, true)
+                if foundPart then
+                    table.insert(humanoidParts, foundPart)
+                end
+            end
+        end
+    end
+    
+    return humanoidParts
+end
+
+-- いろんなところから弓を放つ（ボスのヒューマノイドパーツから発射）
+local function executeMultiBowLoop()
+    while multiBowEnabled do
+        handleEquipForAttack()
+        local boss = workspace:FindFirstChild("Boss", true)
+        if boss then
+            local humanoidParts = getBossHumanoidParts(boss)
+            
+            if #humanoidParts > 0 then
+                local radius = 50
+                
+                for _, sourcePart in ipairs(humanoidParts) do
+                    if sourcePart:IsA("BasePart") then
+                        local sourcePos = sourcePart.Position
+                        
+                        for _, targetPart in ipairs(humanoidParts) do
+                            if targetPart:IsA("BasePart") and targetPart ~= sourcePart then
+                                local targetPos = targetPart.Position
+                                local targetCFrame = targetPart.CFrame
+                                
+                                for i = 1, numBowPositions do
+                                    local angle = (i / numBowPositions) * math.pi * 2
+                                    local offsetX = math.cos(angle) * radius
+                                    local offsetZ = math.sin(angle) * radius
+                                    
+                                    local shootPos = Vector3.new(
+                                        sourcePos.X + offsetX,
+                                        sourcePos.Y,
+                                        sourcePos.Z + offsetZ
+                                    )
+                                    
+                                    local shootCFrame = CFrame.new(shootPos)
+                                    local direction = (targetPos - shootPos).Unit
+                                    
+                                    game:GetService("ReplicatedStorage").BowSystem.BowREEvent:FireServer(
+                                        "shoot",
+                                        0,
+                                        targetCFrame,
+                                        true,
+                                        3.1,
+                                        shootCFrame,
+                                        targetPos,
+                                        direction * 100,
+                                        shootPos,
+                                        game:GetService("Teams").Lobby
+                                    )
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+        
+        wait(fireInterval)
+    end
+end
+
+local function executeStaffRapidFire()
+    while staffRapidFireEnabled do
+        handleEquipForAttack()
+        local boss = workspace:FindFirstChild("Boss", true)
+        if boss then
+            local upperTorso = boss:FindFirstChild("UpperTorso", true)
+            if upperTorso then
+                local targetPos = upperTorso.Position
+                local targetCFrame = upperTorso.CFrame
+                local player = game.Players.LocalPlayer
+                local hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+                
+                if hrp then
+                    local playerPos = hrp.Position
+                    local playerCFrame = hrp.CFrame
+                    local direction = (targetPos - playerPos).Unit
+                    
+                    game:GetService("ReplicatedStorage").BowSystem.BowREEvent:FireServer(
+                        "shoot",
+                        0,
+                        targetCFrame,
+                        true,
+                        3.1,
+                        playerCFrame,
+                        targetPos,
+                        direction * 100,
+                        playerPos,
+                        game:GetService("Teams").Lobby
+                    )
+                end
+            end
+        end
+        
+        wait(fireInterval)
+    end
+end
+
+-- ボス直接連射
+local function executeDirectBossFire()
+    while directBossFireEnabled do
+        handleEquipForAttack()
+        local boss = workspace:FindFirstChild("Boss", true)
+        if boss then
+            local humanoidParts = getBossHumanoidParts(boss)
+            
+            if #humanoidParts > 0 then
+                for _, sourcePart in ipairs(humanoidParts) do
+                    if sourcePart:IsA("BasePart") then
+                        local shootPos = sourcePart.Position
+                        local shootCFrame = sourcePart.CFrame
+                        local targetPos = sourcePart.Position
+                        local targetCFrame = sourcePart.CFrame
+                        local direction = Vector3.new(0, -1, 0)
+                        
+                        game:GetService("ReplicatedStorage").BowSystem.BowREEvent:FireServer(
+                            "shoot",
+                            0,
+                            targetCFrame,
+                            true,
+                            3.1,
+                            shootCFrame,
+                            targetPos,
+                            direction * 100,
+                            shootPos,
+                            game:GetService("Teams").Lobby
+                        )
+                    end
+                end
+            end
+        end
+        
+        wait(fireInterval)
+    end
+end
+
+local oldNamecall
+oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
+    local args = {...}
+    local method = getnamecallmethod()
+    
+    if method == "FireServer" and self.Name == "BowREEvent" and args[1] == "shoot" and not rapidFireEnabled then
+        capturedArgs = args
+    end
+    
+    return oldNamecall(self, ...)
+end)
+
+local function executeRapidFire()
+    while rapidFireEnabled do
+        handleEquipForAttack()
+        if capturedArgs then
+            game:GetService("ReplicatedStorage").BowSystem.BowREEvent:FireServer(table.unpack(capturedArgs))
+        end
+        wait(fireInterval)
+    end
+end
+
+local function executeSwordSpam()
+    while swordSpamEnabled do
+        local player = game.Players.LocalPlayer
+        local boss = workspace:FindFirstChild("Boss", true)
+        
+        if player and player.Character and boss then
+            local hrp = player.Character:FindFirstChild("HumanoidRootPart")
+            local bossHitbox = boss:FindFirstChild("HumanoidRootPart", true) or boss:FindFirstChild("UpperTorso", true) or boss:FindFirstChild("Torso", true)
+            
+            if hrp and bossHitbox then
+                local playerPos = hrp.Position
+                local bossPos = bossHitbox.Position
+                local distance = (bossPos - playerPos).Magnitude
+                
+                local bossSize = bossHitbox.Size
+                local hitboxRadius = math.max(bossSize.X, bossSize.Y, bossSize.Z) / 2
+                
+                local adjustedDistance = distance - hitboxRadius
+                
+                game:GetService("ReplicatedStorage").Remotes.CombatEvent:FireServer({
+                    ["HitBoxDuration"] = 0.3,
+                    ["Action"] = "M1",
+                    ["DashVelocity"] = 60,
+                    ["Combo"] = 1,
+                    ["AnimLength"] = adjustedDistance,
+                })
+            end
+        end
+        
+        wait(0.00000000001)
+    end
+end
+
+BlockTab:AddToggle({
+    Name = "ループブロック",
+    Default = false,
+    Callback = function(Value)
+        loopEnabled = Value
+        if Value then
+            spawn(executeBlockLoop)
+        end
+    end    
+})
+
+BossTab:AddButton({
+    Name = "アップデートWin",
+    Callback = function()
+        local Remote = game:GetService("ReplicatedStorage").Remotes.UpdateWins
+        firesignal(Remote.OnClientEvent, 11, 1)
+    end    
+})
+
+BossTab:AddButton({
+    Name = "クリアタイル",
+    Callback = function()
+        local Remote = game:GetService("ReplicatedStorage").Remotes.GiveTail
+        firesignal(Remote.OnClientEvent, {
+            ["Rarity"] = "Common",
+            ["Model"] = "TAIL001",
+            ["UUID"] = "TAIL001",
+            ["EverEquipped"] = true,
+            ["Name"] = "Red Stars Trail",
+        })
+    end    
+})
+
+BossTab:AddSlider({
+    Name = "弓の射撃箇所数",
+    Min = 1,
+    Max = 1600,
+    Default = 16,
+    Color = Color3.fromRGB(255, 255, 255),
+    Increment = 1,
+    ValueName = "箇所",
+    Callback = function(Value)
+        numBowPositions = Value
+    end    
+})
+
+BossTab:AddSlider({
+    Name = "連射間隔 (秒)",
+    Min = 0,
+    Max = 1,
+    Default = 0,
+    Color = Color3.fromRGB(255, 255, 255),
+    Increment = 0.01,
+    ValueName = "秒",
+    Callback = function(Value)
+        if Value <= 0 then
+            fireInterval = 0.000001
+        else
+            fireInterval = Value
+        end
+    end    
+})
+
+-- 新しく追加：プレイヤー選択ドロップダウン
+playerDropdown = BossTab:AddDropdown({
+    Name = "プレイヤー選択",
+    Default = "",
+    Options = playerList,
+    Callback = function(Value)
+        selectedPlayer = getPlayerFromDisplay(Value)
+    end    
+})
+
+-- プレイヤーの入退室を監視
+game.Players.PlayerAdded:Connect(function(player)
+    updatePlayerList()
+end)
+
+game.Players.PlayerRemoving:Connect(function(player)
+    updatePlayerList()
+end)
+
+-- 初期プレイヤーリストを設定
+updatePlayerList()
+
+BossTab:AddToggle({
+    Name = "杖連射",
+    Default = false,
+    Callback = function(Value)
+        staffRapidFireEnabled = Value
+        if Value then
+            spawn(executeStaffRapidFire)
+        end
+    end    
+})
+
+BossTab:AddToggle({
+    Name = "弓を放つ",
+    Default = false,
+    Callback = function(Value)
+        bowLoopEnabled = Value
+        if Value then
+            spawn(executeBowLoop)
+        end
+    end    
+})
+
+-- 新しく追加：選択プレイヤーから弓を放つ
+BossTab:AddToggle({
+    Name = "選択プレイヤーから弓を放つ",
+    Default = false,
+    Callback = function(Value)
+        playerBowEnabled = Value
+        if Value then
+            spawn(executePlayerBowLoop)
+        end
+    end    
+})
+
+BossTab:AddToggle({
+    Name = "いろんなところから弓を放つ",
+    Default = false,
+    Callback = function(Value)
+        multiBowEnabled = Value
+        if Value then
+            spawn(executeMultiBowLoop)
+        end
+    end    
+})
+
+BossTab:AddToggle({
+    Name = "弓連射",
+    Default = false,
+    Callback = function(Value)
+        rapidFireEnabled = Value
+        if Value then
+            spawn(executeRapidFire)
+        end
+    end    
+})
+
+BossTab:AddToggle({
+    Name = "ボス直接連射",
+    Default = false,
+    Callback = function(Value)
+        directBossFireEnabled = Value
+        if Value then
+            spawn(executeDirectBossFire)
+        end
+    end    
+})
+
+BossTab:AddToggle({
+    Name = "剣連打",
+    Default = false,
+    Callback = function(Value)
+        swordSpamEnabled = Value
+        if Value then
+            spawn(executeSwordSpam)
+        end
+    end    
+})
+
+OrionLib:Init()
