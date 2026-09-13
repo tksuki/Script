@@ -1,0 +1,726 @@
+--================================================================================
+--  Kento Hub / ドット絵メーカー (修正版)
+--  ダイス20個対応 / 虚式紫の機能は完全削除
+--================================================================================
+
+-- 1. OrionLib の読み込み
+local OrionLib = nil
+local successLoad, errLoad = pcall(function()
+    return loadstring(game:HttpGet('https://raw.githubusercontent.com/shlexware/Orion/main/source'))()
+end)
+
+if successLoad and OrionLib then
+    print("[Kento Hub] OrionLib loaded successfully.")
+else
+    local secondSuccess, secondErr = pcall(function()
+        return loadstring(game:HttpGet('https://pastefy.app/H3pBfBVT/raw'))()
+    end)
+    if secondSuccess then OrionLib = secondErr else error("[Kento Hub] Failed to load OrionLib.") end
+end
+
+-- 2. GUI メインウィンドウ
+local Window = OrionLib:MakeWindow({
+    Name = "Kento Hub 🧡 | ドット絵メーカー",
+    HidePremium = false,
+    SaveConfig = false,
+    ConfigFolder = "KentoHubPixelArt",
+    IntroEnabled = true,
+    IntroText = "Kento Hub Loading... 🧡"
+})
+
+-- 3. サービス
+local Services = {
+    Players = game:GetService("Players"),
+    ReplicatedStorage = game:GetService("ReplicatedStorage"),
+    RunService = game:GetService("RunService"),
+    Workspace = game:GetService("Workspace"),
+    Camera = game:GetService("Workspace").CurrentCamera
+}
+
+local LocalPlayer = Services.Players.LocalPlayer
+
+-- 4. リモートイベント (存在する場合のみ)
+local Events = {
+    GrabEvents = Services.ReplicatedStorage:WaitForChild("GrabEvents", 5),
+    DataEvents = Services.ReplicatedStorage:WaitForChild("DataEvents", 5)
+}
+local SetNetworkOwnerEvent = Events.GrabEvents and Events.GrabEvents:WaitForChild("SetNetworkOwner", 5)
+local UpdateLineColorsEvent = Events.DataEvents and Events.DataEvents:WaitForChild("UpdateLineColorsEvent", 5)
+
+-- 5. カラー定義
+local COLORS = {
+    RED     = Color3.fromRGB(255, 0, 0),
+    YELLOW  = Color3.fromRGB(255, 255, 0),
+    BLACK   = Color3.fromRGB(0, 0, 0),
+    WHITE   = Color3.fromRGB(255, 255, 255),
+    BLUE    = Color3.fromRGB(0, 100, 255),
+    GREEN   = Color3.fromRGB(0, 255, 0),
+    PURPLE  = Color3.fromRGB(180, 0, 255),
+    ORANGE  = Color3.fromRGB(255, 140, 0),
+    PINK    = Color3.fromRGB(255, 100, 180),
+    CYAN    = Color3.fromRGB(0, 255, 255),
+    BROWN   = Color3.fromRGB(139, 69, 19),
+    DEFAULT = Color3.fromRGB(255, 170, 0)
+}
+
+-- 6. スクリプト状態
+local HUB_STATE = {
+    AnimationTimeAccumulator = 0,
+    MaxDiceLimit = 20,
+    PixelSpacing = 2.0,
+    CurrentArt = "NONE",
+    ArtBuildProgress = 0,
+    ArtHoldTime = 0,
+    ThirdPersonEnabled = false,
+    ThirdPersonDistance = 15.0
+}
+
+-- 7. データ保管庫
+local DiceStorage = {
+    All = {},
+    HoveringMap = {},
+    ColorMap = {},
+    TargetPositions = {},
+    OriginalProperties = {}
+}
+
+-- 8. カラーマップ
+local COLOR_MAP = {
+    ["R"] = COLORS.RED,
+    ["Y"] = COLORS.YELLOW,
+    ["B"] = COLORS.BLACK,
+    ["W"] = COLORS.WHITE,
+    ["Bl"] = COLORS.BLUE,
+    ["G"] = COLORS.GREEN,
+    ["P"] = COLORS.PURPLE,
+    ["O"] = COLORS.ORANGE,
+    ["Pk"] = COLORS.PINK,
+    ["C"] = COLORS.CYAN,
+    ["Br"] = COLORS.BROWN,
+}
+
+--================================================================================
+-- ドット絵パターン
+--================================================================================
+
+local PATTERNS = {
+    HEART = {
+        {"R","R",0,"R","R"},
+        {"R","R","R","R","R"},
+        {0,"R","R","R",0},
+        {0,0,"R",0,0}
+    },
+    SMILE = {
+        {"Y","B","Y","B","Y"},
+        {"Y","Y","Y","Y","Y"},
+        {"Y","B","B","B","Y"},
+        {"Y","Y","Y","Y","Y"}
+    },
+    CRY = {
+        {"Y","B","Y","B","Y"},
+        {"Bl","Y","Y","Y","Bl"},
+        {"Y","Y","B","Y","Y"},
+        {"Y","B","Y","B","Y"}
+    },
+    ANGRY = {
+        {"B","Y","Y","Y","B"},
+        {"Y","B","Y","B","Y"},
+        {"Y","Y","Y","Y","Y"},
+        {"Y","B","B","B","Y"}
+    },
+    COOL = {
+        {"B","B","B","B","B"},
+        {"Y","Y","Y","Y","Y"},
+        {"Y","B","B","B","Y"},
+        {"Y","Y","Y","Y","Y"}
+    },
+    STAR = {
+        {0,0,"Y",0,0},
+        {"Y","Y","Y","Y","Y"},
+        {0,"Y","Y","Y",0},
+        {0,"Y",0,"Y",0}
+    },
+    MOON = {
+        {0,"Y","Y",0,0},
+        {"Y",0,0,0,0},
+        {"Y",0,0,0,0},
+        {0,"Y","Y",0,0}
+    },
+    SUN = {
+        {0,"Y","Y","Y",0},
+        {"Y","O","O","O","Y"},
+        {"Y","O","O","O","Y"},
+        {0,"Y","Y","Y",0}
+    },
+    FLOWER = {
+        {0,"Pk","Pk","Pk",0},
+        {"Pk","Y","Y","Y","Pk"},
+        {"Pk","Y","Y","Y","Pk"},
+        {0,"Pk","Pk","Pk",0}
+    },
+    CAT = {
+        {"O",0,"O",0,"O"},
+        {"O","O","O","O","O"},
+        {"O","B","O","B","O"},
+        {"O","O","Pk","O","O"}
+    },
+    DOG = {
+        {"Br",0,"Br",0,"Br"},
+        {"Br","Br","Br","Br","Br"},
+        {"Br","B","Br","B","Br"},
+        {"Br","W","W","W","Br"}
+    },
+    PIZZA = {
+        {"O","O","O","O","O"},
+        {"O","R","O","R","O"},
+        {"O","O","R","O","O"},
+        {0,"O","O","O",0}
+    },
+    APPLE = {
+        {0,0,"G",0,0},
+        {0,"R","R","R",0},
+        {"R","R","R","R","R"},
+        {0,"R","R","R",0}
+    },
+    SKULL = {
+        {"W","W","W","W","W"},
+        {"W","B","W","B","W"},
+        {"W","W","W","W","W"},
+        {0,"B","B","B",0}
+    },
+    GHOST = {
+        {"W","W","W","W","W"},
+        {"W","B","W","B","W"},
+        {"W","W","B","W","W"},
+        {"W",0,"W",0,"W"}
+    },
+    PUMPKIN = {
+        {0,"O",0,"O",0},
+        {"O","O","O","O","O"},
+        {"O","B","O","B","O"},
+        {"O","B","B","B","O"}
+    },
+    BLUE_HEART = {
+        {"Bl","Bl",0,"Bl","Bl"},
+        {"Bl","Bl","Bl","Bl","Bl"},
+        {0,"Bl","Bl","Bl",0},
+        {0,0,"Bl",0,0}
+    },
+    GREEN_HEART = {
+        {"G","G",0,"G","G"},
+        {"G","G","G","G","G"},
+        {0,"G","G","G",0},
+        {0,0,"G",0,0}
+    },
+    PURPLE_HEART = {
+        {"P","P",0,"P","P"},
+        {"P","P","P","P","P"},
+        {0,"P","P","P",0},
+        {0,0,"P",0,0}
+    },
+    LIGHTNING = {
+        {0,0,0,"Y","Y"},
+        {0,0,"Y","Y",0},
+        {"Y","Y","Y","Y",0},
+        {"Y","Y",0,0,0}
+    },
+    FIRE = {
+        {0,0,"R",0,0},
+        {0,"O","R","O",0},
+        {"O","O","Y","O","O"},
+        {"O","Y","Y","Y","O"}
+    },
+    SNOWFLAKE = {
+        {0,"C",0,"C",0},
+        {"C","C","C","C","C"},
+        {0,0,"C",0,0},
+        {"C","C","C","C","C"}
+    },
+    NOTE = {
+        {0,0,0,0,"B"},
+        {0,0,0,"B","B"},
+        {0,0,"B",0,"B"},
+        {0,"B","B","B",0}
+    },
+    HOUSE = {
+        {0,0,"R",0,0},
+        {0,"R","R","R",0},
+        {"R","R","R","R","R"},
+        {"Br","B",0,"B","Br"}
+    },
+    CAR = {
+        {0,0,"R","R","R"},
+        {"R","R","R","R","R"},
+        {"B","R","R","R","B"},
+        {0,"B",0,"B",0}
+    },
+    RAINBOW = {
+        {0,"R","R","R",0},
+        {"O","Y","Y","Y","O"},
+        {"G","C","C","C","G"},
+        {"Bl","P","P","P","Bl"}
+    },
+    DANGER = {
+        {0,0,"B",0,0},
+        {0,"B","Y","B",0},
+        {"B","Y","Y","Y","B"},
+        {"Y","B","Y","B","Y"}
+    },
+    TARGET = {
+        {0,"R","R","R",0},
+        {"R","W","W","W","R"},
+        {"R","W","R","W","R"},
+        {0,"R","R","R",0}
+    },
+    SWORD = {
+        {0,0,"W",0,0},
+        {0,0,"W",0,0},
+        {"Y","Y","W","Y","Y"},
+        {0,0,"Br",0,0}
+    },
+    SHIELD = {
+        {"Bl","Bl","Bl","Bl","Bl"},
+        {"Bl","Y","Y","Y","Bl"},
+        {0,"Bl","Y","Bl",0},
+        {0,0,"Bl",0,0}
+    },
+    GIFT = {
+        {0,"R","Y","R",0},
+        {"R","R","Y","R","R"},
+        {"R","R","Y","R","R"},
+        {0,"R","Y","R",0}
+    },
+    CLOVER = {
+        {"G",0,"G",0,0},
+        {"G","G","G","G",0},
+        {0,"G","G","G","G"},
+        {0,0,"G",0,"G"}
+    },
+}
+
+--================================================================================
+-- 自分のダイスのみ判定
+--================================================================================
+
+local function IsOwnedByOtherPlayer(part)
+    if not part or not part:IsA("BasePart") then return true end
+    
+    for _, player in ipairs(Services.Players:GetPlayers()) do
+        if player ~= LocalPlayer then
+            local pChar = player.Character
+            if pChar and part:IsDescendantOf(pChar) then return true end
+            local pBackpack = player:FindFirstChild("Backpack")
+            if pBackpack and part:IsDescendantOf(pBackpack) then return true end
+        end
+    end
+    
+    local success, owner = pcall(function() return part:GetNetworkOwner() end)
+    if success and owner ~= nil and owner ~= LocalPlayer then
+        return true
+    end
+    
+    return false
+end
+
+local function IsMyOnlyToyPart(part)
+    if not part or not part:IsA("BasePart") or part.Anchored then return false end
+    
+    local myChar = LocalPlayer.Character
+    if myChar and part:IsDescendantOf(myChar) then return false end
+
+    if IsOwnedByOtherPlayer(part) then return false end
+
+    local pName = part.Name
+    local parentName = part.Parent and part.Parent.Name or ""
+    
+    if pName:find("Dice") or parentName:find("Dice") or pName:find("Toy") or parentName:find("Toy") then 
+        return true 
+    end
+    return false
+end
+
+--================================================================================
+-- 物理制御
+--================================================================================
+
+local function SetupDicePhysics(part)
+    if not part or not part:IsA("BasePart") then return end
+    if not DiceStorage.OriginalProperties[part] then
+        DiceStorage.OriginalProperties[part] = {
+            Color = part.Color,
+            CFrame = part.CFrame,
+            CanCollide = part.CanCollide
+        }
+    end
+    part.CanCollide = false
+
+    local bv = part:FindFirstChild("DiceForce") or Instance.new("BodyVelocity")
+    bv.Name = "DiceForce" bv.MaxForce = Vector3.new(1, 1, 1) * 1e7 bv.P = 12500 bv.Parent = part
+
+    local bg = part:FindFirstChild("DiceGyro") or Instance.new("BodyGyro")
+    bg.Name = "DiceGyro" bg.MaxTorque = Vector3.new(1, 1, 1) * 1e7 bg.P = 12500 bg.Parent = part
+end
+
+local function RemoveDicePhysics(part)
+    if not part then return end
+    local bv = part:FindFirstChild("DiceForce")
+    local bg = part:FindFirstChild("DiceGyro")
+    if bv then bv:Destroy() end
+    if bg then bg:Destroy() end
+    part.CanCollide = true
+end
+
+local function CleanupDiceDatabase()
+    for i = #DiceStorage.All, 1, -1 do
+        local part = DiceStorage.All[i]
+        if not part or not part.Parent or not part:IsDescendantOf(Services.Workspace) or IsOwnedByOtherPlayer(part) then
+            DiceStorage.HoveringMap[part] = nil
+            DiceStorage.ColorMap[part] = nil
+            DiceStorage.TargetPositions[part] = nil
+            RemoveDicePhysics(part)
+            table.remove(DiceStorage.All, i)
+        end
+    end
+end
+
+local function CollectDice()
+    CleanupDiceDatabase()
+    local char = LocalPlayer.Character
+    local root = char and (char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("Torso"))
+    if not root then return end
+
+    for _, part in ipairs(Services.Workspace:GetPartBoundsInRadius(root.Position, 120)) do
+        if #DiceStorage.All >= HUB_STATE.MaxDiceLimit then break end
+        if IsMyOnlyToyPart(part) and not DiceStorage.HoveringMap[part] then
+            DiceStorage.HoveringMap[part] = true
+            SetupDicePhysics(part)
+            table.insert(DiceStorage.All, part)
+            if not DiceStorage.ColorMap[part] then DiceStorage.ColorMap[part] = COLORS.DEFAULT end
+        end
+    end
+end
+
+--================================================================================
+-- ドット絵配置
+--================================================================================
+
+local function GetColorFromPixel(pixel)
+    if pixel == 0 then return nil end
+    if type(pixel) == "string" and COLOR_MAP[pixel] then
+        return COLOR_MAP[pixel]
+    end
+    return COLORS.DEFAULT
+end
+
+local function PlacePixelArt(pattern)
+    CollectDice()
+
+    local char = LocalPlayer.Character
+    local root = char and (char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("Torso"))
+    if not root then return end
+
+    local rows = #pattern
+    local cols = #pattern[1]
+    local spacing = HUB_STATE.PixelSpacing
+
+    local baseCF = root.CFrame * CFrame.new(0, 8, -10)
+    local right = baseCF.RightVector
+    local up = baseCF.UpVector
+
+    local centerX = (cols - 1) / 2
+    local centerY = (rows - 1) / 2
+
+    -- 全ダイスを一旦目標なしにリセット
+    DiceStorage.TargetPositions = {}
+
+    -- パターンに合わせて配置
+    local diceIndex = 1
+    for row = 1, rows do
+        for col = 1, cols do
+            local pixel = pattern[row][col]
+            if pixel ~= 0 then
+                if diceIndex > #DiceStorage.All then
+                    break
+                end
+                local offsetX = (col - 1 - centerX) * spacing
+                local offsetY = -(row - 1 - centerY) * spacing
+                local targetPos = baseCF.Position + (right * offsetX) + (up * offsetY)
+
+                local d = DiceStorage.All[diceIndex]
+                if d and d.Parent then
+                    DiceStorage.TargetPositions[d] = targetPos
+                    local color = GetColorFromPixel(pixel)
+                    if color then
+                        DiceStorage.ColorMap[d] = color
+                    end
+                end
+                diceIndex = diceIndex + 1
+            end
+        end
+    end
+
+    -- 余ったダイスは上空へ退避
+    for _, d in ipairs(DiceStorage.All) do
+        if d and d.Parent and not DiceStorage.TargetPositions[d] then
+            DiceStorage.TargetPositions[d] = Vector3.new(0, 500, 0)
+        end
+    end
+end
+
+local function ResetDice()
+    HUB_STATE.CurrentArt = "NONE"
+    DiceStorage.TargetPositions = {}
+    for _, d in ipairs(DiceStorage.All) do
+        if d and d.Parent then
+            local orig = DiceStorage.OriginalProperties[d]
+            if orig then
+                DiceStorage.ColorMap[d] = orig.Color
+            else
+                DiceStorage.ColorMap[d] = COLORS.DEFAULT
+            end
+        end
+    end
+end
+
+--================================================================================
+-- GUI 構築
+--================================================================================
+
+local TabFaces = Window:MakeTab({ Name = "🎨 顔", Icon = "rbxassetid://4483345998" })
+local TabHearts = Window:MakeTab({ Name = "💖 ハート", Icon = "rbxassetid://4483345998" })
+local TabNature = Window:MakeTab({ Name = "🌿 自然", Icon = "rbxassetid://4483345998" })
+local TabIcons = Window:MakeTab({ Name = "⚔️ アイコン", Icon = "rbxassetid://4483345998" })
+local TabCamera = Window:MakeTab({ Name = "🎥 3人称視点", Icon = "rbxassetid://4483345998" })
+local TabSettings = Window:MakeTab({ Name = "⚙️ 設定", Icon = "rbxassetid://4483345998" })
+
+local function AddArtButton(tab, name, patternKey)
+    tab:AddButton({
+        Name = name,
+        Callback = function()
+            HUB_STATE.CurrentArt = patternKey
+            HUB_STATE.ArtBuildProgress = 0
+            PlacePixelArt(PATTERNS[patternKey])
+            OrionLib:MakeNotification({Name = "Kento Hub", Content = name .. " を描画中...", Time = 2})
+        end
+    })
+end
+
+-- 🎨 顔タブ
+TabFaces:AddSection({ Name = "😊 顔" })
+AddArtButton(TabFaces, "😊 スマイル (顔:黄 / 目・口:黒)", "SMILE")
+AddArtButton(TabFaces, "😢 泣き顔", "CRY")
+AddArtButton(TabFaces, "😠 怒り顔", "ANGRY")
+AddArtButton(TabFaces, "😎 クール顔 (サングラス)", "COOL")
+
+TabFaces:AddSection({ Name = "🐱 動物" })
+AddArtButton(TabFaces, "🐱 猫の顔", "CAT")
+AddArtButton(TabFaces, "🐶 犬の顔", "DOG")
+
+TabFaces:AddSection({ Name = "👻 ホラー" })
+AddArtButton(TabFaces, "💀 ドクロ", "SKULL")
+AddArtButton(TabFaces, "👻 お化け", "GHOST")
+AddArtButton(TabFaces, "🎃 カボチャ", "PUMPKIN")
+
+-- 💖 ハートタブ
+TabHearts:AddSection({ Name = "💖 ハート (色違い)" })
+AddArtButton(TabHearts, "❤️ 赤ハート", "HEART")
+AddArtButton(TabHearts, "💙 青ハート", "BLUE_HEART")
+AddArtButton(TabHearts, "💚 緑ハート", "GREEN_HEART")
+AddArtButton(TabHearts, "💜 紫ハート", "PURPLE_HEART")
+
+-- 🌿 自然タブ
+TabNature:AddSection({ Name = "⭐ 天体" })
+AddArtButton(TabNature, "⭐ 星", "STAR")
+AddArtButton(TabNature, "🌙 月", "MOON")
+AddArtButton(TabNature, "☀️ 太陽", "SUN")
+
+TabNature:AddSection({ Name = "🌸 植物" })
+AddArtButton(TabNature, "🌸 花", "FLOWER")
+AddArtButton(TabNature, "🍀 クローバー", "CLOVER")
+AddArtButton(TabNature, "🍎 りんご", "APPLE")
+
+TabNature:AddSection({ Name = "⚡ 元素" })
+AddArtButton(TabNature, "⚡ 稲妻", "LIGHTNING")
+AddArtButton(TabNature, "🔥 炎", "FIRE")
+AddArtButton(TabNature, "❄️ 雪の結晶", "SNOWFLAKE")
+AddArtButton(TabNature, "🌈 虹", "RAINBOW")
+
+-- ⚔️ アイコンタブ
+TabIcons:AddSection({ Name = "⚔️ 武器・防具" })
+AddArtButton(TabIcons, "⚔️ 剣", "SWORD")
+AddArtButton(TabIcons, "🛡️ 盾", "SHIELD")
+AddArtButton(TabIcons, "🎯 的", "TARGET")
+AddArtButton(TabIcons, "☠️ 危険マーク", "DANGER")
+
+TabIcons:AddSection({ Name = "🎵 その他" })
+AddArtButton(TabIcons, "🎵 音符", "NOTE")
+AddArtButton(TabIcons, "🏠 家", "HOUSE")
+AddArtButton(TabIcons, "🚗 車", "CAR")
+AddArtButton(TabIcons, "🍕 ピザ", "PIZZA")
+AddArtButton(TabIcons, "🎁 プレゼント", "GIFT")
+
+-- 🎥 3人称視点タブ
+TabCamera:AddSection({ Name = "🎥 3人称視点" })
+TabCamera:AddToggle({
+    Name = "3人称視点（TPS）有効化",
+    Default = false,
+    Callback = function(Value)
+        HUB_STATE.ThirdPersonEnabled = Value
+        if not Value then Services.Camera.CameraType = Enum.CameraType.Custom end
+    end
+})
+
+TabCamera:AddSlider({
+    Name = "カメラ距離",
+    Min = 5, Max = 50, Default = 15, Color = Color3.fromRGB(255, 170, 0), Increment = 1, ValueName = "m",
+    Callback = function(Value) HUB_STATE.ThirdPersonDistance = Value end
+})
+
+-- ⚙️ 設定タブ
+TabSettings:AddSection({ Name = "🎲 ダイス操作" })
+TabSettings:AddButton({
+    Name = "🔄 ダイスを集める",
+    Callback = function()
+        CollectDice()
+        OrionLib:MakeNotification({Name = "Kento Hub", Content = "🎲 " .. #DiceStorage.All .. "個集めました", Time = 2})
+    end
+})
+TabSettings:AddButton({
+    Name = "↩️ リセット",
+    Callback = function()
+        ResetDice()
+        OrionLib:MakeNotification({Name = "Kento Hub", Content = "↩️ リセットしました", Time = 2})
+    end
+})
+TabSettings:AddButton({
+    Name = "🚫 演出停止",
+    Callback = function()
+        HUB_STATE.CurrentArt = "NONE"
+        for _, d in ipairs(DiceStorage.All) do
+            if d and d.Parent then
+                DiceStorage.TargetPositions[d] = Vector3.new(0, 500, 0)
+            end
+        end
+        OrionLib:MakeNotification({Name = "Kento Hub", Content = "🚫 停止しました", Time = 2})
+    end
+})
+
+TabSettings:AddSection({ Name = "📐 パラメータ" })
+TabSettings:AddSlider({
+    Name = "ドット間隔",
+    Min = 1, Max = 5, Default = 2, Color = Color3.fromRGB(255, 170, 0), Increment = 0.5, ValueName = "m",
+    Callback = function(Value) HUB_STATE.PixelSpacing = Value end
+})
+
+TabSettings:AddSlider({
+    Name = "保持時間 (0=無限)",
+    Min = 0, Max = 30, Default = 0, Color = Color3.fromRGB(255, 170, 0), Increment = 1, ValueName = "秒",
+    Callback = function(Value) HUB_STATE.ArtHoldTime = Value end
+})
+
+--================================================================================
+-- メインループ (ドット絵専用 - 通常の球体配置は完全削除)
+--================================================================================
+
+Services.RunService.Heartbeat:Connect(function(dt)
+    HUB_STATE.AnimationTimeAccumulator = HUB_STATE.AnimationTimeAccumulator + dt
+
+    -- ダイス自動収集
+    if #DiceStorage.All < HUB_STATE.MaxDiceLimit then
+        CollectDice()
+    end
+
+    local char = LocalPlayer.Character
+    if not char then return end
+    local root = char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("Torso")
+    if not root then return end
+
+    -- 3人称視点
+    if HUB_STATE.ThirdPersonEnabled then
+        Services.Camera.CameraType = Enum.CameraType.Scriptable
+        local targetCamPos = root.Position - (root.CFrame.LookVector * HUB_STATE.ThirdPersonDistance) + Vector3.new(0, 4, 0)
+        Services.Camera.CFrame = CFrame.new(targetCamPos, root.Position + Vector3.new(0, 2, 0))
+    end
+
+    -- ドット絵モードのときだけ位置を制御
+    -- ★ 通常時の球体配置は完全に削除 ★
+    if HUB_STATE.CurrentArt ~= "NONE" then
+        for _, d in ipairs(DiceStorage.All) do
+            if d and d.Parent then
+                local targetPos = DiceStorage.TargetPositions[d]
+                local bv = d:FindFirstChild("DiceForce")
+                local bg = d:FindFirstChild("DiceGyro")
+                if targetPos then
+                    if bv then bv.Velocity = (targetPos - d.Position) * 25 end
+                    if bg then
+                        bg.CFrame = CFrame.lookAt(d.Position, targetPos) * 
+                            CFrame.Angles(0, HUB_STATE.AnimationTimeAccumulator * 2, 0)
+                    end
+                else
+                    if bv then bv.Velocity = Vector3.zero end
+                end
+            end
+        end
+        
+        -- 保持時間チェック
+        if HUB_STATE.ArtHoldTime > 0 then
+            HUB_STATE.ArtBuildProgress = HUB_STATE.ArtBuildProgress + dt
+            if HUB_STATE.ArtBuildProgress >= HUB_STATE.ArtHoldTime then
+                ResetDice()
+                HUB_STATE.ArtBuildProgress = 0
+            end
+        end
+    else
+        -- ドット絵モードじゃないとき: ダイスをその場で停止
+        for _, d in ipairs(DiceStorage.All) do
+            if d and d.Parent then
+                local bv = d:FindFirstChild("DiceForce")
+                local bg = d:FindFirstChild("DiceGyro")
+                if bv then bv.Velocity = Vector3.zero end
+                if bg then bg.CFrame = CFrame.new(d.CFrame.Position) end
+            end
+        end
+    end
+end)
+
+--================================================================================
+-- ネットワーク・色同期
+--================================================================================
+
+task.spawn(function()
+    while true do
+        CleanupDiceDatabase()
+        for _, d in ipairs(DiceStorage.All) do
+            if d and d.Parent then
+                local targetColor = DiceStorage.ColorMap[d] or COLORS.DEFAULT
+                local seq = ColorSequence.new(targetColor)
+
+                if UpdateLineColorsEvent then
+                    pcall(function() 
+                        UpdateLineColorsEvent:FireServer(seq, targetColor, targetColor, targetColor, 
+                            targetColor, targetColor, targetColor, targetColor, targetColor, targetColor) 
+                    end)
+                end
+                if SetNetworkOwnerEvent then
+                    pcall(function() SetNetworkOwnerEvent:FireServer(d, d.CFrame) end)
+                end
+            end
+        end
+        task.wait(0.2)
+    end
+end)
+
+--================================================================================
+-- 起動
+--================================================================================
+
+OrionLib:MakeNotification({
+    Name = "Kento Hub 🧡",
+    Content = "ドット絵メーカー 読み込み完了!",
+    Time = 3
+})
+
+OrionLib:Init()
+
+print("🧡 Kento Hub / ドット絵メーカー 読み込み完了!")
+print("❤️ 30種類以上のパターン搭載")

