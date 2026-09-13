@@ -1,4 +1,4 @@
---このコードのloopgrab[kick]のコードの最初のプレイヤーのところにtpしてプレイヤーを自分の真上に持ってくる処理をloopgrab[kick v2]の機能に移植してほしい、あとv2の固定も普通のkickと全く同じに修正して
+このコードのloopgrab[kick]のコードの最初のプレイヤーのところにtpしてプレイヤーを自分の真上に持ってくる処理をloopgrab[kick v2]の機能に移植してほしい、あとv2の固定も普通のkickと全く同じに修正して
 --[[
     Target Loops Only Script (完全版 - Kick v2 重力無効化・固定強化対応)
     - LoopGrab [NEAR]
