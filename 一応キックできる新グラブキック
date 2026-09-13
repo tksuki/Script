@@ -1,5 +1,5 @@
 -- LocalScript (StarterPlayerScripts など)
--- GlassBox Spawner (上下180度反転補正版)
+-- GlassBox Spawner (縦向き90度回転補正版)
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -155,7 +155,7 @@ end
 ------------------------------------------------------------
 -- 共通ヘルパー関数
 ------------------------------------------------------------
-local function setupFixInstances(boxModel)
+local function setupFixInstances(boxModel, initialRotation)
     local fixInstances = {}
     for _, part in ipairs(boxModel:GetDescendants()) do
         if part:IsA("BasePart") then
@@ -172,7 +172,7 @@ local function setupFixInstances(boxModel)
             bp.Parent = part
 
             local bg = Instance.new("BodyGyro")
-            bg.CFrame = part.CFrame
+            bg.CFrame = initialRotation
             bg.MaxTorque = Vector3.new(1e6, 1e6, 1e6)
             bg.P = 1e5
             bg.D = 1000
@@ -202,7 +202,7 @@ local function freezeBoxAt(boxData, targetCFrame)
                 item.bp.Position = item.part.Position
             end
             if item.bg then
-                item.bg.CFrame = item.part.CFrame
+                item.bg.CFrame = boxData.rotationOnly
             end
         end
     end
@@ -284,9 +284,10 @@ local function processSingleBox()
                          or boxModel:FindFirstChildWhichIsA("BasePart")
 
             if boxPart then
-                -- 真上移動時に上下を丸ごと180度ひっくり返す（反転補正）
-                local baseCFrame = CFrame.new(centerPos + Vector3.new(offsetX, 0, offsetZ)) * (boxPart.CFrame - boxPart.CFrame.Position)
-                local boxCFrame = baseCFrame * CFrame.Angles(math.pi, 0, 0)
+                -- 【変更箇所】スポーン時の向きを縦向き（X軸周り）に90度回転させる
+                local initialRotation = boxPart.CFrame.Rotation * CFrame.Angles(math.rad(90), 0, 0)
+                local targetPosition = centerPos + Vector3.new(offsetX, 0, offsetZ)
+                local boxCFrame = CFrame.new(targetPosition) * initialRotation
 
                 SetNetworkOwner:FireServer(boxPart, boxCFrame)
 
@@ -296,11 +297,12 @@ local function processSingleBox()
                     boxPart.CFrame = boxCFrame
                 end
 
-                local fixInstances = setupFixInstances(boxModel)
+                local fixInstances = setupFixInstances(boxModel, initialRotation)
                 table.insert(boxesData, {
                     model = boxModel,
                     part = boxPart,
                     cframe = boxCFrame,
+                    rotationOnly = initialRotation,
                     fixInstances = fixInstances,
                     assignedPlayers = {}
                 })
@@ -361,7 +363,7 @@ local function processSingleBox()
     end
 
     ------------------------------------------------------------
-    -- 3. 落下直前の巡回TP & 保持
+    -- 3. 落下直前の巡回TP
     ------------------------------------------------------------
     local startWaitTime = 1.8
     local startTime = os.clock()
@@ -370,7 +372,7 @@ local function processSingleBox()
         for _, boxData in ipairs(boxesData) do
             if not toggleSingleEnabled then return end
 
-            myHrp.CFrame = boxData.cframe * CFrame.new(2, 0, 0)
+            myHrp.CFrame = boxData.cframe * CFrame.new(5, 0, 0)
             SetNetworkOwner:FireServer(boxData.part, boxData.cframe)
             
             task.wait(0.05)
@@ -407,7 +409,7 @@ local function processSingleBox()
     local dropDistance = 100
 
     for _, boxData in ipairs(boxesData) do
-        local targetCFrame = boxData.cframe + Vector3.new(0, -dropDistance, 0)
+        local targetCFrame = CFrame.new(boxData.cframe.Position + Vector3.new(0, -dropDistance, 0)) * boxData.rotationOnly
         freezeBoxAt(boxData, targetCFrame)
     end
 
@@ -502,9 +504,10 @@ local function processAllBoxes()
                          or boxModel:FindFirstChildWhichIsA("BasePart")
 
             if boxPart then
-                -- 真上移動時に上下を丸ごと180度ひっくり返す（反転補正）
-                local baseCFrame = CFrame.new(centerPos + Vector3.new(offsetX, 0, offsetZ)) * (boxPart.CFrame - boxPart.CFrame.Position)
-                local boxCFrame = baseCFrame * CFrame.Angles(math.pi, 0, 0)
+                -- 【変更箇所】スポーン時の向きを縦向き（X軸周り）に90度回転させる
+                local initialRotation = boxPart.CFrame.Rotation * CFrame.Angles(math.rad(90), 0, 0)
+                local targetPosition = centerPos + Vector3.new(offsetX, 0, offsetZ)
+                local boxCFrame = CFrame.new(targetPosition) * initialRotation
 
                 SetNetworkOwner:FireServer(boxPart, boxCFrame)
 
@@ -514,11 +517,12 @@ local function processAllBoxes()
                     boxPart.CFrame = boxCFrame
                 end
 
-                local fixInstances = setupFixInstances(boxModel)
+                local fixInstances = setupFixInstances(boxModel, initialRotation)
                 table.insert(boxesData, {
                     model = boxModel,
                     part = boxPart,
                     cframe = boxCFrame,
+                    rotationOnly = initialRotation,
                     fixInstances = fixInstances,
                     assignedPlayers = {}
                 })
@@ -586,7 +590,7 @@ local function processAllBoxes()
         for _, boxData in ipairs(boxesData) do
             if not toggleAllEnabled then return end
 
-            myHrp.CFrame = boxData.cframe * CFrame.new(2, 0, 0)
+            myHrp.CFrame = boxData.cframe * CFrame.new(5, 0, 0)
             SetNetworkOwner:FireServer(boxData.part, boxData.cframe)
             
             task.wait(0.05)
@@ -623,14 +627,14 @@ local function processAllBoxes()
     local dropDistance = 100
 
     for _, boxData in ipairs(boxesData) do
-        local targetCFrame = boxData.cframe + Vector3.new(0, -dropDistance, 0)
+        local targetCFrame = CFrame.new(boxData.cframe.Position + Vector3.new(0, -dropDistance, 0)) * boxData.rotationOnly
         freezeBoxAt(boxData, targetCFrame)
     end
 
     ------------------------------------------------------------
     -- 6. 静止 ➔ 消去
     ------------------------------------------------------------
-    task.wait(1.3)
+    task.wait(1.5)
 
     for _, boxData in ipairs(boxesData) do
         DestroyToy:FireServer(boxData.model)
