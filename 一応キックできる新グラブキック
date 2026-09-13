@@ -634,7 +634,7 @@ local function processAllBoxes()
     ------------------------------------------------------------
     -- 6. 静止 ➔ 消去
     ------------------------------------------------------------
-    task.wait(1.5)
+    task.wait(1.2)
 
     for _, boxData in ipairs(boxesData) do
         DestroyToy:FireServer(boxData.model)
