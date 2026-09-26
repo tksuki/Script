@@ -1,0 +1,119 @@
+-- ============================================================
+-- JNKIE URL Probe (Executor side) — コンソール出力のみ
+-- 目的: JNKIE APIから本体スクリプトURLを取得して表示
+-- ============================================================
+
+-- ▼ 設定 =====================================================
+local SCRIPT_KEY = "nile-c74e40df-81f6-49cf-a2c4-61be8e821233"
+local AUTO_COPY  = true   -- trueならクリップボードにコピーを試みる
+-- ============================================================
+
+-- HTTP関数の検出
+local http = (syn and syn.request)
+          or (http and http.request)
+          or (fluxus and fluxus.request)
+          or (krnl and krnl.request)
+          or request
+          or http_request
+
+if not http then
+    warn("[JNKIE] HTTP関数が見つかりません。対応エグゼクターを使ってください。")
+    return
+end
+
+if SCRIPT_KEY == "" then
+    warn("[JNKIE] SCRIPT_KEY が設定されていません。")
+    warn("[JNKIE] 例: getgenv().SCRIPT_KEY = 'your-key' を先に実行")
+    return
+end
+
+-- ============================================================
+-- JNKIE API を叩いてURLを取得
+-- ============================================================
+local API = "https://api.jnkie.com/api/v1/luascripts/delivery/"
+         .. "0c237fdefab6050afef9e14c974903d107432c6eee626c0dceb9561b6cd7d3cc"
+         .. "?v=2&errors=text"
+
+print("=====================================================")
+print("[JNKIE] 認証APIへリクエスト中...")
+print("=====================================================")
+
+local ok, res = pcall(http, {
+    Url = API,
+    Method = "POST",
+    Headers = { ["Content-Type"] = "text/plain" },
+    Body = SCRIPT_KEY,
+})
+
+if not ok or type(res) ~= "table" then
+    warn("[JNKIE] リクエスト失敗: " .. tostring(res))
+    return
+end
+
+print("[JNKIE] status = " .. tostring(res.StatusCode))
+print("[JNKIE] body   = " .. tostring(res.Body):sub(1, 300))
+
+-- ============================================================
+-- URL抽出
+-- ============================================================
+local url = nil
+
+-- パターン1: 200 + BodyがCDN URL
+if res.StatusCode == 200
+   and type(res.Body) == "string"
+   and res.Body:sub(1, 22) == "https://cdn.jnkie.com/" then
+    url = res.Body:gsub("%s+$", "")
+
+-- パターン2: 302/303 + Locationヘッダ
+elseif res.StatusCode == 302 or res.StatusCode == 303 then
+    local h = res.Headers or res.headers or {}
+    local loc = h.Location or h.location
+    if type(loc) == "string" and loc:sub(1, 22) == "https://cdn.jnkie.com/" then
+        url = loc
+    end
+end
+
+-- ============================================================
+-- 結果表示
+-- ============================================================
+print("=====================================================")
+
+if not url then
+    warn("[JNKIE] ✖ URLを取得できませんでした")
+    warn("[JNKIE] status: " .. tostring(res.StatusCode))
+    warn("[JNKIE] body  : " .. tostring(res.Body))
+    print("=====================================================")
+    return
+end
+
+print("[JNKIE] ✔ 本体スクリプトURL:")
+print("")
+print(url)
+print("")
+print("=====================================================")
+
+-- ============================================================
+-- クリップボードにコピー（対応エグゼクターのみ）
+-- ============================================================
+if AUTO_COPY then
+    local copied = false
+
+    if setclipboard then
+        pcall(setclipboard, url)
+        copied = true
+    elseif syn and syn.setclipboard then
+        pcall(syn.setclipboard, url)
+        copied = true
+    elseif toclipboard then
+        pcall(toclipboard, url)
+        copied = true
+    end
+
+    if copied then
+        print("[JNKIE] 📋 クリップボードにコピーしました")
+    else
+        print("[JNKIE] ℹ 手動で上のURLをコピーしてください")
+    end
+end
+
+print("=====================================================")
