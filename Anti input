@@ -62,6 +62,8 @@ table.sort(DropdownValues)
 local SelectedToy = ToyList["Burger"]
 local instantLagActive = false
 local instantLagTask = nil
+local fastToggleActive = false
+local fastToggleTask = nil
 
 -- fixEndGrab
 local function fixEndGrab()
@@ -113,8 +115,8 @@ Tab:CreateToggle({
                 local SetNetOwner = RS:WaitForChild("GrabEvents"):WaitForChild("SetNetworkOwner")
                 local GrabEvents = RS:WaitForChild("GrabEvents")
 
-                local HoldDuration = 0.02
-                local CycleSpeed = 0.02
+                local HoldDuration = 0
+                local CycleSpeed = 0
 
                 while instantLagActive do
                     local char = plr.Character
@@ -163,6 +165,69 @@ Tab:CreateToggle({
                         end
                     end
                     task.wait(CycleSpeed)
+                end
+            end)
+        end
+    end,
+})
+
+-- 高速とぐるトグル
+Tab:CreateToggle({
+    Name = "高速とぐる",
+    CurrentValue = false,
+    Flag = "FastToggle",
+    Callback = function(Value)
+        fastToggleActive = Value
+
+        if fastToggleTask then
+            task.cancel(fastToggleTask)
+            fastToggleTask = nil
+        end
+
+        if Value then
+            fastToggleTask = task.spawn(function()
+                local plr = LocalPlayer
+                local RS = ReplicatedStorage
+                local SpawnRemote = RS:WaitForChild("MenuToys"):WaitForChild("SpawnToyRemoteFunction")
+
+                while fastToggleActive do
+                    local char = plr.Character
+                    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+
+                    if hrp then
+                        local toysFolder = workspace:FindFirstChild(plr.Name .. "SpawnedInToys")
+                        local name = SelectedToy
+                        local item = toysFolder and toysFolder:FindFirstChild(name)
+
+                        if not item or not item.Parent then
+                            task.spawn(function()
+                                pcall(function()
+                                    SpawnRemote:InvokeServer(name, hrp.CFrame * CFrame.new(0, -12, 0), Vector3.zero)
+                                end)
+                            end)
+                            task.wait(0.1)
+                        else
+                            local holdPart = item:FindFirstChild("HoldPart")
+                            if holdPart then
+                                for _, v in pairs(item:GetDescendants()) do
+                                    if v:IsA("BasePart") then
+                                        v.CanCollide = false
+                                        v.Massless = true
+                                    end
+                                end
+
+                                task.spawn(function()
+                                    pcall(function()
+                                        holdPart.HoldItemRemoteFunction:InvokeServer(item, char)
+                                        holdPart.DropItemRemoteFunction:InvokeServer(item, CFrame.new(0, 5000, 0), Vector3.zero)
+                                        holdPart.HoldItemRemoteFunction:InvokeServer(item, char)
+                                        holdPart.DropItemRemoteFunction:InvokeServer(item, CFrame.new(0, 5000, 0), Vector3.zero)
+                                    end)
+                                end)
+                            end
+                        end
+                    end
+                    task.wait(0)
                 end
             end)
         end
