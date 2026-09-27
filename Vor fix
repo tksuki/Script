@@ -761,28 +761,12 @@ ThemeManager:SetDefaultTheme({
 })
 
 local Tabs = {
-    infoTab = Window:AddTab("Info", "info"),
-    PlayerTab = Window:AddTab("Local Player", "person-standing"),
     AntiTab = Window:AddTab("Defense", "shield"),
     Target = Window:AddTab("Target", "target"),
-    BlobmanTab = Window:AddTab("Blobman", "skull"),
-    ESPTab = Window:AddTab("ESP", "eye"),
-    NotifyTab = Window:AddTab("Notify", "bell"),
-	Keybinds = Window:AddTab("keybinds", "keyboard"),
-    AuraTab = Window:AddTab("Aura", "sparkles"),
     MiscTab = Window:AddTab("Misc", "package"),
-    ServerTab = Window:AddTab("Server", "server"),
-    CreditsTab = Window:AddTab("Credits", "users"),
     UISettings = Window:AddTab("UISettings", "settings")
 }
 
-local Avatar = Tabs.infoTab:AddLeftGroupbox("Avatar")
-local InfoLocal = Tabs.infoTab:AddRightGroupbox("local Info / Game Info")
-local Ser = Tabs.infoTab:AddRightGroupbox("Rejoin / Join")
-local LeftGroupBoxC = Tabs.PlayerTab:AddLeftGroupbox("Camera")
-local MainLocal = Tabs.PlayerTab:AddLeftGroupbox("Main")
-local ExtraLocal = Tabs.PlayerTab:AddRightGroupbox("Extra")
-local Korblox = Tabs.PlayerTab:AddLeftGroupbox("Fake Korblox")
 local LeftGroupBox = Tabs.AntiTab:AddLeftGroupbox("Main Defense")
 local RightGroupBox = Tabs.AntiTab:AddRightGroupbox("Extra Defense")
 local dadadadad = Tabs.AntiTab:AddLeftGroupbox("Target Defense")
@@ -796,17 +780,6 @@ local blobkill = Tabs.Target:AddLeftGroupbox("Blobman")
 local DestroyGucci = Tabs.Target:AddRightGroupbox("Destroy Gucci")
 local RemoveKickanti = Tabs.Target:AddLeftGroupbox("Remove Anti-Kick")
 local Rei = Tabs.Target:AddRightGroupbox("Fling")
-local aurabklaaaaao = Tabs.BlobmanTab:AddLeftGroupbox("Blobman All")
-local aurabklo = Tabs.BlobmanTab:AddLeftGroupbox("Blobman Aura")
-local SettingsDou = Tabs.BlobmanTab:AddRightGroupbox("Settings")
-local Antikickesp = Tabs.ESPTab:AddLeftGroupbox("Anti-Kick ESP")
-local PCES = Tabs.ESPTab:AddRightGroupbox("Player Character Location Detector")
-local BL = Tabs.ESPTab:AddRightGroupbox("Black Hole")
-local PlayersNotify = Tabs.NotifyTab:AddLeftGroupbox("Players")
-local PackBl = Tabs.NotifyTab:AddRightGroupbox("Misc")
-local Playa = Tabs.Keybinds:AddLeftGroupbox("keybinds")
-local MainAura = Tabs.AuraTab:AddLeftGroupbox("Auras")
-local kickaura = Tabs.AuraTab:AddRightGroupbox("KickAura")
 local Stiyyyyyyyyyyyyyyyyy = Tabs.MiscTab:AddRightGroupbox("Pallet Sticky")
 local miscOtherSec = Tabs.MiscTab:AddLeftGroupbox("Tractor")
 local BBB = Tabs.MiscTab:AddRightGroupbox("Break Barrier")
@@ -814,14 +787,6 @@ local Freeeeeeeeee = Tabs.MiscTab:AddLeftGroupbox("Fire All")
 local BananaAll = Tabs.MiscTab:AddRightGroupbox("Banana All")
 local Nigger = Tabs.MiscTab:AddLeftGroupbox("Nigger All")
 local BR = Tabs.MiscTab:AddRightGroupbox("Bring All")
-local Lag = Tabs.ServerTab:AddLeftGroupbox("Line Lag")
-local Groundkick = Tabs.ServerTab:AddLeftGroupbox("Ground Kick")
-local KickallNoblob = Tabs.ServerTab:AddRightGroupbox("Blob Kickall")
-local Breakiroiro = Tabs.ServerTab:AddLeftGroupbox("Plot Break")
-local OOOOO = Tabs.ServerTab:AddLeftGroupbox("Claim-Plot")
-local Dev = Tabs.CreditsTab:AddLeftGroupbox("Developer", "https://cdn.phototourl.com/free/2026-09-10-5c4f8876-4b73-4199-bee4-989287ed6aad.png")
-local Dev2 = Tabs.CreditsTab:AddLeftGroupbox("Nigger")
-local disc = Tabs.CreditsTab:AddRightGroupbox("Discord (test)", "https://cdn.phototourl.com/free/2026-09-10-6aece83a-8053-4537-8650-e70b237a854e.png")
 local MenuGroup = Tabs.UISettings:AddLeftGroupbox("Menu")
 
 LeftGroupBox:AddToggle("Antigrab", {
@@ -6780,6 +6745,7 @@ BR:AddToggle("BRWhite", {
     end
 })
 
+local Breakiroiro = Tabs.MiscTab:AddLeftGroupbox("Plot Break")
 local Dropdown = Breakiroiro:AddDropdownEx("PlotSelect", {
     Text = "Select Plot (Break Plot Area)",
     Default = Config.SelectedPlot,
