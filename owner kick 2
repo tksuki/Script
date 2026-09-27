@@ -620,13 +620,19 @@ TarTab:AddToggle({
                         etc.Hum.PlatformStand = true
                         etc.Hum.Sit = true
 
-                        -- 1フレーム内でSNO→UNSNO×3セット
+                        -- 1フレーム目: SNO×3
                         local rootCF = etc["Root"].CFrame
                         SetNetworkOwner:FireServer(etc["Root"], rootCF)
-                        DestroyGrabLine:FireServer(etc["Root"])
                         SetNetworkOwner:FireServer(etc["Root"], rootCF)
-                        DestroyGrabLine:FireServer(etc["Root"])
                         SetNetworkOwner:FireServer(etc["Root"], rootCF)
+                        RunService.RenderStepped:Wait()
+                        -- 2フレーム目: SNO×1
+                        rootCF = etc["Root"].CFrame
+                        SetNetworkOwner:FireServer(etc["Root"], rootCF)
+                        RunService.RenderStepped:Wait()
+                        -- 3フレーム目: UNSNO×3
+                        DestroyGrabLine:FireServer(etc["Root"])
+                        DestroyGrabLine:FireServer(etc["Root"])
                         DestroyGrabLine:FireServer(etc["Root"])
 
                         if bool.DoRagdoll then
