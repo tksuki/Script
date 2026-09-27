@@ -18,6 +18,15 @@ local LocalPlayer = Players.LocalPlayer
 
 local GrabEvents = ReplicatedStorage:FindFirstChild("GrabEvents")
 
+-- ===== 調整可能なパラメータ =====
+local Settings = {
+    MAX_RADIUS = 8,       -- 円の半径
+    HEIGHT = 12,          -- 高さ
+    SNO_DURATION = 0.25,
+    TILT_ANGLE = math.rad(30),
+    LINE_MULTIPLIER = 8,  -- ライン送信の倍率
+}
+
 local function tpBehindPlayer(targetPlayer, studs)
     local char = LocalPlayer.Character
     if not char then return end
@@ -58,7 +67,7 @@ local function startLineLag()
             if spawnLocation then
                 local randomX = math.random(-2e9, 2e9)
                 local randomZ = math.random(-2e9, 2e9)
-                local directions = {
+                local baseDirections = {
                     CFrame.new(randomX, 0, randomZ),
                     CFrame.new(-randomX, 0, -randomZ),
                     CFrame.new(randomX, 0, -randomZ),
@@ -72,8 +81,11 @@ local function startLineLag()
                     CFrame.new(randomZ, randomX, 0),
                     CFrame.new(-randomZ, -randomX, 0),
                 }
-                for _, pos in pairs(directions) do
-                    createLine:FireServer(spawnLocation, pos)
+                local mult = Settings.LINE_MULTIPLIER
+                for _, pos in ipairs(baseDirections) do
+                    for i = 1, mult do
+                        createLine:FireServer(spawnLocation, pos)
+                    end
                 end
             end
             task.wait()
@@ -99,12 +111,6 @@ local function snoForDuration(targetHrp, duration)
     end
 end
 
-local MAX_RADIUS = 8
-local HEIGHT = 12
-local SNO_DURATION = 0.25
-local TILT_ANGLE = math.rad(30)
-
--- returnCFrameを引数で受け取る
 local function grabAll(returnCFrame)
     local char = LocalPlayer.Character
     if not char then return end
@@ -119,27 +125,30 @@ local function grabAll(returnCFrame)
             local targetHrp = targetChar and targetChar:FindFirstChild("HumanoidRootPart")
             if targetHrp then
                 tpBehindPlayer(plr, 3)
-                snoForDuration(targetHrp, SNO_DURATION)
+                snoForDuration(targetHrp, Settings.SNO_DURATION)
             end
         end
     end
 
-    -- ボタンを押した時の座標に戻る
     hrp.CFrame = returnCFrame
     task.wait()
 
     local count = #allPlayers
     local centerPos = returnCFrame.Position
 
+    -- 実行時の値を参照
+    local radius = Settings.MAX_RADIUS
+    local height = Settings.HEIGHT
+
     for i, plr in ipairs(allPlayers) do
         if plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
             local angle = (i - 1) * (math.pi * 2 / count)
-            local offset = Vector3.new(math.cos(angle) * MAX_RADIUS, HEIGHT, math.sin(angle) * MAX_RADIUS)
+            local offset = Vector3.new(math.cos(angle) * radius, height, math.sin(angle) * radius)
             local targetPos = centerPos + offset
 
             local targetHrp = plr.Character.HumanoidRootPart
             local lookCFrame = CFrame.new(targetPos, centerPos)
-            local tiltedCFrame = lookCFrame * CFrame.Angles(TILT_ANGLE, 0, 0)
+            local tiltedCFrame = lookCFrame * CFrame.Angles(Settings.TILT_ANGLE, 0, 0)
 
             targetHrp.CFrame = tiltedCFrame
             targetHrp.AssemblyLinearVelocity = Vector3.zero
@@ -156,6 +165,44 @@ local function grabAll(returnCFrame)
     end
 end
 
+-- ===== スライダー =====
+MainTab:CreateSlider({
+    Name = "円の半径 (Radius)",
+    Range = {1, 150},
+    Increment = 1,
+    Suffix = " studs",
+    CurrentValue = Settings.MAX_RADIUS,
+    Flag = "RadiusSlider",
+    Callback = function(value)
+        Settings.MAX_RADIUS = value
+    end,
+})
+
+MainTab:CreateSlider({
+    Name = "高さ (Height)",
+    Range = {0, 100},
+    Increment = 1,
+    Suffix = " studs",
+    CurrentValue = Settings.HEIGHT,
+    Flag = "HeightSlider",
+    Callback = function(value)
+        Settings.HEIGHT = value
+    end,
+})
+
+MainTab:CreateSlider({
+    Name = "ライン送信倍率 (Multiplier)",
+    Range = {1, 50},
+    Increment = 1,
+    Suffix = "x",
+    CurrentValue = Settings.LINE_MULTIPLIER,
+    Flag = "MultSlider",
+    Callback = function(value)
+        Settings.LINE_MULTIPLIER = value
+    end,
+})
+
+-- ===== ボタン =====
 MainTab:CreateButton({
     Name = "グラブオール",
     Callback = function()
@@ -163,13 +210,17 @@ MainTab:CreateButton({
         local hrp = char and char:FindFirstChild("HumanoidRootPart")
         if not hrp then return end
 
-        -- ボタンを押した瞬間にここで取得
         local returnCFrame = hrp.CFrame
 
         task.spawn(function()
             grabAll(returnCFrame)
             startLineLag()
-            Rayfield:Notify({Title = "Grab", Content = "グラブ＋ライン送信開始", Duration = 2})
+            Rayfield:Notify({
+                Title = "Grab",
+                Content = string.format("グラブ＋ライン送信開始 (Radius: %d, Height: %d, %dx)",
+                    Settings.MAX_RADIUS, Settings.HEIGHT, Settings.LINE_MULTIPLIER),
+                Duration = 2,
+            })
         end)
     end,
 })
