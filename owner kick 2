@@ -623,8 +623,8 @@ TarTab:AddToggle({
                         -- SNOを1フレームで5回送る
                         for i = 1, 5 do sno(etc["Root"]) end
                         RunService.RenderStepped:Wait()
-                        -- UNSNOを1フレームで5回送る
-                        for i = 1, 5 do unsno(etc["Root"]) end
+                        -- UNSNOを1フレームで4回送る
+                        for i = 1, 4 do unsno(etc["Root"]) end
 
                         if bool.DoRagdoll then
                             Pallete = inv:FindFirstChild("RagdollPalete")
