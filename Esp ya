@@ -1,0 +1,225 @@
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+
+local Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
+
+local Window = Rayfield:CreateWindow({
+    Name = "MK Panel - ESP",
+    Icon = 0,
+    LoadingTitle = "MK Panel",
+    LoadingSubtitle = "ESP",
+    Theme = "Default",
+    DisableRayfieldPrompts = false,
+    DisableBuildWarnings = false,
+    ConfigurationSaving = { Enabled = false },
+    Discord = { Enabled = false },
+    KeySystem = false
+})
+
+local Tab = Window:CreateTab("ESP", 4483362458)
+
+local LocalPlayer = Players.LocalPlayer
+local ESPEnabled = false
+local IconEnabled = false
+local RainbowConnection = nil
+
+local function CreateIcon(player)
+    if player == LocalPlayer then return end
+
+    local character = player.Character
+    if not character then return end
+
+    local root = character:FindFirstChild("HumanoidRootPart")
+    if not root then return end
+
+    local old = root:FindFirstChild("PlayerInfo")
+    if old then old:Destroy() end
+
+    if not IconEnabled then return end
+
+    local billboard = Instance.new("BillboardGui")
+    billboard.Name = "PlayerInfo"
+    billboard.Adornee = root
+    billboard.StudsOffset = Vector3.new(0, 4.8, 0)
+    billboard.Size = UDim2.fromOffset(160, 68)
+    billboard.AlwaysOnTop = true
+    billboard.MaxDistance = 10000
+    billboard.Parent = root
+
+    local nameLabel = Instance.new("TextLabel")
+    nameLabel.Name = "DisplayName"
+    nameLabel.Size = UDim2.new(1, 0, 0, 22)
+    nameLabel.Position = UDim2.new(0, 0, 0, 0)
+    nameLabel.BackgroundTransparency = 1
+    nameLabel.Text = player.DisplayName .. " (" .. player.Name .. ")"
+    nameLabel.TextScaled = true
+    nameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    nameLabel.TextStrokeTransparency = 0
+    nameLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+    nameLabel.Font = Enum.Font.GothamBold
+    nameLabel.Parent = billboard
+
+    local image = Instance.new("ImageLabel")
+    image.Name = "Icon"
+    image.Size = UDim2.fromOffset(40, 40)
+
+    -- アイコンを上に
+    image.Position = UDim2.new(0.5, -20, 0, 13)
+
+    image.BackgroundTransparency = 1
+    image.Image =
+        "https://www.roblox.com/headshot-thumbnail/image?userId="
+        .. tostring(player.UserId)
+        .. "&width=150&height=150&format=png"
+
+    image.Parent = billboard
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(1, 0)
+    corner.Parent = image
+end
+
+local function RemoveIcon(player)
+    local character = player.Character
+    if not character then return end
+
+    local root = character:FindFirstChild("HumanoidRootPart")
+    if not root then return end
+
+    local info = root:FindFirstChild("PlayerInfo")
+    if info then
+        info:Destroy()
+    end
+end
+
+local function CreateESP(player)
+    if player == LocalPlayer then return end
+
+    local character = player.Character
+    if not character then return end
+
+    local root = character:FindFirstChild("HumanoidRootPart")
+    if not root then return end
+
+    local old = root:FindFirstChild("RainbowESP")
+    if old then old:Destroy() end
+
+    local box = Instance.new("BoxHandleAdornment")
+    box.Name = "RainbowESP"
+    box.Adornee = root
+    box.Size = Vector3.new(4, 6, 2)
+    box.AlwaysOnTop = true
+    box.ZIndex = 10
+    box.Transparency = 0.25
+    box.Color3 = Color3.fromRGB(255, 0, 0)
+    box.Parent = root
+
+    if IconEnabled then
+        CreateIcon(player)
+    end
+end
+
+local function RemoveESP(player)
+    local character = player.Character
+    if not character then return end
+
+    local root = character:FindFirstChild("HumanoidRootPart")
+    if not root then return end
+
+    local box = root:FindFirstChild("RainbowESP")
+    if box then box:Destroy() end
+
+    RemoveIcon(player)
+end
+
+local function StartESP()
+    ESPEnabled = true
+
+    for _, player in ipairs(Players:GetPlayers()) do
+        CreateESP(player)
+    end
+
+    if RainbowConnection then
+        RainbowConnection:Disconnect()
+    end
+
+    RainbowConnection = RunService.RenderStepped:Connect(function()
+        if not ESPEnabled then return end
+
+        local hue = (os.clock() % 5) / 5
+        local rainbowColor = Color3.fromHSV(hue, 1, 1)
+
+        for _, player in ipairs(Players:GetPlayers()) do
+            if player ~= LocalPlayer and player.Character then
+                local root =
+                    player.Character:FindFirstChild("HumanoidRootPart")
+
+                if root then
+                    local box = root:FindFirstChild("RainbowESP")
+
+                    if box then
+                        box.Color3 = rainbowColor
+                    end
+                end
+            end
+        end
+    end)
+end
+
+local function StopESP()
+    ESPEnabled = false
+
+    if RainbowConnection then
+        RainbowConnection:Disconnect()
+        RainbowConnection = nil
+    end
+
+    for _, player in ipairs(Players:GetPlayers()) do
+        RemoveESP(player)
+    end
+end
+
+Tab:CreateButton({
+    Name = "ESP",
+
+    Callback = function()
+        if ESPEnabled then
+            StopESP()
+        else
+            StartESP()
+        end
+    end
+})
+
+Tab:CreateToggle({
+    Name = "プレイヤーアイコン",
+    CurrentValue = false,
+
+    Callback = function(value)
+        IconEnabled = value
+
+        for _, player in ipairs(Players:GetPlayers()) do
+            if player ~= LocalPlayer then
+                if IconEnabled then
+                    CreateIcon(player)
+                else
+                    RemoveIcon(player)
+                end
+            end
+        end
+    end
+})
+
+for _, player in ipairs(Players:GetPlayers()) do
+    if player ~= LocalPlayer then
+        player.CharacterAdded:Connect(function()
+            task.wait(0.5)
+
+            if ESPEnabled then
+                CreateESP(player)
+            elseif IconEnabled then
+                CreateIcon(player)
+            end
+        end)
+    end
+end
