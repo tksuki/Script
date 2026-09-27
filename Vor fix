@@ -135,7 +135,7 @@ local service=setmetatable({},{
 
 local function VortexNotify(Message)
     Library:Notify({
-        Title = "Vortex HUB",
+        Title = "YAJU HUB",
         Description = Message,
         Duration = 4
     })
@@ -840,7 +840,7 @@ end)
 -- Window & Tabs
 -- =====================================================
 local Window = Library:CreateWindow({
-    Title = "Vortex Hub",
+    Title = "YAJU HUB",
     NotifySide = "Right",
     ShowCustomCursor = true,
 })
@@ -1149,7 +1149,7 @@ LeftGroupBox:AddToggle("Antiburn", {
 
 -- 6. Anti-Kill (House)
 LeftGroupBox:AddToggle("ankiltp", {
-    Text = "Anti-Kill (House)",
+    Text = "Anti-Kill (Plot)",
     Default = false,
     Callback = function(val)
         Config.AntikillHouseT = val
@@ -1640,7 +1640,7 @@ antikick:AddToggle("Antikickitem", {
 })
 
 antikick:AddToggle("AntikickPenc", {
-    Text = "Anti-Kick (Pencil ✏)",
+    Text = "Anti-Kick (Penis)",
     Default = false,
     Callback = function(Value)
         Config.Tinko = Value
@@ -1951,7 +1951,7 @@ end)
 
 -- 1. Kick spam (Ragdoll & Lag)
 Loop:AddToggle("KickspamRag", {
-    Text = "Kick spam (Ragdoll & Lag)",
+    Text = "Grab Kick",
     Default = false,
     Callback = function(aa61)
         Config.aa6 = aa61
@@ -2509,7 +2509,7 @@ Loop:AddToggle("blobkillLoop", {
 
 -- 4. Loop Kick (Spam)
 Loop:AddToggle("spamkickbl", {
-    Text = "Loop Kick (Spam)",
+    Text = "Loop Kick Spam",
     Default = false,
     Callback = function(Value)
         Config.SpamkickblT = Value
@@ -2618,7 +2618,7 @@ Loop:AddToggle("spamkickbl", {
 
 -- 5. Pen Kill
 Loop:AddToggle("PenKill", {
-    Text = "Pen Kill",
+    Text = "Ragdoll Kill (pencil)",
     Default = false,
     Callback = function(Value)
         Config.PenKillT = Value
@@ -3739,8 +3739,8 @@ BreakGroup:AddDropdown("BreakSmlDebris", {
 })
 BreakGroup:AddDropdown("BreakOceanMode", {
     Text = "Ocean Mode",
-    Values = {"通常", "上空", "横", "横真反対"},
-    Default = "通常",
+    Values = {"赤い家", "ピンクの家", "天空津波", "オーシャンブレイク、たまに天空"},
+    Default = "赤い家",
     Callback = function(v) BreakOceanMode = v end,
 })
 BreakGroup:AddToggle("BreakLagTgl", {
@@ -3888,12 +3888,12 @@ BreakGroup:AddToggle("BreakOceanTgl", {
                     end)
                     local offsets = {}
                     local mode = BreakOceanMode
-                    if mode == "上空" then
+                    if mode == "ピンクの家" then
                         table.insert(offsets, CFrame.new(0, 2.14748365e+09, 0))
-                    elseif mode == "横" then
+                    elseif mode == "天空津波" then
                         table.insert(offsets, CFrame.new(-1.073741825e+09, 0, 0))
                         table.insert(offsets, CFrame.new(0, -1.073741825e+09, 0))
-                    elseif mode == "横真反対" then
+                    elseif mode == "オーシャンブレイク、たまに天空" then
                         table.insert(offsets, CFrame.new(1.073741825e+09, 0, 0))
                         table.insert(offsets, CFrame.new(0, 1.073741825e+09, 0))
                     else
