@@ -607,7 +607,6 @@ TarTab:AddToggle({
 
                         BodyPos.Position = hrp.Position + Vector3.new(0, 15, 0)
 
-                        -- KICKと同じ: IsHeld時にPartをCFrameで移動
                         if (etc.Root.Position.Y <= hrp.Position.Y + 15) and etc["TargetPLR"].IsHeld.Value then
                             for _, v in pairs(etc.TargetPLR.Character:GetChildren()) do
                                 if v:IsA("Part") then
@@ -620,11 +619,12 @@ TarTab:AddToggle({
                         etc.Hum.PlatformStand = true
                         etc.Hum.Sit = true
 
-                        -- 1フレーム目: SNO×3
+                        -- 1フレーム目: SNO×3 + UNSNO×1 (等間隔 1回目)
                         local rootCF = etc["Root"].CFrame
                         SetNetworkOwner:FireServer(etc["Root"], rootCF)
                         SetNetworkOwner:FireServer(etc["Root"], rootCF)
                         SetNetworkOwner:FireServer(etc["Root"], rootCF)
+                        DestroyGrabLine:FireServer(etc["Root"])
                         RunService.RenderStepped:Wait()
                         
                         -- 2フレーム目: SNO×6
@@ -637,8 +637,7 @@ TarTab:AddToggle({
                         SetNetworkOwner:FireServer(etc["Root"], rootCF)
                         RunService.RenderStepped:Wait()
                         
-                        -- 3フレーム目: UNSNO×2, SNO×3
-                        DestroyGrabLine:FireServer(etc["Root"])
+                        -- 3フレーム目: UNSNO×1 (等間隔 2回目) + SNO×3
                         DestroyGrabLine:FireServer(etc["Root"])
                         rootCF = etc["Root"].CFrame
                         SetNetworkOwner:FireServer(etc["Root"], rootCF)
@@ -676,7 +675,6 @@ TarTab:AddToggle({
                             etc["Head"] = etc["TargetPLR"].Character and etc["TargetPLR"].Character:FindFirstChild("Head")
                             etc["Hum"] = etc["TargetPLR"].Character and etc["TargetPLR"].Character:FindFirstChild("Humanoid")
                             if not (etc["Head"]) or not (etc["Hum"]) then break end
-                            -- KICKと同じ: HeadのところにTPして自分の真上に持ってくる
                             char:PivotTo(etc["Head"].CFrame * CFrame.new(0, 10, 0))
                             sno(etc["Head"])
                             if CheckForPartOwner(etc["Head"]) then
@@ -686,7 +684,6 @@ TarTab:AddToggle({
 
                         hrp.CFrame = oldCF
 
-                        -- KICKと同じ: CheckForPartOwner後にPartで移動
                         if etc.Head and CheckForPartOwner(etc.Head) then
                             for _, v in pairs(etc.TargetPLR.Character:GetChildren()) do
                                 if v:IsA("Part") then
