@@ -626,6 +626,7 @@ TarTab:AddToggle({
                         SetNetworkOwner:FireServer(etc["Root"], rootCF)
                         SetNetworkOwner:FireServer(etc["Root"], rootCF)
                         RunService.RenderStepped:Wait()
+                        
                         -- 2フレーム目: SNO×6
                         rootCF = etc["Root"].CFrame
                         SetNetworkOwner:FireServer(etc["Root"], rootCF)
@@ -635,10 +636,14 @@ TarTab:AddToggle({
                         SetNetworkOwner:FireServer(etc["Root"], rootCF)
                         SetNetworkOwner:FireServer(etc["Root"], rootCF)
                         RunService.RenderStepped:Wait()
-                        -- 3フレーム目: UNSNO×3
+                        
+                        -- 3フレーム目: UNSNO×2, SNO×3
                         DestroyGrabLine:FireServer(etc["Root"])
                         DestroyGrabLine:FireServer(etc["Root"])
-                        DestroyGrabLine:FireServer(etc["Root"])
+                        rootCF = etc["Root"].CFrame
+                        SetNetworkOwner:FireServer(etc["Root"], rootCF)
+                        SetNetworkOwner:FireServer(etc["Root"], rootCF)
+                        SetNetworkOwner:FireServer(etc["Root"], rootCF)
 
                         if bool.DoRagdoll then
                             Pallete = inv:FindFirstChild("RagdollPalete")
