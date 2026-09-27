@@ -620,13 +620,11 @@ TarTab:AddToggle({
                         etc.Hum.PlatformStand = true
                         etc.Hum.Sit = true
 
-                        -- KICKと同じ固定パターン
-                        sno(etc["Root"])
+                        -- SNOを1フレームで5回送る
+                        for i = 1, 5 do sno(etc["Root"]) end
                         RunService.RenderStepped:Wait()
-                        sno(etc["Root"])
-                        unsno(etc["Root"])
-                        RunService.RenderStepped:Wait()
-                        sno(etc["Root"])
+                        -- UNSNOを1フレームで5回送る
+                        for i = 1, 5 do unsno(etc["Root"]) end
 
                         if bool.DoRagdoll then
                             Pallete = inv:FindFirstChild("RagdollPalete")
@@ -637,9 +635,6 @@ TarTab:AddToggle({
                                 Pallete.SoundPart.Position = etc["Root"].Position
                             end
                         end
-
-                        RunService.RenderStepped:Wait()
-                        unsno(etc["Root"])
                     else
                         if not etc["Head"] or not etc["Hum"] or etc["Hum"].Health == 0 then
                             etc.TargetPLR.CharacterAdded:Wait()
