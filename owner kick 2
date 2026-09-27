@@ -626,8 +626,13 @@ TarTab:AddToggle({
                         SetNetworkOwner:FireServer(etc["Root"], rootCF)
                         SetNetworkOwner:FireServer(etc["Root"], rootCF)
                         RunService.RenderStepped:Wait()
-                        -- 2フレーム目: SNO×1
+                        -- 2フレーム目: SNO×6
                         rootCF = etc["Root"].CFrame
+                        SetNetworkOwner:FireServer(etc["Root"], rootCF)
+                        SetNetworkOwner:FireServer(etc["Root"], rootCF)
+                        SetNetworkOwner:FireServer(etc["Root"], rootCF)
+                        SetNetworkOwner:FireServer(etc["Root"], rootCF)
+                        SetNetworkOwner:FireServer(etc["Root"], rootCF)
                         SetNetworkOwner:FireServer(etc["Root"], rootCF)
                         RunService.RenderStepped:Wait()
                         -- 3フレーム目: UNSNO×3
