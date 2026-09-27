@@ -620,11 +620,14 @@ TarTab:AddToggle({
                         etc.Hum.PlatformStand = true
                         etc.Hum.Sit = true
 
-                        -- SNOを1フレームで5回送る
-                        for i = 1, 5 do sno(etc["Root"]) end
-                        RunService.RenderStepped:Wait()
-                        -- UNSNOを1フレームで4回送る
-                        for i = 1, 4 do unsno(etc["Root"]) end
+                        -- 1フレーム内でSNO→UNSNO×3セット
+                        local rootCF = etc["Root"].CFrame
+                        SetNetworkOwner:FireServer(etc["Root"], rootCF)
+                        DestroyGrabLine:FireServer(etc["Root"])
+                        SetNetworkOwner:FireServer(etc["Root"], rootCF)
+                        DestroyGrabLine:FireServer(etc["Root"])
+                        SetNetworkOwner:FireServer(etc["Root"], rootCF)
+                        DestroyGrabLine:FireServer(etc["Root"])
 
                         if bool.DoRagdoll then
                             Pallete = inv:FindFirstChild("RagdollPalete")
