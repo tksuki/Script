@@ -119,6 +119,7 @@ local function grabAll(returnCFrame)
 
     local allPlayers = Players:GetPlayers()
 
+    -- 自分以外のプレイヤーをSNO（ネットワークオーナー変更）
     for _, plr in ipairs(allPlayers) do
         if plr ~= LocalPlayer then
             local targetChar = plr.Character
@@ -130,23 +131,37 @@ local function grabAll(returnCFrame)
         end
     end
 
+    -- 自分はボタンを押した座標に戻す
     hrp.CFrame = returnCFrame
     task.wait()
 
-    local count = #allPlayers
     local centerPos = returnCFrame.Position
 
     -- 実行時の値を参照
     local radius = Settings.MAX_RADIUS
     local height = Settings.HEIGHT
 
-    for i, plr in ipairs(allPlayers) do
-        if plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
-            local angle = (i - 1) * (math.pi * 2 / count)
+    -- 円配置対象（自分以外）をカウント
+    local targets = {}
+    for _, plr in ipairs(allPlayers) do
+        if plr ~= LocalPlayer then
+            local targetChar = plr.Character
+            local targetHrp = targetChar and targetChar:FindFirstChild("HumanoidRootPart")
+            if targetHrp then
+                table.insert(targets, plr)
+            end
+        end
+    end
+    local total = #targets
+
+    -- 自分以外を円形に配置
+    for i, plr in ipairs(targets) do
+        local targetHrp = plr.Character and plr.Character:FindFirstChild("HumanoidRootPart")
+        if targetHrp then
+            local angle = (i - 1) * (math.pi * 2 / math.max(total, 1))
             local offset = Vector3.new(math.cos(angle) * radius, height, math.sin(angle) * radius)
             local targetPos = centerPos + offset
 
-            local targetHrp = plr.Character.HumanoidRootPart
             local lookCFrame = CFrame.new(targetPos, centerPos)
             local tiltedCFrame = lookCFrame * CFrame.Angles(Settings.TILT_ANGLE, 0, 0)
 
@@ -163,6 +178,10 @@ local function grabAll(returnCFrame)
             fireDestroyGrabLine(plr)
         end
     end
+
+    -- 念のため自分をボタン座標に固定
+    hrp.CFrame = returnCFrame
+    hrp.AssemblyLinearVelocity = Vector3.zero
 end
 
 -- ===== スライダー =====
