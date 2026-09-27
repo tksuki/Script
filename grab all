@@ -1,0 +1,183 @@
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+
+local Window = Rayfield:CreateWindow({
+   Name = "Grab All Script",
+   LoadingTitle = "Loading...",
+   LoadingSubtitle = "by Assistant",
+   ConfigurationSaving = { Enabled = false },
+   KeySystem = false,
+})
+
+local MainTab = Window:CreateTab("メイン", nil)
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
+local LocalPlayer = Players.LocalPlayer
+
+local GrabEvents = ReplicatedStorage:FindFirstChild("GrabEvents")
+
+local function tpBehindPlayer(targetPlayer, studs)
+    local char = LocalPlayer.Character
+    if not char then return end
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    local targetChar = targetPlayer.Character
+    if not hrp or not targetChar then return end
+    local targetHrp = targetChar:FindFirstChild("HumanoidRootPart")
+    if not targetHrp then return end
+    hrp.CFrame = targetHrp.CFrame * CFrame.new(0, 0, studs)
+end
+
+local function fireSNO(targetHrp)
+    ReplicatedStorage.GrabEvents.SetNetworkOwner:FireServer(targetHrp, targetHrp.CFrame)
+end
+
+local function fireDestroyGrabLine(targetPlayer)
+    local targetChar = targetPlayer.Character
+    if not targetChar then return end
+    local targetHrp = targetChar:FindFirstChild("HumanoidRootPart")
+    if not targetHrp then return end
+    ReplicatedStorage.GrabEvents.DestroyGrabLine:FireServer(targetHrp)
+end
+
+local lineLagThread = nil
+local lineLagEnabled = false
+
+local function startLineLag()
+    if lineLagEnabled then return end
+    lineLagEnabled = true
+    lineLagThread = coroutine.create(function()
+        if not GrabEvents then return end
+        local createLine = GrabEvents:FindFirstChild("CreateGrabLine")
+        if not createLine then return end
+        while lineLagEnabled do
+            local spawnLocation = Workspace:FindFirstChild("SpawnLocation")
+                or Workspace:FindFirstChild("Spawn")
+                or (LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart"))
+            if spawnLocation then
+                local randomX = math.random(-2e9, 2e9)
+                local randomZ = math.random(-2e9, 2e9)
+                local directions = {
+                    CFrame.new(randomX, 0, randomZ),
+                    CFrame.new(-randomX, 0, -randomZ),
+                    CFrame.new(randomX, 0, -randomZ),
+                    CFrame.new(-randomX, 0, randomZ),
+                    CFrame.new(randomX, randomZ, 0),
+                    CFrame.new(-randomX, -randomZ, 0),
+                    CFrame.new(0, randomX, randomZ),
+                    CFrame.new(0, -randomX, -randomZ),
+                    CFrame.new(randomZ, 0, randomX),
+                    CFrame.new(-randomZ, 0, -randomX),
+                    CFrame.new(randomZ, randomX, 0),
+                    CFrame.new(-randomZ, -randomX, 0),
+                }
+                for _, pos in pairs(directions) do
+                    createLine:FireServer(spawnLocation, pos)
+                end
+            end
+            task.wait()
+        end
+    end)
+    coroutine.resume(lineLagThread)
+end
+
+local function stopLineLag()
+    lineLagEnabled = false
+    if lineLagThread then
+        coroutine.close(lineLagThread)
+        lineLagThread = nil
+    end
+end
+
+local function snoForDuration(targetHrp, duration)
+    local elapsed = 0
+    while elapsed < duration do
+        local dt = RunService.Heartbeat:Wait()
+        fireSNO(targetHrp)
+        elapsed = elapsed + dt
+    end
+end
+
+local MAX_RADIUS = 8
+local HEIGHT = 12
+local SNO_DURATION = 0.25
+local TILT_ANGLE = math.rad(30)
+
+-- returnCFrameを引数で受け取る
+local function grabAll(returnCFrame)
+    local char = LocalPlayer.Character
+    if not char then return end
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+
+    local allPlayers = Players:GetPlayers()
+
+    for _, plr in ipairs(allPlayers) do
+        if plr ~= LocalPlayer then
+            local targetChar = plr.Character
+            local targetHrp = targetChar and targetChar:FindFirstChild("HumanoidRootPart")
+            if targetHrp then
+                tpBehindPlayer(plr, 3)
+                snoForDuration(targetHrp, SNO_DURATION)
+            end
+        end
+    end
+
+    -- ボタンを押した時の座標に戻る
+    hrp.CFrame = returnCFrame
+    task.wait()
+
+    local count = #allPlayers
+    local centerPos = returnCFrame.Position
+
+    for i, plr in ipairs(allPlayers) do
+        if plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
+            local angle = (i - 1) * (math.pi * 2 / count)
+            local offset = Vector3.new(math.cos(angle) * MAX_RADIUS, HEIGHT, math.sin(angle) * MAX_RADIUS)
+            local targetPos = centerPos + offset
+
+            local targetHrp = plr.Character.HumanoidRootPart
+            local lookCFrame = CFrame.new(targetPos, centerPos)
+            local tiltedCFrame = lookCFrame * CFrame.Angles(TILT_ANGLE, 0, 0)
+
+            targetHrp.CFrame = tiltedCFrame
+            targetHrp.AssemblyLinearVelocity = Vector3.zero
+
+            local bp = Instance.new("BodyPosition")
+            bp.MaxForce = Vector3.new(1e9, 1e9, 1e9)
+            bp.P = 500000000000000000
+            bp.Position = targetPos
+            bp.Parent = targetHrp
+            task.delay(2, function() pcall(function() bp:Destroy() end) end)
+
+            fireDestroyGrabLine(plr)
+        end
+    end
+end
+
+MainTab:CreateButton({
+    Name = "グラブオール",
+    Callback = function()
+        local char = LocalPlayer.Character
+        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+        if not hrp then return end
+
+        -- ボタンを押した瞬間にここで取得
+        local returnCFrame = hrp.CFrame
+
+        task.spawn(function()
+            grabAll(returnCFrame)
+            startLineLag()
+            Rayfield:Notify({Title = "Grab", Content = "グラブ＋ライン送信開始", Duration = 2})
+        end)
+    end,
+})
+
+MainTab:CreateButton({
+    Name = "ライン送信 停止",
+    Callback = function()
+        stopLineLag()
+        Rayfield:Notify({Title = "Lag", Content = "ライン送信を停止しました", Duration = 2})
+    end,
+})
