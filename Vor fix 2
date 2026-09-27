@@ -3029,129 +3029,118 @@ blobkill:AddToggle("blobkillLoop", {
 blobkill:AddToggle("spamkickbl", {
     Text = "Loop Kick (Spam)",
     Default = false,
-    Settings = false,
-    Callback = function(on)
-        Config.SpamkickblT = on
-        
-        local targetName = Config.PlayerList and Config.PlayerList[1]
-        local targetPlayer = targetName and service.Players:FindFirstChild(targetName)
+    Callback = function(Value)
+        Config.SpamkickblT = Value
+        if Value then
+            local targetName = Config.PlayerList and Config.PlayerList[1]
+            if not targetName then
+                Config.SpamkickblT = false
+                task.spawn(function() Toggles.spamkickbl:SetValue(false) end)
+                return
+            end
 
-        if on and not targetPlayer then
-            Config.SpamkickblT = false
-            return
-        end
-        local char = localPlayer.Character
-        local hum = char and char:FindFirstChild("Humanoid")
-        local seat = hum and hum.SeatPart
-        if on and (not seat or seat.Parent.Name ~= "CreatureBlobman") then
-            Config.SpamkickblT = false
-            return
-        end
-        if not on then
-            Config.SpamkickblT = false
-            return
-        end
-        task.spawn(function()
-            local blob = seat.Parent
-            local blobRoot = blob:FindFirstChild("HumanoidRootPart") or blob.PrimaryPart
-            local scriptObj = blob:FindFirstChild("BlobmanSeatAndOwnerScript")
-            local CG = scriptObj and scriptObj:FindFirstChild("CreatureGrab")
-            local CD = scriptObj and scriptObj:FindFirstChild("CreatureDrop")
-            local R_Det = blob:FindFirstChild("RightDetector")
-            local R_Weld = R_Det and (R_Det:FindFirstChild("RightWeld") or R_Det:FindFirstChildWhichIsA("Weld"))
-            local SavedPos = blobRoot.CFrame
-            local packetCount = 0
-            local wasDead = false
-            local lockPos = SavedPos * CFrame.new(0, 19, 0)
-            
-            local function TeleportToTarget()
-                local curTargetName = Config.PlayerList and Config.PlayerList[1]
-                local curTarget = curTargetName and service.Players:FindFirstChild(curTargetName)
-                if curTarget and curTarget.Character then
-                    local tRoot = curTarget.Character:FindFirstChild("HumanoidRootPart")
-                    if tRoot and blobRoot then
-                        blobRoot.CFrame = tRoot.CFrame
-                        blobRoot.Velocity = Vector3.zero
-                        if CG and R_Det then CG:FireServer(R_Det, tRoot, R_Weld) end
-                        if CreateGrabLine then CreateGrabLine:FireServer(tRoot, Vector3.zero, tRoot.Position, false) end
-                        local startTime = tick()
-                        while tick() - startTime < 0.7 do
-                            if SetNetworkOwner and tRoot.Parent then
-                                SetNetworkOwner:FireServer(tRoot, tRoot.CFrame)
-                            end
-                            service.RunService.Heartbeat:Wait()
-                        end
-                        blobRoot.CFrame = SavedPos
-                        blobRoot.Velocity = Vector3.zero
-                        startTime = tick()
-                        while tick() - startTime < 0.7 do
-                            if SetNetworkOwner and tRoot.Parent then
-                                SetNetworkOwner:FireServer(tRoot, tRoot.CFrame)
-                            end
-                            service.RunService.Heartbeat:Wait()
-                        end
+            Config.A1B2 = nil -- loopBlobKickSpamTask相当
+            task.spawn(function()
+                local GE = service.ReplicatedStorage:WaitForChild("GrabEvents")
+                local REMOTE_DELAY = 0.002
+                local lastRemote = 0
+                local savedPos = nil
+
+                while Config.SpamkickblT do
+                    local loopTargetName = Config.PlayerList and Config.PlayerList[1]
+                    local target = loopTargetName and service.Players:FindFirstChild(loopTargetName)
+                    if not target or not target.Character or not target.Character:FindFirstChild("HumanoidRootPart") then
+                        task.wait(0.3)
+                        continue
                     end
-                end
-            end
 
-            TeleportToTarget()
-            while Config.SpamkickblT do
-                local curTargetName = Config.PlayerList and Config.PlayerList[1]
-                local curTarget = curTargetName and service.Players:FindFirstChild(curTargetName)
-
-                if not curTarget or not curTarget.Parent or not curTarget.Character then
-                    Config.SpamkickblT = false
-                    break
-                end
-                local tChar = curTarget.Character
-                local tRoot = tChar and tChar:FindFirstChild("HumanoidRootPart")
-                local tHum = tChar and tChar:FindFirstChild("Humanoid")
-                if not tHum or not tRoot then
-                    service.RunService.Heartbeat:Wait()
-                    continue
-                end
-                if tHum.Health > 0 and wasDead then
-                    wasDead = false
-                    TeleportToTarget()
-                    service.RunService.Heartbeat:Wait()
-                    continue
-                end
-                if tHum.Health <= 0 then
-                    wasDead = true
-                    service.RunService.Heartbeat:Wait()
-                    continue
-                end
-                blobRoot.CFrame = SavedPos
-                blobRoot.Velocity = Vector3.zero
-                tRoot.CFrame = lockPos
-                tRoot.Velocity = Vector3.zero
-                tRoot.RotVelocity = Vector3.zero
-                if tRoot.AssemblyLinearVelocity then
-                    tRoot.AssemblyLinearVelocity = Vector3.zero
-                    tRoot.AssemblyAngularVelocity = Vector3.zero
-                end
-                if SetNetworkOwner then SetNetworkOwner:FireServer(tRoot, lockPos) end
-                packetCount = packetCount + 1
-                if packetCount >= 2 then
-                    packetCount = 0
-                    tHum.PlatformStand = true
-                    tHum.Sit = true
-                    if R_Det then
-                        local weld = R_Det:FindFirstChild("RightWeld") or R_Det:FindFirstChildWhichIsA("Weld")
-                        if weld and CD then CD:FireServer(weld) end
+                    local char = localPlayer.Character or localPlayer.CharacterAdded:Wait()
+                    local hum = char:WaitForChild("Humanoid")
+                    local seat = hum.SeatPart
+                    if not seat or seat.Parent.Name ~= "CreatureBlobman" then
+                        Library:Notify("Error: You must sit on a Blobman first!", 5)
+                        Config.SpamkickblT = false
+                        task.spawn(function() Toggles.spamkickbl:SetValue(false) end)
+                        return
                     end
-                    if DestroyGrabLine then DestroyGrabLine:FireServer(tRoot) end
-                    if R_Det and CG then CG:FireServer(R_Det, tRoot, R_Weld) end
-                    if CreateGrabLine then CreateGrabLine:FireServer(tRoot, Vector3.zero, tRoot.Position, false) end
+
+                    local blob = seat.Parent
+                    local blobRoot = blob:FindFirstChild("HumanoidRootPart") or blob.PrimaryPart
+                    local scriptObj = blob:WaitForChild("BlobmanSeatAndOwnerScript")
+                    local CG = scriptObj:WaitForChild("CreatureGrab")
+                    local CD = scriptObj:WaitForChild("CreatureDrop")
+                    local R_Det = blob:WaitForChild("RightDetector")
+                    savedPos = blobRoot.CFrame
+
+                    local dragging = false
+                    local grabStartTime = 0
+
+                    while Config.SpamkickblT do
+                        local curName = Config.PlayerList and Config.PlayerList[1]
+                        local currentTarget = curName and service.Players:FindFirstChild(curName)
+                        if not currentTarget then break end
+
+                        char = localPlayer.Character
+                        hum = char and char:FindFirstChild("Humanoid")
+                        seat = hum and hum.SeatPart
+                        if not seat or seat.Parent.Name ~= "CreatureBlobman" then break end
+
+                        blobRoot = seat.Parent:FindFirstChild("HumanoidRootPart") or seat.Parent.PrimaryPart
+                        local tChar = currentTarget.Character
+                        local tRoot = tChar and tChar:FindFirstChild("HumanoidRootPart")
+                        local tHum = tChar and tChar:FindFirstChild("Humanoid")
+
+                        if tRoot and tHum and tHum.Health > 0 and blobRoot then
+                            tRoot.Velocity = Vector3.zero
+                            if not dragging then
+                                blobRoot.CFrame = tRoot.CFrame
+                                blobRoot.Velocity = Vector3.zero
+                                if tick() - lastRemote >= REMOTE_DELAY then
+                                    lastRemote = tick()
+                                    pcall(function()
+                                        tHum.PlatformStand = true
+                                        tHum.Sit = true
+                                        GE.SetNetworkOwner:FireServer(tRoot, blobRoot.CFrame)
+                                        GE.DestroyGrabLine:FireServer(tRoot)
+                                    end)
+                                end
+                                if grabStartTime == 0 then grabStartTime = tick() end
+                                if tick() - grabStartTime > 0.35 then
+                                    dragging = true
+                                    grabStartTime = 0
+                                    blobRoot.CFrame = savedPos
+                                end
+                            else
+                                blobRoot.CFrame = savedPos
+                                blobRoot.Velocity = Vector3.zero
+                                local lockPos = savedPos * CFrame.new(0, 23, 0)
+                                tRoot.CFrame = lockPos
+                                tHum.PlatformStand = true
+                                tHum.Sit = true
+                                if tick() - lastRemote >= REMOTE_DELAY then
+                                    lastRemote = tick()
+                                    pcall(function()
+                                        GE.SetNetworkOwner:FireServer(tRoot, lockPos)
+                                        GE.DestroyGrabLine:FireServer(tRoot)
+                                        local weld = R_Det:FindFirstChild("RightWeld") or R_Det:FindFirstChildWhichIsA("Weld")
+                                        if weld then
+                                            CD:FireServer(weld)
+                                            CG:FireServer(R_Det, tRoot, weld)
+                                        end
+                                    end)
+                                end
+                            end
+                        else
+                            dragging = false
+                            grabStartTime = 0
+                        end
+                        service.RunService.Heartbeat:Wait()
+                    end
+
+                    if blobRoot then blobRoot.CFrame = savedPos end
                 end
-                service.RunService.Heartbeat:Wait()
-            end
-            Config.SpamkickblT = false
-            if blobRoot then
-                blobRoot.CFrame = SavedPos
-                blobRoot.Velocity = Vector3.zero
-            end
-        end)
+            end)
+        end
     end
 })
 
@@ -3270,147 +3259,217 @@ RemoveKickanti:AddToggle("RemoveWdantikick", {
     end
 })
 
+-- Loop Banana用の変数
+local bananaLoopActive = false
+local bananaLoopConnection = nil
+local bananaMonitorConnection = nil
+local currentBanana = nil
+local isBananaTargetDead = false
+
+local function BananaSetNetworkOwner(part)
+    if not part then return end
+    pcall(function() SetNetworkOwner:FireServer(part, part.CFrame) end)
+end
+
+local function BananaDestroyGrabLine(part)
+    if not part then return end
+    pcall(function() DestroyGrabLine:FireServer(part) end)
+end
+
+local function BananaDestroyToy(banana)
+    if not banana then return end
+    pcall(function() DestroyToy:FireServer(banana) end)
+end
+
+local function BananaSpawn()
+    local hrp = HRP()
+    if not hrp then return nil end
+    local spawnPos = hrp.CFrame * CFrame.new(0, 14, 20)
+    local folder = SpawnedInToys
+    if not folder then return nil end
+    local spawned = nil
+    local conn
+    conn = folder.ChildAdded:Connect(function(child)
+        if child.Name == "FoodBanana" then
+            spawned = child
+            conn:Disconnect()
+        end
+    end)
+    task.spawn(function()
+        pcall(function() spawntoy("FoodBanana", spawnPos, Vector3.zero) end)
+    end)
+    local start = tick()
+    repeat task.wait(0.05) until spawned or (tick() - start) > 3
+    pcall(function() conn:Disconnect() end)
+    return spawned
+end
+
+local function BananaHold(banana)
+    if not banana then return end
+    local holdPart = banana:FindFirstChild("HoldPart")
+    if not holdPart then return end
+    local holdRemote = holdPart:FindFirstChild("HoldItemRemoteFunction")
+    if not holdRemote then return end
+    local char = GetCharacter()
+    if not char then return end
+    for i = 1, 5 do
+        if not banana or not banana.Parent then break end
+        pcall(function() holdRemote:InvokeServer(banana, char) end)
+        task.wait(0.08)
+    end
+end
+
+local function BananaDrop(banana)
+    if not banana then return end
+    local holdPart = banana:FindFirstChild("HoldPart")
+    if not holdPart then return end
+    local dropRemote = holdPart:FindFirstChild("DropItemRemoteFunction")
+    if not dropRemote then return end
+    local hrp = HRP()
+    if not hrp then return end
+    local dropPos = hrp.CFrame * CFrame.new(0, 15, 0)
+    pcall(function() dropRemote:InvokeServer(banana, dropPos, dropPos) end)
+end
+
+local function BananaUse(banana)
+    if not banana then return end
+    pcall(function() UseRemote:FireServer(banana) end)
+end
+
+local function BananaGetTargetLeg()
+    local targetName = Config.PlayerList and Config.PlayerList[1]
+    if not targetName then return nil end
+    local target = service.Players:FindFirstChild(targetName)
+    if not target or not target.Character then return nil end
+    return target.Character:FindFirstChild("Left Leg") or target.Character:FindFirstChild("LeftUpperLeg")
+end
+
+local function BananaGetTargetHealth()
+    local targetName = Config.PlayerList and Config.PlayerList[1]
+    if not targetName then return 0 end
+    local target = service.Players:FindFirstChild(targetName)
+    if not target or not target.Character then return 0 end
+    local hum = target.Character:FindFirstChildOfClass("Humanoid")
+    return hum and hum.Health or 0
+end
+
+local function BananaFullCycle()
+    local targetName = Config.PlayerList and Config.PlayerList[1]
+    if not targetName or targetName == "" then return nil end
+    local banana = BananaSpawn()
+    if not banana then return nil end
+    BananaHold(banana)
+    task.wait(0.5)
+    BananaUse(banana)
+    task.wait(2.3)
+    BananaDrop(banana)
+    task.wait(0.08)
+    BananaDrop(banana)
+    task.wait(0.3)
+    return banana
+end
+
+local function BananaStopLoop()
+    bananaLoopActive = false
+    if bananaLoopConnection then bananaLoopConnection:Disconnect(); bananaLoopConnection = nil end
+    if bananaMonitorConnection then bananaMonitorConnection:Disconnect(); bananaMonitorConnection = nil end
+    if currentBanana then BananaDestroyToy(currentBanana); currentBanana = nil end
+    local folder = SpawnedInToys
+    if folder then
+        for _, child in pairs(folder:GetChildren()) do
+            if child.Name == "FoodBanana" then BananaDestroyToy(child) end
+        end
+    end
+end
+
+local function BananaRestartLoop(banana)
+    if bananaLoopConnection then bananaLoopConnection:Disconnect(); bananaLoopConnection = nil end
+    currentBanana = banana
+    local hitboxPart = banana:FindFirstChild("HitboxPart")
+    if not hitboxPart then return end
+    bananaLoopConnection = service.RunService.Heartbeat:Connect(function()
+        if not bananaLoopActive then BananaStopLoop(); return end
+        if not currentBanana or not currentBanana.Parent then return end
+        local hrp = HRP()
+        if not hrp then return end
+        local targetPos, targetCFrame
+        local health = BananaGetTargetHealth()
+        if health <= 0 then
+            isBananaTargetDead = true
+            targetPos = hrp.CFrame * CFrame.new(0, 20, 0)
+            targetCFrame = CFrame.new(targetPos.Position)
+        else
+            isBananaTargetDead = false
+            local leg = BananaGetTargetLeg()
+            if leg then
+                targetPos = leg.CFrame * CFrame.new(0, 0.5, 0)
+                targetCFrame = leg.CFrame
+            else
+                targetPos = hrp.CFrame * CFrame.new(0, 20, 0)
+                targetCFrame = CFrame.new(targetPos.Position)
+            end
+        end
+        BananaSetNetworkOwner(hitboxPart)
+        BananaDestroyGrabLine(hitboxPart)
+        local bp = hitboxPart:FindFirstChild("BodyPosition")
+        if not bp then
+            bp = Instance.new("BodyPosition")
+            bp.P = 10000; bp.D = 100
+            bp.MaxForce = Vector3.new(1e9, 1e9, 1e9)
+            bp.Parent = hitboxPart
+        end
+        bp.Position = targetPos.Position
+        local bg = hitboxPart:FindFirstChild("BodyGyro")
+        if not bg then
+            bg = Instance.new("BodyGyro")
+            bg.P = 10000; bg.D = 100
+            bg.MaxTorque = Vector3.new(1e9, 1e9, 1e9)
+            bg.Parent = hitboxPart
+        end
+        bg.CFrame = targetCFrame
+    end)
+end
+
+local function BananaStartLoop()
+    if bananaLoopActive then return end
+    local targetName = Config.PlayerList and Config.PlayerList[1]
+    if not targetName or targetName == "" then return end
+    bananaLoopActive = true
+    isBananaTargetDead = false
+    local banana = BananaFullCycle()
+    if banana then BananaRestartLoop(banana) end
+    bananaMonitorConnection = service.RunService.Heartbeat:Connect(function()
+        if not bananaLoopActive then return end
+        local folder = SpawnedInToys
+        local bananaExists = false
+        if folder then
+            for _, child in pairs(folder:GetChildren()) do
+                if child.Name == "FoodBanana" then bananaExists = true; break end
+            end
+        end
+        if not bananaExists then
+            if bananaLoopConnection then bananaLoopConnection:Disconnect(); bananaLoopConnection = nil end
+            task.wait(0.05)
+            local newBanana = BananaFullCycle()
+            if newBanana then BananaRestartLoop(newBanana) end
+        end
+    end)
+end
+
 Loop2:AddToggle("BananaT", {
     Text = "Loop Banana",
     Default = false,
     Callback = function(Value)
-        local char = GetCharacter()
-        Config.BananaLoop = Value
         if Value then
-            task.spawn(function()
-                local banana, SoundPart, AlignPos, Atach
-                local function flingVec(min, max)
-                    return Vector3.new(
-                        math.random(min, max),
-                        math.random(min, max),
-                        math.random(min, max)
-                    )
-                end
-                while Config.BananaLoop do
-                    task.wait(0.05)
-                    local validTargets = {}
-                    for _, playerName in ipairs(Config.PlayerList or {}) do
-                        local targetPlr = service.Players:FindFirstChild(playerName)
-                        if targetPlr
-                           and targetPlr ~= localPlayer
-                           and not ragdolallwhite(targetPlr)
-                           and not IsPlayerInsideSafeZone(targetPlr)
-                           and targetPlr.Character
-                           and targetPlr.Character:FindFirstChild("Left Leg") then
-                            table.insert(validTargets, targetPlr)
-                        end
-                    end
-                    if #validTargets == 0 then
-                        task.wait(0.5)
-                        continue
-                    end
-                    local targetPlr = validTargets[math.random(1, #validTargets)]
-                    local targetLeg = targetPlr.Character:FindFirstChild("Left Leg")
-                    local targetAttach = targetLeg and targetLeg:FindFirstChild("LeftFootAttachment")
-                    if not targetAttach then continue end
-                    if banana and not banana.Parent then
-                        banana = nil
-                        SoundPart = nil
-                    else
-                        banana = SpawnedInToys:FindFirstChild("FoodBanana")
-                    end
-                    SoundPart = banana and banana:FindFirstChild("SoundPart")
-                    if not SoundPart then
-                        for _, v in pairs(SpawnedInToys:GetChildren()) do
-                            if v.Name == "FoodBanana" then
-                                DestroyToy:FireServer(v)
-                            end
-                        end
-                        if InPlot.Value and not InOwnedPlot.Value then
-                            InPlot:GetPropertyChangedSignal("Value"):Wait()
-                        end
-                        if not CanSpawnToy.Value then
-                            CanSpawnToy:GetPropertyChangedSignal("Value"):Wait()
-                        end
-                        local hrp = HRP()
-                        local SpawnCF = hrp.CFrame * CFrame.new(0, 14, 20)
-                        local Container = InOwnedPlot.Value and Config.LastHouse or SpawnedInToys
-                        if Container then
-                            local spawnedObject = nil
-                            local connection = Container.ChildAdded:Connect(function(child)
-                                if child.Name == "FoodBanana" then
-                                    spawnedObject = child
-                                end
-                            end)
-                            pcall(function()
-                                spawntoy("FoodBanana", SpawnCF, Vector3.zero)
-                            end)
-                            local start = tick()
-                            repeat task.wait() until spawnedObject or (tick() - start) > 1.5
-                            connection:Disconnect()
-                            banana = spawnedObject
-                        end
-                        if not banana then continue end
-                        SoundPart = banana:FindFirstChild("SoundPart") or banana:WaitForChild("SoundPart", 2)
-                        if not SoundPart then continue end
-                        local holdPart = banana:FindFirstChild("HoldPart") or banana:WaitForChild("HoldPart", 2)
-                        if holdPart then
-                            local holdRemote = holdPart:FindFirstChild("HoldItemRemoteFunction") or holdPart:WaitForChild("HoldItemRemoteFunction")
-                            if holdRemote then holdRemote:InvokeServer(banana, char) end
-                        end
-                        UseRemote:FireServer(banana)
-                        while Config.BananaLoop and (banana:FindFirstChild("EdiblePart") ~= nil) do task.wait() end
-                        if not Config.BananaLoop then break end
-                        UseRemote:FireServer(banana)
-                        if holdPart then
-                            local dropRemote = holdPart:FindFirstChild("DropItemRemoteFunction") or holdPart:WaitForChild("DropItemRemoteFunction")
-                            if dropRemote then dropRemote:InvokeServer(banana, char:GetPivot() * CFrame.new(0, 15, -10), Vector3.zero) end
-                        end
-                        repeat
-                            SoundPart = banana and banana:FindFirstChild("SoundPart")
-                            if not SoundPart then break end
-                            SetNetworkOwner:FireServer(SoundPart, SoundPart.CFrame)
-                            task.wait()
-                        until not Config.BananaLoop or not SoundPart or (SoundPart:FindFirstChild("PartOwner") ~= nil)
-                        if not Config.BananaLoop then break end
-                        DestroyGrabLine:FireServer(SoundPart)
-                        Atach = Instance.new("Attachment")
-                        Atach.Parent = SoundPart
-                        AlignPos = Instance.new("AlignPosition")
-                        AlignPos.MaxForce = math.huge
-                        AlignPos.MaxVelocity = math.huge
-                        AlignPos.Responsiveness = 200
-                        AlignPos.Parent = SoundPart
-                        AlignPos.Attachment0 = Atach
-                    end
-                    local isOwner = true
-                    for _, v in pairs(banana:GetChildren()) do
-                        if (v:FindFirstChild("PartOwner") ~= nil) and v["PartOwner"].Value ~= localPlayer.Name then
-                            DestroyToy:FireServer(banana)
-                            banana = nil
-                            isOwner = false
-                            break
-                        end
-                    end
-                    if not isOwner or not banana then continue end
-                    AlignPos = SoundPart:FindFirstChild("AlignPosition")
-                    if not AlignPos then
-                        DestroyToy:FireServer(banana)
-                        banana = nil
-                        continue
-                    end
-                    AlignPos.Attachment1 = targetAttach
-                    SoundPart.AssemblyLinearVelocity  = flingVec(-100, 130)
-                    SoundPart.AssemblyAngularVelocity = flingVec(-500, 500)
-
-                    task.wait(0.3)
-                end
-                if banana then
-                    if AlignPos then AlignPos:Destroy() end
-                    DestroyToy:FireServer(banana)
-                end
-            end)
-        else
-            for _, v in pairs(SpawnedInToys:GetChildren()) do
-                if v.Name == "FoodBanana" then
-                    DestroyToy:FireServer(v)
-                end
+            local targetName = Config.PlayerList and Config.PlayerList[1]
+            if not targetName or targetName == "" then
+                Library:Notify("エラー: プレイヤーが選択されていません！", 3)
+                task.spawn(function() Toggles.BananaT:SetValue(false) end)
+                return
             end
+            BananaStartLoop()
+        else
+            BananaStopLoop()
         end
     end
 })
