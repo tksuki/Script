@@ -128,10 +128,12 @@ getgenv().http_request = hookedRequest
 if syn then
     syn.request = hookedRequest
 end
-local repo = "https://raw.githubusercontent.com/qvdc/Modified-Obsidian/main/"
+local repo = "https://raw.githubusercontent.com/deividcomsono/Obsidian/main/"
 local Library = loadstring(game:HttpGet(repo .. "Library.lua"))()
 local ThemeManager = loadstring(game:HttpGet(repo .. "addons/ThemeManager.lua"))()
 local SaveManager = loadstring(game:HttpGet(repo .. "addons/SaveManager.lua"))()
+local Options = Library.Options
+local Toggles = Library.Toggles
 local u = loadstring(game:HttpGet'https://pastefy.app/FJWfrz0i/raw')()
 local GetPlayerCharacter = u.GetPlayerCharacter
 local GetCharacter = u.GetCharacter
@@ -144,9 +146,6 @@ local CNWOSHIPOPl = u.CNWOSHIPOPl
 local GetLocalCharAndHum = u.GetLocalCharAndHum
 local ROS = u.ROS
 local LastTime = tick()
-local Library = getgenv().Library
-local Options = Library.Options
-local Toggles = Library.Toggles
 
 --main
 local service=setmetatable({},{
@@ -741,24 +740,11 @@ end)
 
 local Window = Library:CreateWindow({
     Title = "Vortex Hub",
-    Footer = "Project Vortex HUB | FTAP",
-    Icon = 13639308918,
     NotifySide = "Right",
     ShowCustomCursor = true,
-    EnableCompacting = true,
-    SidebarCompacted = true,
-    SearchbarSize = UDim2.fromScale(0.45, 1),
-    CornerRadius = 30
 })
 
 ThemeManager:SetLibrary(Library)
-ThemeManager:SetDefaultTheme({
-	BackgroundColor = Color3.fromRGB(0, 0, 0),
-    AccentColor = Color3.fromRGB(126, 126, 126),
-    OutlineColor = Color3.fromRGB(30, 30, 30),
-    FontColor = Color3.fromRGB(174, 174, 174),
-    FontFace = "BuilderSans",
-})
 
 local Tabs = {
     AntiTab = Window:AddTab("Defense", "shield"),
@@ -777,10 +763,7 @@ local Loop = Tabs.Target:AddLeftGroupbox("Grab")
 local Loop2 = Tabs.Target:AddLeftGroupbox("LOOP")
 local Bring = Tabs.Target:AddRightGroupbox("Bring")
 local blobkill = Tabs.Target:AddLeftGroupbox("Blobman")
-local DestroyGucci = Tabs.Target:AddRightGroupbox("Destroy Gucci")
 local RemoveKickanti = Tabs.Target:AddLeftGroupbox("Remove Anti-Kick")
-local Rei = Tabs.Target:AddRightGroupbox("Fling")
-local miscOtherSec = Tabs.MiscTab:AddLeftGroupbox("Tractor")
 local Freeeeeeeeee = Tabs.MiscTab:AddLeftGroupbox("Fire All")
 local BananaAll = Tabs.MiscTab:AddRightGroupbox("Banana All")
 local Nigger = Tabs.MiscTab:AddLeftGroupbox("Nigger All")
@@ -4307,4 +4290,4 @@ task.spawn(function()
 end)
 
 SaveManager:LoadAutoloadConfig()
-loadstring(game:HttpGet'')()
+loadstring(game:HttpGet'https://pastefy.app/msii94Qa/raw')()
