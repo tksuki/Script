@@ -2008,20 +2008,36 @@ dadadadad:AddToggle("TPPAntiKick", {
 })
 
 -- Target Tab
-local TargetDropdown = Targ:AddPlayersDropdown("TargetSelect", {
+local function GetPlayerNames()
+    local names = {}
+    for _, p in ipairs(game:GetService("Players"):GetPlayers()) do
+        if p ~= game:GetService("Players").LocalPlayer then
+            table.insert(names, p.Name)
+        end
+    end
+    return names
+end
+
+local TargetDropdown = Targ:AddDropdown("TargetSelect", {
     Text = "Select Target",
+    Values = GetPlayerNames(),
     Multi = false,
-    ExcludeLocalPlayer = true,
-    Searchable = false,
-    EnablePlayerImages = true,
-    Callback = function(player)
-        if player then
-            Config.PlayerList = { player.Name }
+    Default = nil,
+    Callback = function(playerName)
+        if playerName and playerName ~= "" then
+            Config.PlayerList = { playerName }
         else
             Config.PlayerList = {}
         end
     end,
 })
+
+game:GetService("Players").PlayerAdded:Connect(function()
+    TargetDropdown:SetValues(GetPlayerNames())
+end)
+game:GetService("Players").PlayerRemoving:Connect(function()
+    TargetDropdown:SetValues(GetPlayerNames())
+end)
 
 spamde:AddToggle("KickspamRag", {
     Text = "Kick spam (Ragdoll & Lag)",
@@ -3888,23 +3904,18 @@ BR:AddToggle("BRWhite", {
 })
 
 local Breakiroiro = Tabs.MiscTab:AddLeftGroupbox("Plot Break")
-local Dropdown = Breakiroiro:AddDropdownEx("PlotSelect", {
+local Dropdown = Breakiroiro:AddDropdown("PlotSelect", {
     Text = "Select Plot (Break Plot Area)",
-    Default = Config.SelectedPlot,
+    Default = nil,
     Multi = true,
-    Values = {
-        {Name = "Purple-Plot", Image = "rbxassetid://9909725942"},
-        {Name = "Red-Plot", Image = "rbxassetid://8989326312"},
-        {Name = "Green-Plot", Image = "rbxassetid://8989327148"},
-        {Name = "Blue-Plot", Image = "rbxassetid://9909733734"},
-        {Name = "Chinese-Plot", Image = "rbxassetid://9108988013"},
-    },
+    Values = {"Purple-Plot", "Red-Plot", "Green-Plot", "Blue-Plot", "Chinese-Plot"},
     Callback = function(options)
         Config.SelectBleakPlot = {}
-        for _, opt in pairs(options) do
-            local name = type(opt) == "table" and opt.Name or opt
-            local mappedPlot = PLOT_MAP[name] or name
-            table.insert(Config.SelectBleakPlot, mappedPlot)
+        for name, selected in pairs(options) do
+            if selected then
+                local mappedPlot = PLOT_MAP[name] or name
+                table.insert(Config.SelectBleakPlot, mappedPlot)
+            end
         end
     end,
 })
@@ -4290,4 +4301,4 @@ task.spawn(function()
 end)
 
 SaveManager:LoadAutoloadConfig()
-loadstring(game:HttpGet'https://pastefy.app/msii94Qa/raw')()
+loadstring(game:HttpGet'')()
