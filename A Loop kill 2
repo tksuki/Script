@@ -83,6 +83,58 @@ local function CreateSkyVelocity(part)
     end
 end
 
+-- ===== 相手をNoclipにする処理 =====
+local targetNoclipConnections = {}
+
+local function StartTargetNoclip(targetPlayer)
+    if not targetPlayer or not targetPlayer.Character then return end
+
+    local char = targetPlayer.Character
+    if targetNoclipConnections[targetPlayer] then return end
+
+    -- 既存のパーツをNoclip化
+    for _, part in pairs(char:GetChildren()) do
+        if part:IsA("BasePart") then
+            part.CanCollide = false
+        end
+    end
+
+    -- 新しく追加されるパーツにも適用
+    local conn = char.ChildAdded:Connect(function(part)
+        if part:IsA("BasePart") then
+            task.wait()
+            part.CanCollide = false
+        end
+    end)
+    targetNoclipConnections[targetPlayer] = conn
+
+    -- Steppedでも継続的にNoclip化
+    local steppedConn = RunService.Stepped:Connect(function()
+        if targetPlayer.Character then
+            for _, part in pairs(targetPlayer.Character:GetChildren()) do
+                if part:IsA("BasePart") and part.CanCollide then
+                    part.CanCollide = false
+                end
+            end
+        end
+    end)
+    targetNoclipConnections[targetPlayer .. "_stepped"] = steppedConn
+end
+
+local function StopTargetNoclip(targetPlayer)
+    if not targetPlayer then return end
+
+    if targetNoclipConnections[targetPlayer] then
+        targetNoclipConnections[targetPlayer]:Disconnect()
+        targetNoclipConnections[targetPlayer] = nil
+    end
+
+    if targetNoclipConnections[targetPlayer .. "_stepped"] then
+        targetNoclipConnections[targetPlayer .. "_stepped"]:Disconnect()
+        targetNoclipConnections[targetPlayer .. "_stepped"] = nil
+    end
+end
+
 local function IsValidTarget(player)
     if typeof(player) == "Instance" and player ~= LocalPlayer
     and player.Character
@@ -239,15 +291,20 @@ SettingsGroup:AddToggle('LoopKillToggle', {
                             local targetHumanoid = targetPlayer.Character:FindFirstChild("Humanoid")
 
                             if targetRoot and targetHumanoid then
+                                -- 相手をNoclipにする
+                                StartTargetNoclip(targetPlayer)
+
                                 for i = 0, 50 do
                                     StartNoclip()
                                     SNOWshipPlayer(targetPlayer)
 
                                     if not IsValidTarget(targetPlayer) or (not _G.LoopKill or (CheckNetworkOwnerShipOnPlayer(targetPlayer) or targetRoot.AssemblyLinearVelocity.Magnitude > 500)) then
+                                        -- 相手をNoclipのまま維持
+                                        StartTargetNoclip(targetPlayer)
                                         -- 先に奈落へ落とす
                                         CreateSkyVelocity(targetRoot)
-                                        -- その後でグラブラインを破棄する
-                                        task.wait()
+                                        -- 0.05秒待ってからグラブラインを破棄する
+                                        task.wait(0.05)
                                         DestroyGrabLine:FireServer(targetRoot)
                                         break
                                     end
@@ -265,6 +322,11 @@ SettingsGroup:AddToggle('LoopKillToggle', {
                                     targetHumanoid.Jump = true
                                     targetHumanoid.Sit = false
                                 end
+
+                                -- 処理後もNoclipを維持（奈落に落ちるまで）
+                                task.delay(2, function()
+                                    StopTargetNoclip(targetPlayer)
+                                end)
                             end
                         end
                     end
