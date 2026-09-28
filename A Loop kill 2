@@ -78,7 +78,7 @@ local function CreateSkyVelocity(part)
     if not part:FindFirstChild("SkyVelocity") then
         local bv = Instance.new("BodyVelocity", part)
         bv.Name = "SkyVelocity"
-        bv.Velocity = Vector3.new(0, -100000000000000, 0) -- 真下（奈落）に落とす
+        bv.Velocity = Vector3.new(0, -2147483647, 0) -- 21億（int32最大値）で真下（奈落）に落とす
         bv.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
     end
 end
