@@ -1,0 +1,299 @@
+local repo = "https://raw.githubusercontent.com/deividcomsono/Obsidian/main/"
+local Library = loadstring(game:HttpGet(repo .. "Library.lua"))()
+local ThemeManager = loadstring(game:HttpGet(repo .. "addons/ThemeManager.lua"))()
+local SaveManager = loadstring(game:HttpGet(repo .. "addons/SaveManager.lua"))()
+local Options = Library.Options
+local Toggles = Library.Toggles
+
+local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
+local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local LocalPlayer = Players.LocalPlayer
+
+local GrabEvents = ReplicatedStorage:WaitForChild("GrabEvents")
+local DestroyGrabLine = GrabEvents:WaitForChild("DestroyGrabLine")
+local SetNetworkOwner = GrabEvents:WaitForChild("SetNetworkOwner")
+
+local LoopList = {}
+_G.LoopKill = false
+_G.NoclipToggle = false
+
+local DisplayToUsername = {}
+
+local function tableAlphabeticOrder(a, b)
+    return a:lower() < b:lower()
+end
+
+local function lookAt(pos1, pos2)
+    local diff = (pos2 - pos1).Unit
+    local right = diff:Cross(Vector3.new(0, 1, 0))
+    local up = right:Cross(diff)
+    return CFrame.fromMatrix(pos1, right, up)
+end
+
+local function IsPlayerInsideSafeZone(player)
+    if typeof(player) == "Instance" and player:IsA("Player") and player:FindFirstChild("InPlot") and player.InPlot.Value then
+        return true
+    end
+    return false
+end
+
+local function CheckNetworkOwnerShipOnPlayer(player)
+    if typeof(player) == "Instance" and player:IsA("Player") and player.Character
+    and player.Character:FindFirstChild("Head")
+    and player.Character.Head:FindFirstChild("PartOwner")
+    and player.Character.Head.PartOwner.Value == LocalPlayer.Name then
+        return true
+    end
+    return false
+end
+
+local function SNOWshipPlayer(targetPlayer, callback)
+    if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    and typeof(targetPlayer) == "Instance" and targetPlayer:IsA("Player")
+    and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
+
+        local targetRoot = targetPlayer.Character.HumanoidRootPart
+        local distance = LocalPlayer:DistanceFromCharacter(targetRoot.Position)
+
+        if CheckNetworkOwnerShipOnPlayer(targetPlayer) then
+            if type(callback) == "function" then
+                callback()
+            end
+            return true
+        end
+
+        if distance <= 30 then
+            -- 1フレームに3回SNOを送る
+            local cframe = lookAt(LocalPlayer.Character.HumanoidRootPart.Position, targetRoot.Position)
+            SetNetworkOwner:FireServer(targetRoot, cframe)
+            SetNetworkOwner:FireServer(targetRoot, cframe)
+            SetNetworkOwner:FireServer(targetRoot, cframe)
+        end
+    end
+end
+
+local function CreateSkyVelocity(part)
+    if not part:FindFirstChild("SkyVelocity") then
+        local bv = Instance.new("BodyVelocity", part)
+        bv.Name = "SkyVelocity"
+        bv.Velocity = Vector3.new(0, -100000000000000, 0) -- 真下（奈落）に落とす
+        bv.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+    end
+end
+
+local function IsValidTarget(player)
+    if typeof(player) == "Instance" and player ~= LocalPlayer
+    and player.Character
+    and player.Character:IsDescendantOf(Workspace)
+    and player.Character:FindFirstChild("HumanoidRootPart")
+    and player.Character:FindFirstChild("Humanoid")
+    and player.Character.Humanoid.Health > 0 then
+        if not IsPlayerInsideSafeZone(player) then
+            return true
+        end
+    end
+    return false
+end
+
+local function GetPlayerCharacter()
+    if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") and LocalPlayer.Character:FindFirstChildOfClass("Humanoid") then
+        return LocalPlayer.Character
+    end
+end
+
+local function GetPlayerCFrame()
+    local char = GetPlayerCharacter()
+    if char then
+        return char.HumanoidRootPart.CFrame
+    end
+end
+
+local function TeleportPlayer(cframe)
+    local char = GetPlayerCharacter()
+    if char and typeof(cframe) == "CFrame" then
+        local root = char.HumanoidRootPart
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        root.CFrame = root.CFrame.Rotation + cframe.Position
+
+        if hum.SeatPart == nil or tostring(hum.SeatPart.Parent) ~= "CreatureBlobman" then
+            hum.Sit = false
+        end
+    end
+end
+
+local noclipConnection = nil
+local noclipDebounce = false
+
+local function StartNoclip()
+    if not noclipConnection then
+        noclipDebounce = false
+        local function noclipLoop()
+            if noclipDebounce == false and LocalPlayer.Character ~= nil then
+                for _, part in pairs(LocalPlayer.Character:GetChildren()) do
+                    if part:IsA("BasePart") and part.CanCollide then
+                        part.CanCollide = false
+                    end
+                end
+            end
+        end
+        noclipConnection = RunService.Stepped:Connect(noclipLoop)
+    end
+end
+
+local function StopNoclip()
+    if not _G.NoclipToggle then
+        if noclipConnection then
+            noclipConnection:Disconnect()
+            noclipConnection = nil
+        end
+        noclipDebounce = true
+    end
+end
+
+-- ===== UI構築 (Obsidian) =====
+
+local Window = Library:CreateWindow({
+    Title = 'ループキル',
+    Center = true,
+    AutoShow = true,
+    TabPadding = 8,
+    MenuFadeTime = 0.2
+})
+
+local Tabs = {
+    Main = Window:AddTab('メイン'),
+    ['UI Settings'] = Window:AddTab('UI設定'),
+}
+
+local TargetGroup = Tabs.Main:AddLeftGroupbox('ターゲット選択')
+local SettingsGroup = Tabs.Main:AddRightGroupbox('実行設定')
+
+-- ドロップダウンの作成
+TargetGroup:AddDropdown('PlayerSelect', {
+    Values = {},
+    Default = 0,
+    Multi = true,
+    Text = 'プレイヤー',
+    Tooltip = 'ループキルするプレイヤーを複数選択できます',
+})
+
+-- プレイヤーリストの更新関数
+local function UpdatePlayerDropdown()
+    local list = {}
+    DisplayToUsername = {}
+    for _, v in pairs(Players:GetPlayers()) do
+        if v ~= LocalPlayer then
+            local displayStr = v.DisplayName .. " (@" .. v.Name .. ")"
+            table.insert(list, displayStr)
+            DisplayToUsername[displayStr] = v.Name
+        end
+    end
+    table.sort(list, tableAlphabeticOrder)
+
+    if Options.PlayerSelect then
+        Options.PlayerSelect:SetValues(list)
+    end
+end
+
+TargetGroup:AddButton('リストを手動更新', function()
+    UpdatePlayerDropdown()
+end)
+
+-- ドロップダウンの値が変更されたときの処理
+Options.PlayerSelect:OnChanged(function()
+    LoopList = {}
+    local selected = Options.PlayerSelect.Value
+
+    if type(selected) == "table" then
+        for displayStr, isSelected in pairs(selected) do
+            if isSelected and DisplayToUsername[displayStr] then
+                table.insert(LoopList, DisplayToUsername[displayStr])
+            end
+        end
+    end
+end)
+
+-- ループキルのトグル
+SettingsGroup:AddToggle('LoopKillToggle', {
+    Text = 'ループキル実行',
+    Default = false,
+    Tooltip = '選択したプレイヤーへのループキルを開始/停止します',
+    Callback = function(Value)
+        _G.LoopKill = Value
+        _G.NoclipToggle = Value
+
+        if Value then
+            StartNoclip()
+
+            task.spawn(function()
+                while _G.LoopKill do
+                    local originalPos = GetPlayerCFrame()
+
+                    for _, playerName in pairs(LoopList) do
+                        local targetPlayer = Players:FindFirstChild(playerName)
+
+                        if targetPlayer and IsValidTarget(targetPlayer) then
+                            local targetRoot = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+                            local targetHumanoid = targetPlayer.Character:FindFirstChild("Humanoid")
+
+                            if targetRoot and targetHumanoid then
+                                for i = 0, 50 do
+                                    StartNoclip()
+                                    SNOWshipPlayer(targetPlayer)
+
+                                    if not IsValidTarget(targetPlayer) or (not _G.LoopKill or (CheckNetworkOwnerShipOnPlayer(targetPlayer) or targetRoot.AssemblyLinearVelocity.Magnitude > 500)) then
+                                        DestroyGrabLine:FireServer(targetRoot)
+                                        CreateSkyVelocity(targetRoot) -- 奈落に落とす
+                                        break
+                                    end
+
+                                    task.wait()
+
+                                    if targetRoot.Position.Y <= -12 then
+                                        TeleportPlayer(CFrame.new(targetRoot.Position + Vector3.new(0, 5, -15)))
+                                    else
+                                        TeleportPlayer(CFrame.new(targetRoot.Position + Vector3.new(0, -10, -10)))
+                                    end
+
+                                    targetHumanoid.BreakJointsOnDeath = false
+                                    targetHumanoid:ChangeState(Enum.HumanoidStateType.Dead)
+                                    targetHumanoid.Jump = true
+                                    targetHumanoid.Sit = false
+                                end
+                            end
+                        end
+                    end
+
+                    if originalPos then
+                        TeleportPlayer(originalPos)
+                    end
+                    task.wait(0.2)
+                end
+
+                StopNoclip()
+            end)
+        else
+            StopNoclip()
+        end
+    end
+})
+
+-- UI設定タブの構築
+ThemeManager:SetLibrary(Library)
+SaveManager:SetLibrary(Library)
+SaveManager:IgnoreThemeSettings()
+SaveManager:SetIgnoreIndexes({'PlayerSelect'}) 
+ThemeManager:SetFolder('LoopKillSettings')
+SaveManager:SetFolder('LoopKillSettings/main')
+SaveManager:BuildConfigSection(Tabs['UI Settings'])
+ThemeManager:BuildThemeSection(Tabs['UI Settings'])
+
+-- 初期化とイベント接続
+UpdatePlayerDropdown()
+Players.PlayerAdded:Connect(UpdatePlayerDropdown)
+Players.PlayerRemoving:Connect(UpdatePlayerDropdown)
+
+-- UI表示用通知
+Library:Notify('UIが読み込まれました。右シフト(RightShift)で開閉できます。', 3)
