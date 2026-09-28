@@ -244,8 +244,11 @@ SettingsGroup:AddToggle('LoopKillToggle', {
                                     SNOWshipPlayer(targetPlayer)
 
                                     if not IsValidTarget(targetPlayer) or (not _G.LoopKill or (CheckNetworkOwnerShipOnPlayer(targetPlayer) or targetRoot.AssemblyLinearVelocity.Magnitude > 500)) then
+                                        -- 先に奈落へ落とす
+                                        CreateSkyVelocity(targetRoot)
+                                        -- その後でグラブラインを破棄する
+                                        task.wait()
                                         DestroyGrabLine:FireServer(targetRoot)
-                                        CreateSkyVelocity(targetRoot) -- 奈落に落とす
                                         break
                                     end
 
