@@ -1,3 +1,4 @@
+--3フレーム目に送るUNSNOをただ単に3回送るのではなく、UNSNOを2回送り、SNOを3回送るように直して
 --[[
     Target Loops Only Script (完全版 - Kick v2 重力無効化・固定強化対応)
     - LoopGrab [NEAR]
@@ -626,7 +627,6 @@ TarTab:AddToggle({
                         SetNetworkOwner:FireServer(etc["Root"], rootCF)
                         SetNetworkOwner:FireServer(etc["Root"], rootCF)
                         RunService.RenderStepped:Wait()
-                        
                         -- 2フレーム目: SNO×6
                         rootCF = etc["Root"].CFrame
                         SetNetworkOwner:FireServer(etc["Root"], rootCF)
@@ -636,14 +636,10 @@ TarTab:AddToggle({
                         SetNetworkOwner:FireServer(etc["Root"], rootCF)
                         SetNetworkOwner:FireServer(etc["Root"], rootCF)
                         RunService.RenderStepped:Wait()
-                        
-                        -- 3フレーム目: UNSNO×2, SNO×3
+                        -- 3フレーム目: UNSNO×3
                         DestroyGrabLine:FireServer(etc["Root"])
                         DestroyGrabLine:FireServer(etc["Root"])
-                        rootCF = etc["Root"].CFrame
-                        SetNetworkOwner:FireServer(etc["Root"], rootCF)
-                        SetNetworkOwner:FireServer(etc["Root"], rootCF)
-                        SetNetworkOwner:FireServer(etc["Root"], rootCF)
+                        DestroyGrabLine:FireServer(etc["Root"])
 
                         if bool.DoRagdoll then
                             Pallete = inv:FindFirstChild("RagdollPalete")
