@@ -1,4 +1,3 @@
---3フレーム目に送るUNSNOをただ単に3回送るのではなく、UNSNOを2回送り、SNOを3回送るように直して
 --[[
     Target Loops Only Script (完全版 - Kick v2 重力無効化・固定強化対応)
     - LoopGrab [NEAR]
