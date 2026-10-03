@@ -1,4 +1,3 @@
---このコードのloopgrab[kick]のコードの最初のプレイヤーのところにtpしてプレイヤーを自分の真上に持ってくる処理をloopgrab[kick v2]の機能に移植してほしい、あとv2の固定も普通のkickと全く同じに修正して
 --[[
     Target Loops Only Script (完全版 - Kick v2 重力無効化・固定強化対応)
     - LoopGrab [NEAR]
@@ -516,7 +515,7 @@ TarTab:AddToggle({
                         hrp.CFrame = oldCF
                         if etc.Head and CheckForPartOwner(etc.Head) then
                             for _, v in pairs(etc.TargetPLR.Character:GetChildren()) do
-                                if v:IsA("BasePart") then
+                                if v:IsA("Part") then
                                     v.CFrame = hrp.CFrame * CFrame.new(0, 15, 0)
                                 end
                             end
@@ -607,9 +606,9 @@ TarTab:AddToggle({
                         BodyForce.Force = Vector3.new(0, totalMass * workspace.Gravity, 0)
 
                         BodyPos.Position = hrp.Position + Vector3.new(0, 15, 0)
-                        etc.Root.CFrame = hrp.CFrame * CFrame.new(0, 15, 0)
 
-                        if etc["TargetPLR"].IsHeld.Value then
+                        -- KICKと同じ: IsHeld時にPartをCFrameで移動
+                        if (etc.Root.Position.Y <= hrp.Position.Y + 15) and etc["TargetPLR"].IsHeld.Value then
                             for _, v in pairs(etc.TargetPLR.Character:GetChildren()) do
                                 if v:IsA("Part") then
                                     v.CFrame = hrp.CFrame * CFrame.new(0, 15, 0)
@@ -621,10 +620,30 @@ TarTab:AddToggle({
                         etc.Hum.PlatformStand = true
                         etc.Hum.Sit = true
 
-                        for i = 1, 4 do
-                            SetNetworkOwner:FireServer(etc["Root"], etc["Root"].CFrame)
-                            DestroyGrabLine:FireServer(etc["Root"])
-                        end
+                        -- 1フレーム目: SNO×3
+                        local rootCF = etc["Root"].CFrame
+                        SetNetworkOwner:FireServer(etc["Root"], rootCF)
+                        SetNetworkOwner:FireServer(etc["Root"], rootCF)
+                        SetNetworkOwner:FireServer(etc["Root"], rootCF)
+                        RunService.RenderStepped:Wait()
+                        
+                        -- 2フレーム目: SNO×6
+                        rootCF = etc["Root"].CFrame
+                        SetNetworkOwner:FireServer(etc["Root"], rootCF)
+                        SetNetworkOwner:FireServer(etc["Root"], rootCF)
+                        SetNetworkOwner:FireServer(etc["Root"], rootCF)
+                        SetNetworkOwner:FireServer(etc["Root"], rootCF)
+                        SetNetworkOwner:FireServer(etc["Root"], rootCF)
+                        SetNetworkOwner:FireServer(etc["Root"], rootCF)
+                        RunService.RenderStepped:Wait()
+                        
+                        -- 3フレーム目: UNSNO×2, SNO×3
+                        DestroyGrabLine:FireServer(etc["Root"])
+                        DestroyGrabLine:FireServer(etc["Root"])
+                        rootCF = etc["Root"].CFrame
+                        SetNetworkOwner:FireServer(etc["Root"], rootCF)
+                        SetNetworkOwner:FireServer(etc["Root"], rootCF)
+                        SetNetworkOwner:FireServer(etc["Root"], rootCF)
 
                         if bool.DoRagdoll then
                             Pallete = inv:FindFirstChild("RagdollPalete")
@@ -657,8 +676,9 @@ TarTab:AddToggle({
                             etc["Head"] = etc["TargetPLR"].Character and etc["TargetPLR"].Character:FindFirstChild("Head")
                             etc["Hum"] = etc["TargetPLR"].Character and etc["TargetPLR"].Character:FindFirstChild("Humanoid")
                             if not (etc["Head"]) or not (etc["Hum"]) then break end
+                            -- KICKと同じ: HeadのところにTPして自分の真上に持ってくる
                             char:PivotTo(etc["Head"].CFrame * CFrame.new(0, 10, 0))
-                            SNO_UNSNO_COMBO(etc["Head"])
+                            sno(etc["Head"])
                             if CheckForPartOwner(etc["Head"]) then
                                 break
                             end
@@ -666,9 +686,10 @@ TarTab:AddToggle({
 
                         hrp.CFrame = oldCF
 
+                        -- KICKと同じ: CheckForPartOwner後にPartで移動
                         if etc.Head and CheckForPartOwner(etc.Head) then
                             for _, v in pairs(etc.TargetPLR.Character:GetChildren()) do
-                                if v:IsA("BasePart") then
+                                if v:IsA("Part") then
                                     v.CFrame = hrp.CFrame * CFrame.new(0, 15, 0)
                                 end
                             end
