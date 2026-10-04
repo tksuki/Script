@@ -1,0 +1,69 @@
+-- サービス取得
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+-- Lightingサービスを取得
+local Lighting = game:GetService("Lighting") -- ★追加★
+
+local LocalPlayer = Players.LocalPlayer
+if not LocalPlayer then return end
+
+-- HSV (色相・彩度・明度) から Color3 に変換する関数
+local function hsvToColor3(h, s, v)
+    return Color3.fromHSV(h, s, v)
+end
+
+-- 既存のクロスヘアを削除
+local function RemoveOldCrosshair()
+    local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+    -- 標準のクロスヘアと以前作ったカスタムクロスヘアを削除
+    local oldGui = PlayerGui:FindFirstChild("Crosshairs")
+    if oldGui then
+        oldGui:Destroy()
+    end
+    local customGui = PlayerGui:FindFirstChild("RainbowCrosshair")
+    if customGui then
+        customGui:Destroy()
+    end
+end
+
+-- 新しい卍クロスヘア作成
+local function CreateRainbowCrosshair()
+    local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+
+    local ScreenGui = Instance.new("ScreenGui")
+    ScreenGui.Name = "RainbowCrosshair"
+    ScreenGui.ResetOnSpawn = false
+    ScreenGui.Parent = PlayerGui
+
+    local TextLabel = Instance.new("TextLabel")
+    TextLabel.Name = "SwastikaCrosshair"
+    TextLabel.Text = "卍"
+    TextLabel.Font = Enum.Font.SourceSansBold
+    TextLabel.TextSize = 30
+    TextLabel.Size = UDim2.new(0,30, 0, 30)
+    TextLabel.Position = UDim2.new(0.5, 0, 0.5, -30)
+    TextLabel.AnchorPoint = Vector2.new(0.5, 0.5)
+    TextLabel.BackgroundTransparency = 1
+    TextLabel.Parent = ScreenGui
+
+    local hue = 0
+    -- 回転＆レインボー色アニメーション
+    RunService.RenderStepped:Connect(function(deltaTime)
+        -- 色相を時間経過と共に増加させる（秒間1周）
+        hue = (hue + deltaTime) % 1 
+        local newColor = hsvToColor3(hue, 1, 1)
+
+        -- 1. クロスヘアの色を更新
+        TextLabel.TextColor3 = newColor
+        
+        -- 2. 空の色 (ColorShift_Top) もクロスヘアと同じ色に更新！
+        Lighting.ColorShift_Top = newColor -- ★追加された処理★
+
+        -- 3. 回転
+        TextLabel.Rotation = TextLabel.Rotation + 180 * deltaTime 
+    end)
+end
+
+-- 処理実行
+RemoveOldCrosshair()
+CreateRainbowCrosshair()
