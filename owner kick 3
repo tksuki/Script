@@ -577,7 +577,7 @@ TarTab:AddToggle({
 -- ============ LoopGrab [KICK v3] (v2機能移植 + SNO,SNO,UNSNO×1フレーム) ============
 local kickV3Angle = 360       -- 相手の回転角度（BodyGyro用）
 local palleteV3Angle = 360    -- パレット独立高速回転角度
-local V3_PALLETE_RADIUS = 8
+local V3_PALLETE_RADIUS = 6
 local V3_PALLETE_SPEED = 1800
 
 TarTab:AddToggle({
