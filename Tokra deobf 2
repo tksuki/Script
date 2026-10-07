@@ -164,7 +164,7 @@ do
     return
   end
   HttpService = game:GetService("HttpService")
-  local v69 = tbl280.tokra_decrypt(_HttpGet({}, "https://raw.githubusercontent.com/sladostrastnik/TokraScript/refs/heads/main/Sender.txt"))
+  local v69 = tbl280.tokra_decrypt(game:HttpGet("https://raw.githubusercontent.com/sladostrastnik/TokraScript/refs/heads/main/Sender.txt"))
   local v72 = v538(game.PlaceId)
   Name = LocalPlayer.Name
   local v74 = v538(LocalPlayer.UserId)
@@ -192,8 +192,9 @@ end
 local Default, Drag, Elements, LoadingFrame, Main, Notifications, Prompt, TabList, Topbar, fn232, fn233, fn234, fn235, fn238, fn239, fn241, fn242, tbl266, v1037, v1043, v2441, v2444, v2447, v2456, v2457, v2458, v2808, v2809, v2810, v2811, v2812, v2813, v2814
 do
   if not v296 or typeof(v296) ~= "Instance" or not v296:IsA("TextChannel") then
-    return
-  end
+  warn("RBXGeneral が見つかりませんでした")
+  return
+end
   local fn135 = function(a1_1)
     local v2873
     v2873 = game:GetService(a1_1)
@@ -240,9 +241,14 @@ do
       end
       return
     end)
-    while true do
+        while not v2884 do
       task.wait()
     end
+    if v2885 then
+      return v2886
+    end
+    warn("Failed to load: " .. tostring(v2886))
+    return nil
   end
   v1037 = "Rayfield/Configurations"
   local v1040 = fn135("HttpService")
@@ -10087,7 +10093,8 @@ do
     return
   end
   if not tbl21.Secret.NoMessage then
-    tbl151.ClientManager.SendMessage("Tokra Script [FREE BETA] loaded. Made by VF_Owner.")
+    tbl151.ClientManager.SendMessage("Tokra Script Decoder: YAJU
+Tokra script loaded")
   end
   tbl378.CreateCommand = function(a1_1, a1_2, a1_3, a1_4)
     local tbl381, v2879
