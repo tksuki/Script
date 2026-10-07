@@ -10072,8 +10072,7 @@ do
     return
   end
   if not tbl21.Secret.NoMessage then
-    tbl151.ClientManager.SendMessage("Tokra Script Decoder: YAJU
-Tokra script loaded")
+    tbl151.ClientManager.SendMessage("Tokra Script was decoded by YAJU. [FREE BETA] Loading complete.")
   end
   tbl378.CreateCommand = function(a1_1, a1_2, a1_3, a1_4)
     local tbl381, v2879
