@@ -577,7 +577,7 @@ TarTab:AddToggle({
 local kickV3Angle = 0       -- 相手の回転角度（BodyGyro用）
 local palleteV3Angle = 0    -- パレット独立高速回転角度
 local V3_PALLETE_RADIUS = 3
-local V3_PALLETE_SPEED = 45
+local V3_PALLETE_SPEED = 250
 
 TarTab:AddToggle({
     Name = "LoopGrab<font color=\"rgb(0, 200, 255)\"><b>[KICK v3]</b></font>",
@@ -714,7 +714,6 @@ TarTab:AddToggle({
                         SetNetworkOwner:FireServer(etc["Root"], rootCF)
                         RunService.RenderStepped:Wait()
                         -- 2フレーム目: UNSNO×2
-                        DestroyGrabLine:FireServer(etc["Root"])
                         DestroyGrabLine:FireServer(etc["Root"])
                         RunService.RenderStepped:Wait()
 
