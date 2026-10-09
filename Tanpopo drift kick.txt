@@ -1,0 +1,452 @@
+-- =============================================
+-- たんぽぽ&おな共同開発HUB - ドリフトキック特化版
+-- =============================================
+
+local Players = game:GetService("Players")
+local TextChatService = game:GetService("TextChatService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
+local RunService = game:GetService("RunService")
+
+local Player = Players.LocalPlayer
+
+-- ====================================================
+-- 1. Orion UI のソース取得
+-- ====================================================
+local rawOrion = game:HttpGet("https://raw.githubusercontent.com/Siro-script/FtaP.90hub/refs/heads/main/Orion")
+
+-- ====================================================
+-- 2. チャット送信
+-- ====================================================
+if TextChatService.ChatVersion == Enum.ChatVersion.TextChatService then
+    local textChannel = TextChatService.TextChannels:FindFirstChild("RBXGeneral")
+    if textChannel then
+        textChannel:SendAsync("[たんぽぽ.おな共同開発private🌼]")
+    end
+else
+    local rbxLegacyChat = ReplicatedStorage:FindFirstChild("DefaultChatSystemChatEvents")
+    if rbxLegacyChat then
+        local sayMessage = rbxLegacyChat:FindFirstChild("SayMessageRequest")
+        if sayMessage and sayMessage:IsA("RemoteEvent") then
+            sayMessage:FireServer("[たんぽぽ.おな共同開発private🌼]", "All")
+        end
+    end
+end
+
+-- ====================================================
+-- 3. Orion UI 設定
+-- ====================================================
+rawOrion = string.gsub(rawOrion, "Notifications%.Position = UDim2%.new%(1, %-20, 1, %-20%)", "Notifications.Position = UDim2.new(1, -15, 0, 10)")
+rawOrion = string.gsub(rawOrion, "Notifications%.AnchorPoint = Vector2%.new%(1, 1%)", "Notifications.AnchorPoint = Vector2.new(1, 0)")
+rawOrion = string.gsub(rawOrion, "VerticalAlignment = Enum%.VerticalAlignment%.Bottom", "VerticalAlignment = Enum.VerticalAlignment.Top")
+
+local OrionLib = loadstring(rawOrion)()
+
+-- ====================================================
+-- 4. ウィンドウ作成
+-- ====================================================
+local Window = OrionLib:MakeWindow({
+    Name = "[たんぽぽ.おな共同開発private🌼]",
+    HidePremium = false,
+    SaveConfig = false,
+    IntroText = "[たんぽぽ.おな共同開発private🌼]"
+})
+
+OrionLib:Init()
+
+OrionLib:MakeNotification({
+    Name = "[たんぽぽ.おな共同開発private🌼]",
+    Content = "起動完了",
+    Image = "rbxassetid://4483345998",
+    Time = 3
+})
+
+-- ==============================================================================
+-- ドリフトキック タブ
+-- ==============================================================================
+
+local TargetTab = Window:MakeTab({
+    Name = "ドリフトキック",
+    Icon = "rbxassetid://7733916988",
+    PremiumOnly = false
+})
+
+-- ==========================================
+-- 変数 & サービス
+-- ==========================================
+local playerMap = {}
+local selectedActionTargetName = ""
+local driftRunning = false
+local currentLoopId = 0
+
+-- ★ ドリフト調整用変数 ★
+local driftRadius = 19       -- 幅(半径)
+local driftSpeed = 12        -- まわる速さ
+local driftHeightOffset = 0  -- 高さ
+local driftCenterHeight = 30 -- ターゲット中心の高さ
+local driftGrabCount = 2     -- 掴む量 (ドロップ回数)
+local driftGrabInterval = 0.8 -- 掴み直し間隔
+local driftAngle = 0
+
+-- ==========================================
+-- プレイヤーリスト取得
+-- ==========================================
+local function getPlayerList()
+    local names = {}
+    playerMap = {}
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= Player then
+            local displayStr = player.DisplayName .. " (@" .. player.Name .. ")"
+            table.insert(names, displayStr)
+            playerMap[displayStr] = player.Name
+        end
+    end
+    if #names == 0 then table.insert(names, "(None)") end
+    return names
+end
+
+-- ==========================================
+-- UI
+-- ==========================================
+local targetDropdown = TargetTab:AddDropdown({
+    Name = "ターゲット選択",
+    Default = "",
+    Options = getPlayerList(),
+    Callback = function(val)
+        selectedActionTargetName = playerMap[val] or ""
+    end
+})
+
+TargetTab:AddButton({
+    Name = "🔄 プレイヤーリスト更新",
+    Callback = function()
+        targetDropdown:Refresh(getPlayerList(), true)
+        OrionLib:MakeNotification({Name="[たんぽぽ.おな共同開発private🌼]", Content="リスト更新完了", Time=2})
+    end
+})
+
+-- ==========================================
+-- ★ ドリフト詳細設定セクション ★
+-- ==========================================
+TargetTab:AddSection({ Name = "⚙️ ドリフト設定" })
+
+-- 幅(半径)
+TargetTab:AddSlider({
+    Name = "幅 (半径)",
+    Min = 1,
+    Max = 100,
+    Default = 19,
+    Color = Color3.fromRGB(255, 100, 100),
+    Increment = 1,
+    ValueName = "studs",
+    Callback = function(v)
+        driftRadius = v
+    end
+})
+
+-- まわる速さ
+TargetTab:AddSlider({
+    Name = "まわる速さ",
+    Min = 0.1,
+    Max = 100,
+    Default = 12,
+    Color = Color3.fromRGB(100, 200, 255),
+    Increment = 0.1,
+    ValueName = "",
+    Callback = function(v)
+        driftSpeed = v
+    end
+})
+
+-- 高さ (ドリフト軌道の上下オフセット)
+TargetTab:AddSlider({
+    Name = "高さ (上下オフセット)",
+    Min = -50,
+    Max = 100,
+    Default = 0,
+    Color = Color3.fromRGB(150, 255, 150),
+    Increment = 1,
+    ValueName = "studs",
+    Callback = function(v)
+        driftHeightOffset = v
+    end
+})
+
+-- ターゲット中心の高さ
+TargetTab:AddSlider({
+    Name = "中心の高さ (ターゲットから)",
+    Min = 0,
+    Max = 100,
+    Default = 30,
+    Color = Color3.fromRGB(255, 220, 100),
+    Increment = 1,
+    ValueName = "studs",
+    Callback = function(v)
+        driftCenterHeight = v
+    end
+})
+
+-- 掴む量 (ドロップ回数)
+TargetTab:AddSlider({
+    Name = "掴む量 (ドロップ回数)",
+    Min = 1,
+    Max = 20,
+    Default = 2,
+    Color = Color3.fromRGB(255, 150, 255),
+    Increment = 1,
+    ValueName = "回",
+    Callback = function(v)
+        driftGrabCount = v
+    end
+})
+
+-- 掴み直し間隔
+TargetTab:AddSlider({
+    Name = "掴み直し間隔",
+    Min = 0.1,
+    Max = 5,
+    Default = 0.8,
+    Color = Color3.fromRGB(200, 200, 200),
+    Increment = 0.05,
+    ValueName = "秒",
+    Callback = function(v)
+        driftGrabInterval = v
+    end
+})
+
+-- ==========================================
+-- ★ Drift Kick ★
+-- ==========================================
+TargetTab:AddToggle({
+    Name = "Drift Kick",
+    Default = false,
+    Callback = function(v)
+        driftRunning = v
+        currentLoopId = currentLoopId + 1
+        local myLoopId = currentLoopId
+        if not v then return end
+
+        local target = Players:FindFirstChild(selectedActionTargetName)
+        if target and target ~= Player then
+            local blobman = nil
+            local spawned = Workspace:FindFirstChild(Player.Name .. "SpawnedInToys")
+            if spawned then blobman = spawned:FindFirstChild("CreatureBlobman") end
+
+            if not blobman then
+                local mt = ReplicatedStorage:FindFirstChild("MenuToys")
+                local st = mt and mt:FindFirstChild("SpawnToyRemoteFunction")
+                if st then
+                    local myRoot = Player.Character and Player.Character:FindFirstChild("HumanoidRootPart")
+                    local spawnCF = myRoot and (myRoot.CFrame + Vector3.new(0, 5, 0)) or CFrame.new(0, 50, 0)
+                    st:InvokeServer("CreatureBlobman", spawnCF, Vector3.zero)
+                    task.wait(0.8)
+                    spawned = Workspace:FindFirstChild(Player.Name .. "SpawnedInToys")
+                    if spawned then blobman = spawned:FindFirstChild("CreatureBlobman") end
+                end
+            end
+
+            if not blobman then
+                for _, obj in ipairs(Workspace:GetChildren()) do
+                    if obj.Name == "CreatureBlobman" and obj:FindFirstChild("VehicleSeat") then
+                        blobman = obj
+                        break
+                    end
+                end
+            end
+
+            if blobman then
+                local scriptObj = blobman:FindFirstChild("BlobmanSeatAndOwnerScript") or blobman:FindFirstChild("BlobmanSeatAndOwnerScript[old]")
+                local grabRemote = scriptObj and scriptObj:FindFirstChild("CreatureGrab") or blobman:FindFirstChild("CreatureGrab", true)
+                local dropRemote = scriptObj and scriptObj:FindFirstChild("CreatureDrop") or blobman:FindFirstChild("CreatureDrop", true)
+                local lDet = blobman:FindFirstChild("LeftDetector")
+                local rDet = blobman:FindFirstChild("RightDetector")
+                local lWeld = lDet and (lDet:FindFirstChild("LeftWeld") or lDet:FindFirstChildWhichIsA("Weld") or lDet:FindFirstChildWhichIsA("JointInstance") or lDet:FindFirstChild("RigidConstraint"))
+                local rWeld = rDet and (rDet:FindFirstChild("RightWeld") or rDet:FindFirstChildWhichIsA("Weld") or rDet:FindFirstChildWhichIsA("JointInstance") or rDet:FindFirstChild("RigidConstraint"))
+                local seat = blobman:FindFirstChild("VehicleSeat")
+                local hum = Player.Character and Player.Character:FindFirstChild("Humanoid")
+
+                if seat and hum then
+                    if seat.Occupant ~= hum then
+                        Player.Character.HumanoidRootPart.CFrame = seat.CFrame + Vector3.new(0, 2, 0)
+                        task.wait(0.2)
+                        seat:Sit(hum)
+                        task.wait(0.5)
+                    end
+                end
+
+                local GE = ReplicatedStorage:FindFirstChild("GrabEvents")
+                if GE and grabRemote and dropRemote and ((lDet and lWeld) or (rDet and rWeld)) then
+                    OrionLib:MakeNotification({ Name = "[たんぽぽ.おな共同開発private🌼]", Content = "Drift Kick 開始", Time = 3 })
+
+                    task.spawn(function()
+                        local blobRoot = blobman:FindFirstChild("HumanoidRootPart") or blobman.PrimaryPart
+                        local Det = rDet or lDet
+                        local Weld = rWeld or lWeld
+
+                        while driftRunning do
+                            if myLoopId ~= currentLoopId then break end
+                            if not target or not target.Parent then break end
+
+                            local tChar = target.Character
+                            local tHum = tChar and tChar:FindFirstChild("Humanoid")
+                            local tRoot = tChar and tChar:FindFirstChild("HumanoidRootPart")
+
+                            if tChar and tRoot and tHum and tHum.Health > 0 then
+                                -- 掴み開始
+                                local bringStart = tick()
+                                while tick() - bringStart < 0.35 do
+                                    if myLoopId ~= currentLoopId or not driftRunning or not blobman or not blobman.Parent then break end
+                                    if target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
+                                        local currentTRoot = target.Character.HumanoidRootPart
+                                        blobRoot.CFrame = currentTRoot.CFrame
+                                        blobRoot.AssemblyLinearVelocity = Vector3.zero
+                                        pcall(function()
+                                            if Det then grabRemote:FireServer(Det, currentTRoot, Weld) end
+                                            if GE.CreateGrabLine then GE.CreateGrabLine:FireServer(currentTRoot, Vector3.zero, currentTRoot.Position, false) end
+                                            if GE.SetNetworkOwner then GE.SetNetworkOwner:FireServer(currentTRoot, blobRoot.CFrame) end
+                                        end)
+                                    end
+                                    RunService.Heartbeat:Wait()
+                                end
+
+                                if myLoopId ~= currentLoopId or not driftRunning or not blobman or not blobman.Parent then break end
+
+                                tChar = target.Character
+                                tRoot = tChar and tChar:FindFirstChild("HumanoidRootPart")
+                                tHum = tChar and tChar:FindFirstChild("Humanoid")
+
+                                if tChar and tRoot and tHum and tHum.Health > 0 then
+                                    local SavedPos = tRoot.CFrame
+                                    local targetCenterCFrame = SavedPos + Vector3.new(0, driftCenterHeight, 0)
+                                    local lastTime = tick()
+                                    local lastDropTime = tick()
+                                    local dropCount = 0
+
+                                    while driftRunning and blobman and blobman.Parent do
+                                        if myLoopId ~= currentLoopId then break end
+                                        if not target or not target.Parent then break end
+
+                                        tChar = target.Character
+                                        tRoot = tChar and tChar:FindFirstChild("HumanoidRootPart")
+                                        tHum = tChar and tChar:FindFirstChild("Humanoid")
+
+                                        if not tChar or not tRoot or not tHum or tHum.Health <= 0 then break end
+
+                                        -- ドロップ&掴み直し (掴む量まで)
+                                        if dropCount < driftGrabCount and (tick() - lastDropTime) > driftGrabInterval then
+                                            dropCount = dropCount + 1
+                                            pcall(function()
+                                                local currentWeld = Det:FindFirstChild("RightWeld") or Det:FindFirstChild("LeftWeld") or Det:FindFirstChildWhichIsA("Weld") or Det:FindFirstChildWhichIsA("JointInstance") or Det:FindFirstChild("RigidConstraint")
+                                                if currentWeld then dropRemote:FireServer(currentWeld) end
+                                                if GE.DestroyGrabLine then GE.DestroyGrabLine:FireServer(tRoot) end
+                                            end)
+                                            blobRoot.CFrame = SavedPos
+                                            blobRoot.AssemblyLinearVelocity = Vector3.zero
+                                            RunService.Heartbeat:Wait()
+
+                                            if target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
+                                                local currentTRoot = target.Character.HumanoidRootPart
+                                                blobRoot.CFrame = currentTRoot.CFrame
+                                                blobRoot.AssemblyLinearVelocity = Vector3.zero
+                                                pcall(function()
+                                                    if Det then grabRemote:FireServer(Det, currentTRoot, Weld) end
+                                                    if GE.CreateGrabLine then GE.CreateGrabLine:FireServer(currentTRoot, Vector3.zero, currentTRoot.Position, false) end
+                                                    if GE.SetNetworkOwner then GE.SetNetworkOwner:FireServer(currentTRoot, blobRoot.CFrame) end
+                                                end)
+                                            end
+                                            lastTime = tick()
+                                            lastDropTime = tick()
+                                            continue
+                                        end
+
+                                        -- ドリフト旋回
+                                        if tRoot and tHum and tHum.Health > 0 and blobRoot then
+                                            local currentTime = tick()
+                                            local dt = currentTime - lastTime
+                                            lastTime = currentTime
+                                            driftAngle = driftAngle + (driftSpeed * dt)
+
+                                            local offsetX = math.cos(driftAngle) * driftRadius
+                                            local offsetZ = math.sin(driftAngle) * driftRadius
+                                            local blobPos = targetCenterCFrame.Position + Vector3.new(offsetX, driftHeightOffset, offsetZ)
+
+                                            blobRoot.CFrame = CFrame.new(blobPos, targetCenterCFrame.Position)
+                                            blobRoot.AssemblyLinearVelocity = Vector3.zero
+                                            blobRoot.AssemblyAngularVelocity = Vector3.zero
+
+                                            tRoot.CFrame = targetCenterCFrame
+                                            tRoot.AssemblyLinearVelocity = Vector3.zero
+                                            tRoot.AssemblyAngularVelocity = Vector3.zero
+
+                                            pcall(function()
+                                                tHum.PlatformStand = true
+                                                tHum.Sit = true
+                                                if GE.SetNetworkOwner then GE.SetNetworkOwner:FireServer(tRoot, targetCenterCFrame) end
+                                                local currentWeld = Det:FindFirstChild("RightWeld") or Det:FindFirstChild("LeftWeld") or Det:FindFirstChildWhichIsA("Weld") or Det:FindFirstChildWhichIsA("JointInstance") or Det:FindFirstChild("RigidConstraint")
+                                                if currentWeld then dropRemote:FireServer(currentWeld) end
+                                                if GE.DestroyGrabLine then GE.DestroyGrabLine:FireServer(tRoot) end
+                                                if Det then grabRemote:FireServer(Det, tRoot, Weld) end
+                                                if GE.CreateGrabLine then GE.CreateGrabLine:FireServer(tRoot, Vector3.zero, targetCenterCFrame.Position, false) end
+                                            end)
+                                        else
+                                            break
+                                        end
+                                        RunService.Heartbeat:Wait()
+                                    end
+
+                                    if not driftRunning or myLoopId ~= currentLoopId then
+                                        if blobRoot and SavedPos then
+                                            pcall(function()
+                                                local currentWeld = Det:FindFirstChild("RightWeld") or Det:FindFirstChild("LeftWeld") or Det:FindFirstChildWhichIsA("Weld") or Det:FindFirstChildWhichIsA("JointInstance") or Det:FindFirstChild("RigidConstraint")
+                                                if currentWeld then dropRemote:FireServer(currentWeld) end
+                                                if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") and GE.DestroyGrabLine then
+                                                    GE.DestroyGrabLine:FireServer(target.Character.HumanoidRootPart)
+                                                end
+                                            end)
+                                            blobRoot.CFrame = SavedPos
+                                            blobRoot.AssemblyLinearVelocity = Vector3.zero
+                                        end
+                                        break
+                                    end
+                                end
+                            end
+                            RunService.Heartbeat:Wait()
+                        end
+                    end)
+                else
+                    OrionLib:MakeNotification({ Name = "[たんぽぽ.おな共同開発private🌼]", Content = "必要なRemoteEventやDetectorが見つかりません", Time = 5 })
+                    driftRunning = false
+                end
+            else
+                OrionLib:MakeNotification({ Name = "[たんぽぽ.おな共同開発private🌼]", Content = "Blobmanの取得・生成に失敗しました", Time = 3 })
+                driftRunning = false
+            end
+        else
+            OrionLib:MakeNotification({ Name = "[たんぽぽ.おな共同開発private🌼]", Content = "ターゲットが無効です", Time = 3 })
+            driftRunning = false
+        end
+    end
+})
+
+TargetTab:AddButton({
+    Name = "🛑 Drift Kick 停止",
+    Callback = function()
+        if driftRunning then
+            driftRunning = false
+            currentLoopId = currentLoopId + 1
+            OrionLib:MakeNotification({ Name = "[たんぽぽ.おな共同開発private🌼]", Content = "Drift Kick 停止", Time = 3 })
+        else
+            OrionLib:MakeNotification({ Name = "[たんぽぽ.おな共同開発private🌼]", Content = "動作中のキックはありません", Time = 3 })
+        end
+    end
+})
+
+-- =============================================
+-- 完了通知
+-- =============================================
+OrionLib:MakeNotification({
+    Name = "[たんぽぽ.おな共同開発private🌼]",
+    Content = "ドリフトキック特化版 起動完了",
+    Image = "rbxassetid://4483345998",
+    Time = 3
+})
