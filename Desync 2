@@ -1,26 +1,202 @@
-local Players = game:GetService("Players")
+-- Position Desync (Standalone)
+-- Extracted from Resonance v2.9
+
 local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
 
-local Player = Players.LocalPlayer
-local Character = Player.Character or Player.CharacterAdded:Wait()
-local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
+local localPlayer = Players.LocalPlayer
 
-local WaitFrames = 1
-local Syncing = false
+-- 必要な executor 関数チェック
+assert(type(sethiddenproperty) == "function", "sethiddenproperty が必要です")
+assert(type(setfflag) == "function", "setfflag が必要です")
+assert(type(getfflag) == "function", "getfflag が必要です")
 
-local Connection; Connection = RunService.Heartbeat:Connect(function()
-    if not Character.Parent then Connection:Disconnect(); return end
-    if Syncing then return end
+-- ローカル状態
+local enabled = false
+local rootPart = nil        -- 現在の HRP
+local settled = false       -- PhysicsRepRootPart をセット済みか
+local cooldownUntil = 0
+local resetCount = 0
+local originalRate = nil
+local rateCheckAt = 0
+local heartbeatConn = nil
 
-    if WaitFrames > 0 then
-        sethiddenproperty(HumanoidRootPart, "PhysicsRepRootPart", HumanoidRootPart)
-        WaitFrames -= 1
-    else
-        Syncing = true
-        sethiddenproperty(HumanoidRootPart, "PhysicsRepRootPart", nil)
-        task.wait(0.1)
-        sethiddenproperty(HumanoidRootPart, "PhysicsRepRootPart", HumanoidRootPart)
-        WaitFrames = 1
-        Syncing = false
+-- キャラクター取得ヘルパー
+local function getChar()
+    local char = localPlayer.Character
+    if not char then return nil, nil, nil end
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    return char, hrp, hum
+end
+
+-- S2PhysicsSenderRate を指定の値に設定し、確認する
+local function setRate(rate)
+    for _, v in ipairs({ tostring(rate), rate }) do
+        pcall(setfflag, "S2PhysicsSenderRate", v)
+        local ok, result = pcall(getfflag, "S2PhysicsSenderRate")
+        if ok and tonumber(result) == rate then
+            return true
+        end
     end
-end)
+    return false
+end
+
+-- デシンクを強制オフにする（内部エラー時）
+local function forceOff()
+    disable()  -- 後で定義
+end
+
+-- HRP のリセット（デシンク解除）
+local function resetHRP()
+    resetCount += 1
+    if rootPart and rootPart.Parent then
+        pcall(sethiddenproperty, rootPart, "PhysicsRepRootPart", nil)
+    end
+    rootPart = nil
+    settled = false
+    cooldownUntil = 0
+end
+
+-- Heartbeat ごとに呼ばれる更新関数
+local function update()
+    if not enabled then return end
+
+    local now = os.clock()
+
+    -- 1秒ごとにレートを確認
+    if rateCheckAt <= now then
+        rateCheckAt = now + 1
+        local ok, result = pcall(getfflag, "S2PhysicsSenderRate")
+        if (not ok or tonumber(result) ~= 1000) and not setRate(1000) then
+            forceOff()
+            return
+        end
+    end
+
+    local char, hrp, hum = getChar()
+
+    -- キャラクターが無効な場合はリセット
+    local invalid = (char ~= localPlayer.Character)
+        or not (char and char.Parent and hrp and hum and hum.Health > 0)
+
+    if invalid then
+        if rootPart then resetHRP() end
+        return
+    end
+
+    -- HRP が変わった場合はリセット＆新しい HRP を記録
+    if hrp ~= rootPart then
+        resetHRP()
+        rootPart = hrp
+        cooldownUntil = now + 0.14
+    end
+
+    if settled then return end
+
+    -- クールダウン中は PhysicsRepRootPart を自身にセット（まずロック）
+    if now < cooldownUntil then
+        if not pcall(sethiddenproperty, rootPart, "PhysicsRepRootPart", rootPart) then
+            forceOff()
+        end
+        return
+    end
+
+    -- クールダウン終了 → nil にしてデシンク開始
+    settled = true
+    local capturedHRP = rootPart
+    local capturedCount = resetCount
+
+    if not pcall(sethiddenproperty, capturedHRP, "PhysicsRepRootPart", nil) then
+        forceOff()
+        return
+    end
+
+    task.wait(0.1)
+
+    -- 割り込みチェック
+    if capturedCount ~= resetCount or not enabled or capturedHRP ~= rootPart then
+        return
+    end
+    if not capturedHRP.Parent or char ~= localPlayer.Character or hum.Health <= 0 then
+        resetHRP()
+        return
+    end
+
+    -- 再度 PhysicsRepRootPart を自身にセット（デシンク維持）
+    if not pcall(sethiddenproperty, capturedHRP, "PhysicsRepRootPart", capturedHRP) then
+        forceOff()
+        return
+    end
+
+    settled = false
+    cooldownUntil = os.clock() + 0.14
+end
+
+-- 有効化
+local function enable()
+    if enabled then return end
+
+    local ok, result = pcall(getfflag, "S2PhysicsSenderRate")
+    if ok and tonumber(result) then
+        originalRate = tonumber(result)
+    end
+
+    if originalRate == nil then
+        warn("[PositionDesync] S2PhysicsSenderRate が取得できませんでした")
+        return
+    end
+
+    rateCheckAt = os.clock() + 1
+
+    if not setRate(1000) then
+        warn("[PositionDesync] S2PhysicsSenderRate の設定に失敗しました")
+        return
+    end
+
+    enabled = true
+    heartbeatConn = RunService.Heartbeat:Connect(update)
+    print("[PositionDesync] 有効化しました")
+end
+
+-- 無効化
+function disable()
+    if not enabled then return end
+    enabled = false
+
+    if heartbeatConn then
+        heartbeatConn:Disconnect()
+        heartbeatConn = nil
+    end
+
+    resetHRP()
+
+    if originalRate ~= nil then
+        setRate(originalRate)
+        originalRate = nil
+    end
+
+    print("[PositionDesync] 無効化しました")
+end
+
+-- トグル
+local function toggle()
+    if enabled then
+        disable()
+    else
+        enable()
+    end
+end
+
+-- ===== 起動 =====
+enable()
+
+-- 終了したい場合は disable() を呼ぶ
+-- 例: task.delay(30, disable)  -- 30秒後に自動オフ
+
+return {
+    enable = enable,
+    disable = disable,
+    toggle = toggle,
+    isEnabled = function() return enabled end,
+}
