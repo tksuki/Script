@@ -15,7 +15,6 @@ local char = plr.Character or plr.CharacterAdded:Wait()
 local hum = char:FindFirstChild("Humanoid") or char:WaitForChild("Humanoid")
 local hrp = char:FindFirstChild("HumanoidRootPart") or char:WaitForChild("HumanoidRootPart")
 
--- 確実な読み込みのために WaitForChild を使用
 local CanSpawnToy = plr:WaitForChild("CanSpawnToy", 10)
 local InPlot = plr:WaitForChild("InPlot", 10)
 local InOwnedPlot = plr:WaitForChild("InOwnedPlot", 10)
@@ -65,7 +64,6 @@ local function CheckForPartOwner(Head)
     return PartOwner and PartOwner.Value == plr.Name
 end
 
--- etc2を関数の外に出してキャッシュとして機能させる
 local etc2 = {}
 local function CheckForHome()
     if etc2["LastHouse"] == nil or etc2["LastPlotOwner"] == nil or etc2["LastPlotOwner"].Parent == nil then
@@ -118,7 +116,6 @@ local function SpawnToy(ToyName)
     return spawnedObject
 end
 
--- Instanceは予約語なのでTargetObjectに変更
 local function RenameInShop(TargetObject, OriginalName, ToRename)
     local index = nil
     local ToCheckName = typeof(TargetObject) == "Instance" and TargetObject.Name or TargetObject
@@ -321,7 +318,7 @@ TarTab:AddToggle({
                             etc.TargetPLR.CharacterAdded:Wait()
                             etc.Head = FWD(etc.TargetPLR.Character, "Head", 5)
                             etc.Hum = FWD(etc.TargetPLR.Character, "Humanoid", 5)
-                            etc.Root = FWD(etc.TargetPLR.Character, "HumanoidRootPart", 5) -- 【修正】これを忘れるとエラーになる
+                            etc.Root = FWD(etc.TargetPLR.Character, "HumanoidRootPart", 5)
                             if etc.Root then
                                 BodyPos = Instance.new("BodyPosition")
                                 BodyPos.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
@@ -533,7 +530,7 @@ TarTab:AddToggle({
                             etc.TargetPLR.CharacterAdded:Wait()
                             etc.Head = FWD(etc.TargetPLR.Character, "Head", 5)
                             etc.Hum = FWD(etc.TargetPLR.Character, "Humanoid", 5)
-                            etc.Root = FWD(etc.TargetPLR.Character, "HumanoidRootPart", 5) -- 【修正】取得漏れを修正
+                            etc.Root = FWD(etc.TargetPLR.Character, "HumanoidRootPart", 5)
                             if etc.Root then
                                 BodyPos = Instance.new("BodyPosition")
                                 BodyPos.Name = "KickBodyPos"
@@ -584,7 +581,7 @@ TarTab:AddToggle({
     end
 })
 
--- ============ LoopGrab [KICK v3] (v2機能移植 + SNO,SNO,UNSNO×1フレーム) ============
+-- ============ LoopGrab [KICK v3] (v2方式でプレイヤーを動かす + SNO×3,UNSNO×2) ============
 local kickV3Angle = 0       
 local palleteV3Angle = 0    
 local V3_PALLETE_RADIUS = 3
@@ -684,7 +681,7 @@ TarTab:AddToggle({
                         local ryV3 = math.rad(kickV3Angle)
                         local rrV3 = math.rad(kickV3Angle * 2.3 + math.random(0, 360))
                         local spinCFV3 = CFrame.new(etc.Root.Position) * CFrame.Angles(rpV3, ryV3, rrV3)
-                        etc.Root.CFrame = spinCFV3
+                        -- [修正] etc.Root.CFrame への直接代入を削除。BodyGyroのみで回転を制御（v2方式）
                         BodyGyro.CFrame = spinCFV3
 
                         local totalMass = 0
@@ -736,7 +733,7 @@ TarTab:AddToggle({
                             etc.TargetPLR.CharacterAdded:Wait()
                             etc.Head = FWD(etc.TargetPLR.Character, "Head", 5)
                             etc.Hum = FWD(etc.TargetPLR.Character, "Humanoid", 5)
-                            etc.Root = FWD(etc.TargetPLR.Character, "HumanoidRootPart", 5) -- 【修正】取得漏れを修正
+                            etc.Root = FWD(etc.TargetPLR.Character, "HumanoidRootPart", 5)
                             if etc.Root then
                                 BodyPos = Instance.new("BodyPosition")
                                 BodyPos.Name = "KickBodyPos"
