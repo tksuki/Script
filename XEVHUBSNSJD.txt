@@ -1,0 +1,1346 @@
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TextChatService = game:GetService("TextChatService")
+local TweenService = game:GetService("TweenService")
+local CoreGui = game:GetService("CoreGui")
+local Workspace = game:GetService("Workspace")
+local Lighting = game:GetService("Lighting")
+local lp = Players.LocalPlayer
+
+-- UI Parent
+local targetGuiParent = (gethui and gethui()) or CoreGui or lp:WaitForChild("PlayerGui", 10) or lp.PlayerGui
+
+-- 設定変数
+local isChaosOn = false
+local dropEnabled = false
+local _wfConns = {}
+local dropTimer = nil
+
+local isGiant = false
+local antiSpamTiny = false
+local lagSpeed = 0.0000000000000000000000000010
+local tinyMeDelay = 0
+local tinyEnabled = true
+local apSpamEnabled = false
+local apSpamRunning = false
+
+-- Walk Speed 変数
+local walkSpeedEnabled = false
+local walkSpeedValue = 22.5
+
+-- Infinity Jump 変数
+local infinityJumpEnabled = false
+local jumpHeld = false
+
+local isUILocked = false
+_G.ESPBaseEnabled = true
+_G.AutoGrabEnabled = false
+
+-- =============================================================================
+-- ⚡ 起動時最適化 (FPS向上)
+-- =============================================================================
+local function processDescendant(obj)
+    if obj:IsA("ParticleEmitter") or obj:IsA("Trail") or obj:IsA("Beam") or obj:IsA("Fire") then
+        pcall(function() obj.Enabled = false end)
+    elseif obj:IsA("Decal") or obj:IsA("Texture") then
+        pcall(function() obj.Transparency = 1 end)
+    elseif obj:IsA("BasePart") then
+        pcall(function()
+            obj.Material = Enum.Material.Plastic
+            obj.Reflectance = 0
+            obj.CastShadow = false
+        end)
+    elseif obj:IsA("Accessory") or obj:IsA("Hat") then
+        pcall(function() obj:Destroy() end)
+    end
+end
+
+local function optimizeLighting()
+    pcall(function()
+        Lighting.GlobalShadows = false
+        Lighting.FogEnd = 9000000488
+        Lighting.Brightness = 1
+        Lighting.EnvironmentDiffuseScale = 0
+        Lighting.EnvironmentSpecularScale = 0
+    end)
+    for _, effect in pairs(Lighting:GetChildren()) do
+        if effect:IsA("BlurEffect") or effect:IsA("SunRaysEffect") or effect:IsA("ColorCorrectionEffect") or effect:IsA("BloomEffect") or effect:IsA("DepthOfFieldEffect") then
+            pcall(function() effect.Enabled = false end)
+        end
+    end
+end
+
+local function runOptimization()
+    pcall(function()
+        settings().Rendering.QualityLevel = Enum.QualityLevel.Level01
+    end)
+    pcall(optimizeLighting)
+    
+    for _, obj in pairs(Workspace:GetDescendants()) do
+        pcall(function() processDescendant(obj) end)
+    end
+end
+
+task.spawn(runOptimization)
+Workspace.DescendantAdded:Connect(function(obj)
+    pcall(function() processDescendant(obj) end)
+end)
+
+-- =============================================================================
+-- 📌 TIMER ESP VARIABLES
+-- =============================================================================
+local plotsFolder = workspace:FindFirstChild("Plots")
+local baseEspInstances = {}
+local espBaseThread = nil
+
+-- =============================================================================
+-- 🛡️ ANTI RAGDOLL
+-- =============================================================================
+local antiRagdollMode = nil
+local ragdollConnections = {}
+local cachedCharData = {}
+local isBoosting = false
+
+local BOOST_SPEED = 400
+local DEFAULT_SPEED = 16
+
+local function cacheCharacterData()
+local char = lp.Character
+if not char then return false end
+local hum = char:FindFirstChildOfClass("Humanoid")
+local root = char:FindFirstChild("HumanoidRootPart")
+if not hum or not root then return false end
+cachedCharData = {
+character = char,
+humanoid = hum,
+root = root
+}
+return true
+end
+
+local function isRagdolled()
+if not cachedCharData.humanoid then return false end
+local state = cachedCharData.humanoid:GetState()
+local ragdollStates = {
+[Enum.HumanoidStateType.Physics] = true,
+[Enum.HumanoidStateType.Ragdoll] = true,
+[Enum.HumanoidStateType.FallingDown] = true
+}
+if ragdollStates[state] then return true end
+local endTime = lp:GetAttribute("RagdollEndTime")
+if endTime and (endTime - workspace:GetServerTimeNow()) > 0 then
+return true
+end
+return false
+end
+
+local function forceExitRagdoll()
+if not cachedCharData.humanoid or not cachedCharData.root then return end
+pcall(function()
+lp:SetAttribute("RagdollEndTime", workspace:GetServerTimeNow())
+end)
+for _, descendant in ipairs(cachedCharData.character:GetDescendants()) do
+if descendant:IsA("BallSocketConstraint") or (descendant:IsA("Attachment") and descendant.Name:find("RagdollAttachment")) then
+descendant:Destroy()
+end
+end
+if not isBoosting then
+isBoosting = true
+cachedCharData.humanoid.WalkSpeed = BOOST_SPEED
+end
+if cachedCharData.humanoid.Health > 0 then
+cachedCharData.humanoid:ChangeState(Enum.HumanoidStateType.Running)
+end
+cachedCharData.root.Anchored = false
+end
+
+local function v1HeartbeatLoop()
+while antiRagdollMode == "v1" do
+task.wait()
+local currentlyRagdolled = isRagdolled()
+if currentlyRagdolled then
+forceExitRagdoll()
+elseif isBoosting and not currentlyRagdolled then
+isBoosting = false
+if cachedCharData.humanoid then
+cachedCharData.humanoid.WalkSpeed = DEFAULT_SPEED
+end
+end
+end
+end
+
+local function EnableAntiRagdoll()
+if antiRagdollMode == "v1" then return end
+if not cacheCharacterData() then return end
+antiRagdollMode = "v1"
+local camConn = RunService.RenderStepped:Connect(function()
+local cam = workspace.CurrentCamera
+if cam and cachedCharData.humanoid then
+cam.CameraSubject = cachedCharData.humanoid
+end
+end)
+table.insert(ragdollConnections, camConn)
+local respawnConn = lp.CharacterAdded:Connect(function()
+isBoosting = false
+task.wait(0.5)
+cacheCharacterData()
+end)
+table.insert(ragdollConnections, respawnConn)
+task.spawn(v1HeartbeatLoop)
+end
+
+task.spawn(function()
+repeat task.wait() until lp.Character
+task.wait(0.5)
+EnableAntiRagdoll()
+end)
+
+-- =============================================================================
+-- ✂️ アクセサリー削除 (Strip Accessories) - 高速化
+-- =============================================================================
+local excludedTools = {
+"Giant Potion",
+"Gummy Bear"
+}
+
+local function stripAccessories(char)
+if not char then return end
+local removed = 0
+for _, v in pairs(char:GetChildren()) do
+local shouldSkip = false
+for _, excluded in ipairs(excludedTools) do
+if v.Name == excluded then
+shouldSkip = true
+break
+end
+end
+if shouldSkip then continue end
+
+if v:IsA("Accessory") then      
+        pcall(function()      
+            v:Destroy()      
+            removed = removed + 1      
+        end)      
+    end      
+    if v:IsA("BasePart") and v:FindFirstChild("Handle") and not v:IsA("Tool") then      
+        pcall(function()      
+            v:Destroy()      
+            removed = removed + 1      
+        end)      
+    end      
+end      
+return removed
+
+end
+
+local function stripPlayerAccessories(player)
+if not player then return end
+local char = player.Character
+if char then
+local count = stripAccessories(char)
+if count > 0 and player ~= lp then
+print("[WED&XEV] " .. player.Name .. " のアクセサリー " .. count .. " 個を剥がしました")
+end
+end
+end
+
+local function stripAllPlayersAccessories()
+print("[WED&XEV] 全プレイヤーのアクセサリーを剥がし中...")
+for _, player in ipairs(Players:GetPlayers()) do
+task.spawn(function()
+stripPlayerAccessories(player)
+end)
+end
+end
+
+local function initStrip()
+    if lp.Character then
+        stripAccessories(lp.Character)
+    end
+    stripAllPlayersAccessories()
+end
+
+if lp.Character then
+    task.spawn(initStrip)
+else
+    lp.CharacterAdded:Connect(function()
+        task.spawn(initStrip)
+    end)
+end
+
+Players.PlayerAdded:Connect(function(player)
+    if player == lp then return end
+    if player.Character then
+        stripPlayerAccessories(player)
+    end
+    player.CharacterAdded:Connect(function(char)
+        task.wait(0.1)
+        stripAccessories(char)
+    end)
+end)
+
+lp.CharacterAdded:Connect(function(char)
+    task.wait(0.1)
+    stripAccessories(char)
+end)
+
+task.spawn(function()
+while true do
+task.wait(5)
+pcall(function()
+for _, player in ipairs(Players:GetPlayers()) do
+if player.Character then
+local hasAccessory = false
+for _, v in pairs(player.Character:GetChildren()) do
+if v:IsA("Accessory") then
+hasAccessory = true
+break
+end
+end
+if hasAccessory then
+stripPlayerAccessories(player)
+end
+end
+end
+end)
+end
+end)
+
+-- =============================================================================
+-- 💬 Universal Chat
+-- =============================================================================
+local function sendTinyMeCommand()
+pcall(function()
+if TextChatService.ChatVersion == Enum.ChatVersion.TextChatService then
+local generalChannel = TextChatService:FindFirstChild("TextChannels") and TextChatService.TextChannels:FindFirstChild("RBXGeneral")
+if generalChannel then
+generalChannel:SendAsync(";tiny me")
+end
+else
+local chatRemote = ReplicatedStorage:FindFirstChild("DefaultChatSystemChatEvents") and ReplicatedStorage.DefaultChatSystemChatEvents:FindFirstChild("SayMessageRequest")
+if chatRemote then
+chatRemote:FireServer(";tiny me", "All")
+end
+end
+end)
+end
+
+-- AP SPAM 用チャット送信関数
+local function sendApSpamCommand(command)
+pcall(function()
+if TextChatService.ChatVersion == Enum.ChatVersion.TextChatService then
+local generalChannel = TextChatService:FindFirstChild("TextChannels") and TextChatService.TextChannels:FindFirstChild("RBXGeneral")
+if generalChannel then
+generalChannel:SendAsync(command)
+end
+else
+local chatRemote = ReplicatedStorage:FindFirstChild("DefaultChatSystemChatEvents") and ReplicatedStorage.DefaultChatSystemChatEvents:FindFirstChild("SayMessageRequest")
+if chatRemote then
+chatRemote:FireServer(command, "All")
+end
+end
+end)
+end
+
+-- スコアボードのトッププレイヤーを取得
+local function getTopPlayer()
+local topPlayer = nil
+local topScore = -math.huge
+
+for _, player in ipairs(Players:GetPlayers()) do
+if player == lp then continue end
+local leaderstats = player:FindFirstChild("leaderstats")
+if leaderstats then
+local score = leaderstats:FindFirstChild("Score") or leaderstats:FindFirstChild("Points") or leaderstats:FindFirstChild("Cash")
+if score and type(score.Value) == "number" and score.Value > topScore then
+topScore = score.Value
+topPlayer = player
+end
+end
+end
+
+if not topPlayer then
+for _, player in ipairs(Players:GetPlayers()) do
+if player ~= lp then
+topPlayer = player
+break
+end
+end
+end
+
+return topPlayer
+end
+
+-- AP SPAM 実行スレッド（1回のみ）
+local function startApSpam()
+if apSpamRunning then return end
+apSpamRunning = true
+
+task.spawn(function()
+local target = getTopPlayer()
+if target then
+local name = target.Name
+sendApSpamCommand(";rocket " .. name)
+task.wait(0.3)
+sendApSpamCommand(";jumpscare " .. name)
+task.wait(0.3)
+sendApSpamCommand(";balloon " .. name)
+end
+apSpamRunning = false
+end)
+end
+
+local function stopApSpam()
+apSpamRunning = false
+end
+
+-- =============================================================================
+-- 💾 設定保存・読み込み機能
+-- =============================================================================
+local function saveSettings()
+local settings = {
+espEnabled = _G.ESPBaseEnabled,
+autoGrabEnabled = _G.AutoGrabEnabled,
+tinyMeDelay = tinyMeDelay,
+tinyEnabled = tinyEnabled,
+apSpamEnabled = apSpamEnabled,
+walkSpeedEnabled = walkSpeedEnabled,
+walkSpeedValue = walkSpeedValue,
+infinityJumpEnabled = infinityJumpEnabled
+}
+pcall(function()
+writefile("WEDXEV_Settings.json", game:GetService("HttpService"):JSONEncode(settings))
+end)
+end
+
+local function loadSettings()
+pcall(function()
+local data = readfile("WEDXEV_Settings.json")
+if data then
+local settings = game:GetService("HttpService"):JSONDecode(data)
+_G.ESPBaseEnabled = settings.espEnabled ~= nil and settings.espEnabled or true
+_G.AutoGrabEnabled = settings.autoGrabEnabled ~= nil and settings.autoGrabEnabled or false
+tinyMeDelay = settings.tinyMeDelay or 0
+tinyEnabled = settings.tinyEnabled ~= nil and settings.tinyEnabled or true
+apSpamEnabled = settings.apSpamEnabled ~= nil and settings.apSpamEnabled or false
+walkSpeedEnabled = settings.walkSpeedEnabled ~= nil and settings.walkSpeedEnabled or false
+walkSpeedValue = settings.walkSpeedValue or 22.5
+infinityJumpEnabled = settings.infinityJumpEnabled ~= nil and settings.infinityJumpEnabled or false
+end
+end)
+end
+
+loadSettings()
+
+-- =============================================================================
+-- 🏃 WALK SPEED BOOSTER
+-- =============================================================================
+task.spawn(function()
+    while true do
+        task.wait()
+        if walkSpeedEnabled then
+            local char = lp.Character
+            if char then
+                local humanoid = char:FindFirstChildOfClass("Humanoid")
+                local rootPart = char:FindFirstChild("HumanoidRootPart")
+                if humanoid and rootPart then
+                    if humanoid.MoveDirection.Magnitude > 0 then
+                        rootPart.Velocity = Vector3.new(
+                            humanoid.MoveDirection.X * walkSpeedValue,
+                            rootPart.Velocity.Y,
+                            humanoid.MoveDirection.Z * walkSpeedValue
+                        )
+                    end
+                end
+            end
+        end
+    end
+end)
+
+-- =============================================================================
+-- 🦘 INFINITY JUMP
+-- =============================================================================
+UserInputService.JumpRequest:Connect(function()
+    jumpHeld = true
+    task.wait(0.05)
+    jumpHeld = false
+end)
+
+UserInputService.InputBegan:Connect(function(inp, gpe)
+    if not gpe and inp.KeyCode == Enum.KeyCode.Space then
+        jumpHeld = true
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(inp)
+    if inp.KeyCode == Enum.KeyCode.Space then
+        jumpHeld = false
+    end
+end)
+
+RunService.Stepped:Connect(function()
+    if infinityJumpEnabled and jumpHeld then
+        local hrp = lp.Character and lp.Character:FindFirstChild("HumanoidRootPart")
+        if hrp and hrp.AssemblyLinearVelocity.Y < 55 then
+            hrp.AssemblyLinearVelocity = Vector3.new(hrp.AssemblyLinearVelocity.X, 65, hrp.AssemblyLinearVelocity.Z)
+        end
+    end
+end)
+
+-- =============================================================================
+-- 🔒 BASE DESIGN DESIGN
+-- =============================================================================
+local oldGui = targetGuiParent:FindFirstChild("WEDHUB_v2_Hub")
+if oldGui then pcall(function() oldGui:Destroy() end) end
+
+local masterGui = Instance.new("ScreenGui")
+masterGui.Name = "WEDHUB_v2_Hub"
+masterGui.ResetOnSpawn = false
+masterGui.Parent = targetGuiParent
+masterGui.Enabled = true
+
+local function applyNeonStyle(frame)
+Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 8)
+
+local stroke = Instance.new("UIStroke", frame)      
+stroke.Thickness = 1.5
+stroke.Color = Color3.fromRGB(0, 160, 255)      
+
+local gradient = Instance.new("UIGradient", frame)      
+gradient.Color = ColorSequence.new({      
+    ColorSequenceKeypoint.new(0.0, Color3.fromRGB(10, 15, 35)),      
+    ColorSequenceKeypoint.new(0.3, Color3.fromRGB(0, 50, 130)),      
+    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(0, 130, 230)),      
+    ColorSequenceKeypoint.new(0.7, Color3.fromRGB(0, 50, 130)),      
+    ColorSequenceKeypoint.new(1.0, Color3.fromRGB(10, 15, 35))      
+})      
+return gradient
+
+end
+
+-- =============================================================================
+-- 📢 トースト通知UI
+-- =============================================================================
+local toastFrame = Instance.new("Frame", masterGui)
+toastFrame.Name = "ToastFrame"
+toastFrame.Size = UDim2.new(0, 240, 0, 40)
+toastFrame.Position = UDim2.new(0.5, -120, 0, -80)
+toastFrame.BackgroundColor3 = Color3.fromRGB(10, 15, 35)
+toastFrame.BackgroundTransparency = 1
+toastFrame.ClipsDescendants = true
+toastFrame.Visible = false
+Instance.new("UICorner", toastFrame).CornerRadius = UDim.new(0, 10)
+
+local toastStroke = Instance.new("UIStroke", toastFrame)
+toastStroke.Thickness = 1.5
+toastStroke.Color = Color3.fromRGB(0, 160, 255)
+
+local toastGradient = Instance.new("UIGradient", toastFrame)
+toastGradient.Color = ColorSequence.new({
+    ColorSequenceKeypoint.new(0.0, Color3.fromRGB(10, 15, 35)),
+    ColorSequenceKeypoint.new(0.3, Color3.fromRGB(0, 50, 130)),
+    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(0, 130, 230)),
+    ColorSequenceKeypoint.new(0.7, Color3.fromRGB(0, 50, 130)),
+    ColorSequenceKeypoint.new(1.0, Color3.fromRGB(10, 15, 35))
+})
+
+local toastText = Instance.new("TextLabel", toastFrame)
+toastText.Size = UDim2.new(1, 0, 1, -6)
+toastText.Position = UDim2.new(0, 0, 0, 3)
+toastText.BackgroundTransparency = 1
+toastText.Text = ""
+toastText.TextColor3 = Color3.fromRGB(255, 255, 255)
+toastText.Font = Enum.Font.SourceSansBold
+toastText.TextSize = 14
+toastText.TextScaled = true
+
+local toastProgressBg = Instance.new("Frame", toastFrame)
+toastProgressBg.Size = UDim2.new(1, 0, 0, 2)
+toastProgressBg.Position = UDim2.new(0, 0, 1, -2)
+toastProgressBg.BackgroundColor3 = Color3.fromRGB(30, 30, 50)
+toastProgressBg.BorderSizePixel = 0
+Instance.new("UICorner", toastProgressBg).CornerRadius = UDim.new(0, 3)
+
+local toastProgressFill = Instance.new("Frame", toastProgressBg)
+toastProgressFill.Size = UDim2.new(0, 0, 1, 0)
+toastProgressFill.BackgroundColor3 = Color3.fromRGB(0, 200, 255)
+toastProgressFill.BorderSizePixel = 0
+Instance.new("UICorner", toastProgressFill).CornerRadius = UDim.new(0, 3)
+
+local toastQueue = {}
+local isToastShowing = false
+
+local function showToast(text, isOn)
+    table.insert(toastQueue, {text = text, isOn = isOn})
+    
+    if isToastShowing then return end
+    isToastShowing = true
+    
+    task.spawn(function()
+        while #toastQueue > 0 do
+            local data = table.remove(toastQueue, 1)
+            local text = data.text
+            local isOn = data.isOn
+            
+            local icon = isOn and "✅" or "😵"
+            local statusText = isOn and "ON" or "OFF"
+            local color = isOn and Color3.fromRGB(0, 255, 100) or Color3.fromRGB(255, 80, 80)
+            toastText.Text = text .. " " .. statusText .. " " .. icon
+            toastText.TextColor3 = color
+            toastStroke.Color = color
+            
+            toastFrame.Position = UDim2.new(0.5, -120, 0, -80)
+            toastFrame.BackgroundTransparency = 1
+            toastFrame.Visible = true
+            toastProgressFill.Size = UDim2.new(0, 0, 1, 0)
+            
+            local fadeIn = TweenService:Create(toastFrame, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+                Position = UDim2.new(0.5, -120, 0, 55),
+                BackgroundTransparency = 0.15
+            })
+            fadeIn:Play()
+            fadeIn.Completed:Wait()
+            
+            local progressTween = TweenService:Create(toastProgressFill, TweenInfo.new(1, Enum.EasingStyle.Linear, Enum.EasingDirection.Out), {
+                Size = UDim2.new(1, 0, 1, 0)
+            })
+            progressTween:Play()
+            progressTween.Completed:Wait()
+            
+            local fadeOut = TweenService:Create(toastFrame, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+                Position = UDim2.new(0.5, -120, 0, -80),
+                BackgroundTransparency = 1
+            })
+            fadeOut:Play()
+            fadeOut.Completed:Wait()
+            
+            toastFrame.Visible = false
+            toastProgressFill.Size = UDim2.new(0, 0, 1, 0)
+            
+            task.wait(0.1)
+        end
+        
+        isToastShowing = false
+    end)
+end
+
+-- =============================================================================
+-- 📦 Main Hud Container (Kanan)
+-- =============================================================================
+local rightActionContainer = Instance.new("Frame", masterGui)
+rightActionContainer.Name = "RightActionContainer"
+rightActionContainer.Size = UDim2.new(0, 70, 0, 130)
+rightActionContainer.Position = UDim2.new(1, -85, 0.5, -65)
+rightActionContainer.BackgroundTransparency = 1
+rightActionContainer.Active = true
+rightActionContainer.Draggable = true
+
+local rightLayout = Instance.new("UIListLayout", rightActionContainer)
+rightLayout.FillDirection = Enum.FillDirection.Vertical
+rightLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+rightLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+rightLayout.SortOrder = Enum.SortOrder.LayoutOrder
+rightLayout.Padding = UDim.new(0, 5)
+
+-- 📦 Status & Info Container (Atas)
+local infoContainer = Instance.new("Frame", masterGui)
+infoContainer.Name = "InfoContainer"
+infoContainer.Size = UDim2.new(0, 260, 0, 30)
+infoContainer.Position = UDim2.new(0.5, -130, 0, 12)
+infoContainer.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+local infoGradient = applyNeonStyle(infoContainer)
+
+local infoLayout = Instance.new("UIListLayout", infoContainer)
+infoLayout.FillDirection = Enum.FillDirection.Horizontal
+infoLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+infoLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+infoLayout.Padding = UDim.new(0, 8)
+
+-- =============================================================================
+-- 🔼 ISI INFO BAR (Atas)
+-- =============================================================================
+local settingBtn = Instance.new("TextButton", infoContainer)
+settingBtn.Size = UDim2.new(0, 16, 0, 16)
+settingBtn.BackgroundTransparency = 1
+settingBtn.Text = "⚙️"
+settingBtn.TextSize = 10
+
+local titleLabel = Instance.new("TextLabel", infoContainer)
+titleLabel.Size = UDim2.new(0, 65, 0, 26)
+titleLabel.BackgroundTransparency = 1
+titleLabel.Text = "WED & XEV v2"
+titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+titleLabel.Font = Enum.Font.SourceSansBold
+titleLabel.TextSize = 12
+
+local sepLabel = Instance.new("TextLabel", infoContainer)
+sepLabel.Size = UDim2.new(0, 4, 0, 26)
+sepLabel.BackgroundTransparency = 1
+sepLabel.Text = "|"
+sepLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+sepLabel.Font = Enum.Font.SourceSans
+sepLabel.TextSize = 12
+
+local statsLabel = Instance.new("TextLabel", infoContainer)
+statsLabel.Size = UDim2.new(0, 130, 0, 26)
+statsLabel.BackgroundTransparency = 1
+statsLabel.Text = "💎 0 FPS  |  0ms"
+statsLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+statsLabel.Font = Enum.Font.SourceSansBold
+statsLabel.TextSize = 10
+
+-- =============================================================================
+-- 🚀 DROP (Fling) FUNCTION
+-- =============================================================================
+local function toggleDrop(state)
+dropEnabled = state
+
+if dropEnabled then      
+    local colConn = RunService.Stepped:Connect(function()      
+        if not dropEnabled then return end      
+        for _, p in ipairs(Players:GetPlayers()) do      
+            if p ~= lp and p.Character then      
+                for _, part in ipairs(p.Character:GetChildren()) do      
+                    if part:IsA("BasePart") then part.CanCollide = false end      
+                end      
+            end      
+        end      
+    end)      
+    table.insert(_wfConns, colConn)      
+
+    task.spawn(function()      
+        while dropEnabled do      
+            RunService.Heartbeat:Wait()      
+            local c = lp.Character      
+            local root = c and c:FindFirstChild("HumanoidRootPart")      
+                  
+            if not root then continue end      
+                  
+            local vel = root.Velocity      
+            root.Velocity = vel * 10000 + Vector3.new(0, 10000, 0)      
+                  
+            RunService.RenderStepped:Wait()      
+            if root and root.Parent then root.Velocity = vel end      
+                  
+            RunService.Stepped:Wait()      
+            if root and root.Parent then       
+                root.Velocity = vel + Vector3.new(0, 0.1, 0)       
+            end      
+        end      
+    end)      
+else      
+    for _, c in ipairs(_wfConns) do      
+        if typeof(c) == "RBXScriptConnection" then c:Disconnect() end      
+    end      
+    _wfConns = {}      
+end
+
+end
+
+-- =============================================================================
+-- 🔘 ACTION BUTTON GENERATOR (サイズは元に戻す)
+-- =============================================================================
+local rightGradients = {}
+
+local function createActionButton(parent, text, layoutOrder, func)
+local btnContainer = Instance.new("Frame", parent)
+btnContainer.Size = UDim2.new(1, 0, 0, 28)
+btnContainer.BackgroundTransparency = 0
+btnContainer.LayoutOrder = layoutOrder
+
+local grad = applyNeonStyle(btnContainer)    
+table.insert(rightGradients, grad)    
+
+local btn = Instance.new("TextButton", btnContainer)    
+btn.Size = UDim2.new(1, 0, 1, 0)    
+btn.BackgroundTransparency = 1    
+btn.Text = text    
+btn.TextColor3 = Color3.fromRGB(255, 255, 255)    
+btn.Font = Enum.Font.SourceSansBold    
+btn.TextSize = 11
+    
+if func then    
+    btn.MouseButton1Click:Connect(function() func(btnContainer, btn) end)    
+end    
+return btnContainer
+
+end
+
+local lagBtn = createActionButton(rightActionContainer, "LAG", 1, function(frame, b)
+isChaosOn = not isChaosOn
+local stroke = frame:FindFirstChildOfClass("UIStroke")
+
+if isChaosOn then
+if stroke then stroke.Color = Color3.fromRGB(0, 255, 100) end
+saveSettings()
+
+if apSpamEnabled then
+task.spawn(function()
+task.wait(4)
+if isChaosOn and apSpamEnabled then
+startApSpam()
+end
+end)
+end
+
+else
+if stroke then stroke.Color = Color3.fromRGB(0, 160, 255) end
+stopApSpam()
+saveSettings()
+end
+end)
+
+local resetBtn = createActionButton(rightActionContainer, "RESET", 2, function()
+local char = lp.Character
+if char and char:FindFirstChild("Humanoid") then
+char.Humanoid.Health = 0
+end
+end)
+
+local leaveBtn = createActionButton(rightActionContainer, "LEAVE", 3, function()
+lp:Kick("KICK BY WED & VEX")
+end)
+
+-- =============================================================================
+-- 👈 BUTANG DROP DI SEBELAH KIRI
+-- =============================================================================
+local leftDropFrame = Instance.new("Frame", masterGui)
+leftDropFrame.Name = "LeftDropFrame"
+leftDropFrame.Size = UDim2.new(0, 55, 0, 24)
+leftDropFrame.Position = UDim2.new(0, 12, 0.5, -12)
+leftDropFrame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+local leftDropGradient = applyNeonStyle(leftDropFrame)
+
+local leftDropBtn = Instance.new("TextButton", leftDropFrame)
+leftDropBtn.Size = UDim2.new(1, 0, 1, 0)
+leftDropBtn.BackgroundTransparency = 1
+leftDropBtn.Text = "DROP"
+leftDropBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+leftDropBtn.Font = Enum.Font.SourceSansBold
+leftDropBtn.TextSize = 9
+
+leftDropBtn.MouseButton1Click:Connect(function()
+    if dropEnabled then return end
+    
+    dropEnabled = true
+    toggleDrop(dropEnabled)
+    
+    local stroke = leftDropFrame:FindFirstChildOfClass("UIStroke")
+    if stroke then stroke.Color = Color3.fromRGB(0, 255, 100) end
+    
+    task.wait(0.3)
+    
+    dropEnabled = false
+    toggleDrop(dropEnabled)
+    
+    if stroke then stroke.Color = Color3.fromRGB(0, 160, 255) end
+end)
+
+-- =============================================================================
+-- 🎯 AUTO GRAB INTEGRATION
+-- =============================================================================
+if targetGuiParent:FindFirstChild("AutoGrabPureGui") then targetGuiParent.AutoGrabPureGui:Destroy() end
+
+local ProgressFrame = Instance.new("Frame", masterGui)
+ProgressFrame.Name = "ProgressFrame"
+ProgressFrame.Size = UDim2.new(0, 260, 0, 40)
+ProgressFrame.Position = UDim2.new(0.5, -130, 0, 46)
+ProgressFrame.BackgroundColor3 = Color3.fromRGB(10, 10, 20)
+ProgressFrame.BorderSizePixel = 0
+ProgressFrame.Visible = false
+
+local stealFrameGradient = applyNeonStyle(ProgressFrame)
+
+local ProgressText = Instance.new("TextLabel", ProgressFrame)
+ProgressText.Name = "ProgressText"
+ProgressText.Size = UDim2.new(1, 0, 0, 22)
+ProgressText.Position = UDim2.new(0, 0, 0, 2)
+ProgressText.BackgroundTransparency = 1
+ProgressText.Text = "0%"
+ProgressText.TextColor3 = Color3.fromRGB(255, 255, 255)
+ProgressText.TextSize = 11
+ProgressText.Font = Enum.Font.Code
+
+local ProgressBarBg = Instance.new("Frame", ProgressFrame)
+ProgressBarBg.Name = "ProgressBarBg"
+ProgressBarBg.Size = UDim2.new(1, -24, 0, 5)
+ProgressBarBg.Position = UDim2.new(0, 12, 0, 24)
+ProgressBarBg.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+ProgressBarBg.BorderSizePixel = 0
+local stealBarBgGradient = applyNeonStyle(ProgressBarBg)
+
+local ProgressBarFill = Instance.new("Frame", ProgressBarBg)
+ProgressBarFill.Name = "ProgressBarFill"
+ProgressBarFill.Size = UDim2.new(0, 0, 1, 0)
+ProgressBarFill.BackgroundColor3 = Color3.fromRGB(0, 200, 255)
+ProgressBarFill.BorderSizePixel = 0
+Instance.new("UICorner", ProgressBarFill).CornerRadius = UDim.new(1, 0)
+
+local IsStealing = false
+local StealData = {}
+
+local function getHRP()
+local c = lp.Character
+if c then return c:FindFirstChild("HumanoidRootPart") or c:FindFirstChild("Torso") end
+return nil
+end
+
+local function isMyPlotByName(pn)
+local plots = workspace:FindFirstChild("Plots")
+if not plots then return false end
+local plot = plots:FindFirstChild(pn)
+if not plot then return false end
+local sign = plot:FindFirstChild("PlotSign")
+if sign then
+local yb = sign:FindFirstChild("YourBase")
+if yb and yb:IsA("BillboardGui") then return yb.Enabled == true end
+end
+return false
+end
+
+local function findNearestPrompt()
+local hrp = getHRP()
+if not hrp then return nil, nil end
+local plots = workspace:FindFirstChild("Plots")
+if not plots then return nil, nil end
+
+local nearestPrompt, nearestSpawn, dist = nil, nil, math.huge   
+local configRadius = 61   
+
+for _, plot in ipairs(plots:GetChildren()) do   
+    if isMyPlotByName(plot.Name) then continue end   
+    local pods = plot:FindFirstChild("AnimalPodiums")   
+    if not pods then continue end   
+    for _, pod in ipairs(pods:GetChildren()) do   
+        local base = pod:FindFirstChild("Base")   
+        if not base then continue end   
+        local spawn = base:FindFirstChild("Spawn")   
+        if not spawn then continue end   
+        local d = (spawn.Position - hrp.Position).Magnitude   
+        if d <= configRadius and d < dist then   
+            local att = spawn:FindFirstChild("PromptAttachment")   
+            if att then  
+                for _, p in ipairs(att:GetChildren()) do   
+                    if p:IsA("ProximityPrompt") and p.ActionText and p.ActionText:find("Steal") then   
+                        nearestPrompt, nearestSpawn, dist = p, spawn, d   
+                    end  
+                end  
+            end  
+        end  
+    end  
+end  
+return nearestPrompt, nearestSpawn
+
+end
+
+local function executeSteal(prompt, spawnPart)
+if IsStealing then return end
+
+if not StealData[prompt] then  
+    StealData[prompt] = {hold = {}, trigger = {}, ready = true}   
+    local getconnections = getconnections or get_signal_cons  
+    if getconnections then  
+        pcall(function()  
+            for _, c in ipairs(getconnections(prompt.PromptButtonHoldBegan)) do   
+                if c.Function then table.insert(StealData[prompt].hold, c.Function) end   
+            end  
+            for _, c in ipairs(getconnections(prompt.Triggered)) do   
+                if c.Function then table.insert(StealData[prompt].trigger, c.Function) end   
+            end  
+        end)  
+    end  
+end  
+  
+local data = StealData[prompt]  
+if not data.ready then return end   
+  
+data.ready = false  
+IsStealing = true  
+ProgressFrame.Visible = true  
+  
+local duration = 1.3   
+local startTime = tick()  
+
+task.spawn(function()  
+    for _, f in ipairs(data.hold) do pcall(f) end   
+      
+    while tick() - startTime < duration do   
+        if not _G.AutoGrabEnabled then break end  
+        local elapsed = tick() - startTime  
+        local percent = math.clamp(elapsed / duration, 0, 1)  
+        local displayPercent = math.floor(percent * 100)  
+          
+        ProgressText.Text = "Stealing... " .. displayPercent .. "%"  
+        ProgressBarFill.Size = UDim2.new(percent, 0, 1, 0)  
+        task.wait()  
+    end  
+      
+    if _G.AutoGrabEnabled then  
+        for _, f in ipairs(data.trigger) do pcall(f) end   
+    end  
+      
+    ProgressBarFill.Size = UDim2.new(0, 0, 1, 0)  
+    ProgressText.Text = "0%"  
+    ProgressFrame.Visible = false  
+      
+    data.ready = true  
+    IsStealing = false  
+end)
+
+end
+
+RunService.Heartbeat:Connect(function()
+if not _G.AutoGrabEnabled or IsStealing then return end
+local success, prompt, spawnPart = pcall(findNearestPrompt)
+if success and prompt and spawnPart then pcall(executeSteal, prompt, spawnPart) end
+end)
+
+-- =============================================================================
+-- 🛠️ SETTINGS PANEL
+-- =============================================================================
+local settingsPanel = Instance.new("Frame", masterGui)
+settingsPanel.Name = "SettingsPanel"
+settingsPanel.Size = UDim2.new(0, 260, 0, 0)
+settingsPanel.Position = UDim2.new(0.5, -130, 0, 46)
+settingsPanel.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+settingsPanel.ClipsDescendants = true
+settingsPanel.Visible = false
+local settingsGradient = applyNeonStyle(settingsPanel)
+
+local sLayout = Instance.new("UIListLayout", settingsPanel)
+sLayout.FillDirection = Enum.FillDirection.Vertical
+sLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+sLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+sLayout.Padding = UDim.new(0, 3)
+
+-- 行作成関数
+local function createSettingRow(parent, text, toggleState, toggleCallback)
+local row = Instance.new("Frame", parent)
+row.Size = UDim2.new(1, -16, 0, 18)
+row.BackgroundTransparency = 1
+
+local dot = Instance.new("Frame", row)
+dot.Size = UDim2.new(0, 5, 0, 5)
+dot.Position = UDim2.new(0, 12, 0.5, -2.5)
+dot.BackgroundColor3 = Color3.fromRGB(0, 160, 255)
+Instance.new("UICorner", dot).CornerRadius = UDim.new(1, 0)
+
+local title = Instance.new("TextLabel", row)
+title.Size = UDim2.new(0, 130, 1, 0)
+title.Position = UDim2.new(0, 24, 0, 0)
+title.BackgroundTransparency = 1
+title.Text = text
+title.TextSize = 10
+title.Font = Enum.Font.SourceSansBold
+title.TextColor3 = Color3.fromRGB(255, 255, 255)
+title.TextXAlignment = Enum.TextXAlignment.Left
+
+local toggleBtn = Instance.new("TextButton", row)
+toggleBtn.Size = UDim2.new(0, 16, 0, 16)
+toggleBtn.Position = UDim2.new(1, -26, 0.5, -8)
+toggleBtn.BackgroundColor3 = toggleState and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(80, 80, 80)
+toggleBtn.Text = ""
+Instance.new("UICorner", toggleBtn).CornerRadius = UDim.new(1, 0)
+
+toggleBtn.MouseButton1Click:Connect(function()
+toggleCallback(toggleBtn)
+end)
+
+return row, toggleBtn
+end
+
+-- ESP TOGGLE
+local espRow, espToggleBtn = createSettingRow(settingsPanel, "ESP TIMER", _G.ESPBaseEnabled, function(btn)
+_G.ESPBaseEnabled = not _G.ESPBaseEnabled
+btn.BackgroundColor3 = _G.ESPBaseEnabled and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(80, 80, 80)
+saveSettings()
+showToast("ESP TIMER", _G.ESPBaseEnabled)
+end)
+
+-- AUTO GRAB TOGGLE
+local grabRow, grabToggleBtn = createSettingRow(settingsPanel, "AUTO GRAB", _G.AutoGrabEnabled, function(btn)
+_G.AutoGrabEnabled = not _G.AutoGrabEnabled
+btn.BackgroundColor3 = _G.AutoGrabEnabled and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(80, 80, 80)
+if not _G.AutoGrabEnabled then ProgressFrame.Visible = false end
+saveSettings()
+showToast("AUTO GRAB", _G.AutoGrabEnabled)
+end)
+
+-- TINY ME TOGGLE
+local tinyRow, tinyToggleBtn = createSettingRow(settingsPanel, "TINY ME", tinyEnabled, function(btn)
+tinyEnabled = not tinyEnabled
+btn.BackgroundColor3 = tinyEnabled and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(80, 80, 80)
+saveSettings()
+showToast("TINY ME", tinyEnabled)
+end)
+
+-- AP SPAM TOGGLE
+local apRow, apToggleBtn = createSettingRow(settingsPanel, "AP SPAM", apSpamEnabled, function(btn)
+apSpamEnabled = not apSpamEnabled
+btn.BackgroundColor3 = apSpamEnabled and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(80, 80, 80)
+if not apSpamEnabled then stopApSpam() end
+saveSettings()
+showToast("AP SPAM", apSpamEnabled)
+end)
+
+-- INFINITY JUMP TOGGLE
+local jumpRow, jumpToggleBtn = createSettingRow(settingsPanel, "INFINITY JUMP", infinityJumpEnabled, function(btn)
+infinityJumpEnabled = not infinityJumpEnabled
+btn.BackgroundColor3 = infinityJumpEnabled and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(80, 80, 80)
+saveSettings()
+showToast("INFINITY JUMP", infinityJumpEnabled)
+end)
+
+-- WALK SPEED ROW
+local walkRow = Instance.new("Frame", settingsPanel)
+walkRow.Size = UDim2.new(1, -16, 0, 20)
+walkRow.BackgroundTransparency = 1
+
+local walkDot = Instance.new("Frame", walkRow)
+walkDot.Size = UDim2.new(0, 5, 0, 5)
+walkDot.Position = UDim2.new(0, 12, 0.5, -2.5)
+walkDot.BackgroundColor3 = Color3.fromRGB(0, 160, 255)
+Instance.new("UICorner", walkDot).CornerRadius = UDim.new(1, 0)
+
+local walkTitle = Instance.new("TextLabel", walkRow)
+walkTitle.Size = UDim2.new(0, 65, 1, 0)
+walkTitle.Position = UDim2.new(0, 24, 0, 0)
+walkTitle.BackgroundTransparency = 1
+walkTitle.Text = "Walk Speed"
+walkTitle.TextSize = 10
+walkTitle.Font = Enum.Font.SourceSansBold
+walkTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+walkTitle.TextXAlignment = Enum.TextXAlignment.Left
+
+local walkBox = Instance.new("TextBox", walkRow)
+walkBox.Size = UDim2.new(0, 40, 1, -4)
+walkBox.Position = UDim2.new(0, 92, 0.5, -2)
+walkBox.BackgroundColor3 = Color3.fromRGB(20, 30, 60)
+walkBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+walkBox.Font = Enum.Font.SourceSansBold
+walkBox.TextSize = 10
+walkBox.Text = tostring(walkSpeedValue)
+Instance.new("UICorner", walkBox).CornerRadius = UDim.new(0, 3)
+
+walkBox.FocusLost:Connect(function()
+local num = tonumber(walkBox.Text)
+if num and num > 0 then
+walkSpeedValue = num
+else
+walkBox.Text = tostring(walkSpeedValue)
+end
+saveSettings()
+end)
+
+local walkToggleBtn = Instance.new("TextButton", walkRow)
+walkToggleBtn.Size = UDim2.new(0, 16, 0, 16)
+walkToggleBtn.Position = UDim2.new(1, -26, 0.5, -8)
+walkToggleBtn.BackgroundColor3 = walkSpeedEnabled and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(80, 80, 80)
+walkToggleBtn.Text = ""
+Instance.new("UICorner", walkToggleBtn).CornerRadius = UDim.new(1, 0)
+
+walkToggleBtn.MouseButton1Click:Connect(function()
+walkSpeedEnabled = not walkSpeedEnabled
+walkToggleBtn.BackgroundColor3 = walkSpeedEnabled and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(80, 80, 80)
+saveSettings()
+showToast("WALK SPEED", walkSpeedEnabled)
+end)
+
+-- DELAY INPUT
+local delayRow = Instance.new("Frame", settingsPanel)
+delayRow.Size = UDim2.new(1, -16, 0, 20)
+delayRow.BackgroundTransparency = 1
+
+local delayLabel = Instance.new("TextLabel", delayRow)
+delayLabel.Size = UDim2.new(0, 130, 1, 0)
+delayLabel.Position = UDim2.new(0, 24, 0, 0)
+delayLabel.BackgroundTransparency = 1
+delayLabel.Text = ":tiny me delay:"
+delayLabel.TextSize = 10
+delayLabel.Font = Enum.Font.SourceSansBold
+delayLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+delayLabel.TextXAlignment = Enum.TextXAlignment.Left
+
+local delayBox = Instance.new("TextBox", delayRow)
+delayBox.Size = UDim2.new(0, 40, 1, -4)
+delayBox.Position = UDim2.new(1, -56, 0.5, -2)
+delayBox.BackgroundColor3 = Color3.fromRGB(20, 30, 60)
+delayBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+delayBox.Font = Enum.Font.SourceSansBold
+delayBox.TextSize = 10
+delayBox.Text = tostring(tinyMeDelay)
+Instance.new("UICorner", delayBox).CornerRadius = UDim.new(0, 3)
+
+delayBox.FocusLost:Connect(function()
+local num = tonumber(delayBox.Text)
+if num then
+tinyMeDelay = math.clamp(math.round(num), 0, 30)
+end
+delayBox.Text = tostring(tinyMeDelay)
+saveSettings()
+end)
+
+-- PANEL ANIMATION OPEN/CLOSE
+local menuOpen = false
+settingBtn.MouseButton1Click:Connect(function()
+menuOpen = not menuOpen
+if menuOpen then
+settingsPanel.Visible = true
+settingsPanel.Position = _G.AutoGrabEnabled and UDim2.new(0.5, -130, 0, 90) or UDim2.new(0.5, -130, 0, 46)
+TweenService:Create(settingsPanel, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Size = UDim2.new(0, 260, 0, 165)}):Play()
+else
+local tween = TweenService:Create(settingsPanel, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {Size = UDim2.new(0, 260, 0, 0)})
+tween:Play()
+tween.Completed:Connect(function() if not menuOpen then settingsPanel.Visible = false end end)
+end
+end)
+
+-- =============================================================================
+-- ⚡ PLOTS TIMER ESP
+-- =============================================================================
+local function createBaseESP(plot, mainPart)
+if baseEspInstances[plot.Name] then pcall(function() baseEspInstances[plot.Name]:Destroy() end) end
+local billboard = Instance.new("BillboardGui")
+billboard.Name = "rznnq" .. plot.Name
+billboard.Size = UDim2.new(0, 80, 0, 25)
+billboard.AlwaysOnTop = true
+billboard.Adornee = mainPart
+billboard.Parent = plot
+
+local label = Instance.new("TextLabel", billboard)      
+label.Size = UDim2.new(1, 0, 1, 0)      
+label.BackgroundTransparency = 1      
+label.TextScaled = true      
+label.Font = Enum.Font.Arcade      
+label.TextColor3 = Color3.fromRGB(0, 220, 255)       
+label.TextStrokeTransparency = 0      
+label.TextStrokeColor3 = Color3.fromRGB(0, 30, 90)       
+return billboard
+
+end
+
+espBaseThread = RunService.RenderStepped:Connect(function()
+if not _G.ESPBaseEnabled or not plotsFolder then return end
+for _, plot in ipairs(plotsFolder:GetChildren()) do
+local purchases = plot:FindFirstChild("Purchases")
+local plotBlock = purchases and purchases:FindFirstChild("PlotBlock")
+local mainPart = plotBlock and plotBlock:FindFirstChild("Main")
+local billboard = baseEspInstances[plot.Name]
+local timeLabel = mainPart and mainPart:FindFirstChild("BillboardGui") and mainPart.BillboardGui:FindFirstChild("RemainingTime")
+if timeLabel and mainPart then
+if not billboard then billboard = createBaseESP(plot, mainPart) baseEspInstances[plot.Name] = billboard end
+local label = billboard:FindFirstChildWhichIsA("TextLabel")
+if label then label.Text = timeLabel.Text end
+elseif billboard then
+pcall(function() billboard:Destroy() end)
+baseEspInstances[plot.Name] = nil
+end
+end
+end)
+
+-- =============================================================================
+-- 🔒 RENDERING KILAT/PETIR/GELOMBANG ANIMATION
+-- =============================================================================
+local t = 0
+local lastUpdate = 0
+local fpsCounter = 0
+local fpsTimer = 0
+local currentFPS = 0
+
+RunService.RenderStepped:Connect(function(dt)
+t = t + dt
+fpsTimer = fpsTimer + dt
+fpsCounter = fpsCounter + 1
+
+if fpsTimer >= 1 then currentFPS = fpsCounter fpsCounter = 0 fpsTimer = 0 end      
+
+local waterRotation = (t * 45) % 360       
+local waveOffset = math.sin(t * 1.5) * 0.5       
+      
+if infoGradient then infoGradient.Rotation = waterRotation infoGradient.Offset = Vector2.new(waveOffset, 0) end    
+if settingsGradient then settingsGradient.Rotation = waterRotation settingsGradient.Offset = Vector2.new(waveOffset, 0) end    
+if leftDropGradient then leftDropGradient.Rotation = waterRotation leftDropGradient.Offset = Vector2.new(waveOffset, 0) end    
+  
+if stealFrameGradient then stealFrameGradient.Rotation = waterRotation stealFrameGradient.Offset = Vector2.new(waveOffset, 0) end  
+if stealBarBgGradient then stealBarBgGradient.Rotation = waterRotation stealBarBgGradient.Offset = Vector2.new(waveOffset, 0) end  
+if toastGradient then toastGradient.Rotation = waterRotation toastGradient.Offset = Vector2.new(waveOffset, 0) end  
+
+for _, g in ipairs(rightGradients) do    
+    if g then g.Rotation = waterRotation g.Offset = Vector2.new(waveOffset, 0) end    
+end    
+
+if t - lastUpdate >= 0.3 then       
+    lastUpdate = t       
+    local ping = math.round(lp:GetNetworkPing() * 1000)       
+    statsLabel.Text = string.format("💎 %d FPS  |  %dms", currentFPS, ping)
+end
+
+end)
+
+-- =============================================================================
+-- 🌀 LAG PROCESS ENGINE (Giant Potion = equip+use, Gummy Bear = equip+use)
+-- =============================================================================
+local function useToolOnce(itemName, shouldSwing)
+local char = lp.Character local bp = lp:FindFirstChild("Backpack")
+if not char or not bp then return end
+local tool = bp:FindFirstChild(itemName) or char:FindFirstChild(itemName)
+if tool then
+if tool.Parent == bp then
+tool.Parent = char 
+if shouldSwing then 
+    pcall(function() tool:Activate() end) 
+end
+task.wait(0.0000000000000000000000000010) 
+tool.Parent = bp
+else 
+    if shouldSwing then 
+        pcall(function() tool:Activate() end) 
+    end 
+end
+end
+end
+
+task.spawn(function()
+while true do
+pcall(function()
+local char = lp.Character 
+local bp = lp:FindFirstChild("Backpack")
+if isChaosOn and char and bp then
+local humanoid = char:FindFirstChildOfClass("Humanoid")
+if humanoid then
+local heightScale = humanoid:FindFirstChild("BodyHeightScale") or humanoid:FindFirstChild("HeadScale")
+if tinyEnabled then
+if heightScale and heightScale.Value > 1.15 then 
+isGiant = true 
+antiSpamTiny = false
+elseif heightScale and heightScale.Value <= 1.15 and isGiant and not antiSpamTiny then
+antiSpamTiny = true 
+isGiant = false
+task.spawn(function() 
+if tinyMeDelay > 0 then task.wait(tinyMeDelay) end 
+sendTinyMeCommand() 
+end)
+end
+end
+end
+
+-- Giant Potion: equip + use
+useToolOnce("Giant Potion", true)
+-- Gummy Bear: equip + use
+useToolOnce("Gummy Bear", true)
+
+end
+end)
+task.wait(lagSpeed)
+end
+end)
+
+-- =============================================================================
+-- ⌨️ RightShift Toggle Menu
+-- =========================
+UserInputService.InputBegan:Connect(function(io, p)
+if not p and io.KeyCode == Enum.KeyCode.RightShift then masterGui.Enabled = not masterGui.Enabled end
+end)
