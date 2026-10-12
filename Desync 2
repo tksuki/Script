@@ -1,0 +1,26 @@
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+
+local Player = Players.LocalPlayer
+local Character = Player.Character or Player.CharacterAdded:Wait()
+local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
+
+local WaitFrames = 1
+local Syncing = false
+
+local Connection; Connection = RunService.Heartbeat:Connect(function()
+    if not Character.Parent then Connection:Disconnect(); return end
+    if Syncing then return end
+
+    if WaitFrames > 0 then
+        sethiddenproperty(HumanoidRootPart, "PhysicsRepRootPart", HumanoidRootPart)
+        WaitFrames -= 1
+    else
+        Syncing = true
+        sethiddenproperty(HumanoidRootPart, "PhysicsRepRootPart", nil)
+        task.wait(0.1)
+        sethiddenproperty(HumanoidRootPart, "PhysicsRepRootPart", HumanoidRootPart)
+        WaitFrames = 1
+        Syncing = false
+    end
+end)
