@@ -435,17 +435,17 @@ OrbitGroup:AddDropdown("OrbitMethod", {
 
 OrbitGroup:AddSlider("OrbitHeight", {
     Text = "頭の上の高さ(中心)",
-    Default = 3, Min = -5, Max = 30, Rounding = 1, Suffix = "スタッド",
+    Default = 3, Min = -5, Max = 100, Rounding = 1, Suffix = "スタッド",
 })
 
 OrbitGroup:AddSlider("OrbitRadius", {
     Text = "半径",
-    Default = 6, Min = 1, Max = 30, Rounding = 1, Suffix = "スタッド",
+    Default = 6, Min = 1, Max = 100, Rounding = 1, Suffix = "スタッド",
 })
 
 OrbitGroup:AddSlider("OrbitSpeed", {
     Text = "速度",
-    Default = 2, Min = 0.1, Max = 20, Rounding = 1,
+    Default = 2, Min = 0.1, Max = 200, Rounding = 1,
 })
 
 -- アップグレード円
@@ -458,7 +458,7 @@ OrbitGroup:AddSlider("UpgradeDuration", {
 
 OrbitGroup:AddSlider("UpgradeMaxRadius", {
     Text = "目標半径",
-    Default = 15, Min = 5, Max = 30, Rounding = 1, Suffix = "スタッド",
+    Default = 15, Min = 5, Max =  500, Rounding = 1, Suffix = "スタッド",
 })
 
 -- 立体円
@@ -466,7 +466,7 @@ OrbitGroup:AddToggle("StereoOrbit", { Text = "立体円", Default = false })
 
 OrbitGroup:AddSlider("StereoRotationSpeed", {
     Text = "立体円の横回転速度",
-    Default = 1, Min = 0, Max = 10, Rounding = 1,
+    Default = 1, Min = 0, Max = 100, Rounding = 1,
 })
 
 -- 円形スーパースパークラー
@@ -503,15 +503,15 @@ OrbitGroup:AddToggle("TpLive", {
 
 OrbitGroup:AddSlider("SparklerHeight", {
     Text = "スパークラー高さ",
-    Default = 50, Min = 5, Max = 150, Rounding = 1, Suffix = "スタッド",
+    Default = 50, Min = 5, Max = 1500, Rounding = 1, Suffix = "スタッド",
 })
 
 OrbitGroup:AddSlider("LiveTopRadius", {
     Text = "上部半径",
-    Default = 6, Min = 1, Max = 50, Rounding = 1, Suffix = "スタッド",
+    Default = 6, Min = 1, Max = 500, Rounding = 1, Suffix = "スタッド",
 })
 
 OrbitGroup:AddSlider("LiveBottomRadius", {
     Text = "下部半径",
-    Default = 6, Min = 1, Max = 50, Rounding = 1, Suffix = "スタッド",
+    Default = 6, Min = 1, Max = 200, Rounding = 1, Suffix = "スタッド",
 })
