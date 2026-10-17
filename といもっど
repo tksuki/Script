@@ -328,8 +328,9 @@ function startLiveOrbit()
             local method = Options.OrbitMethod.Value
             local topRadius = Options.LiveTopRadius.Value
             local bottomRadius = Options.LiveBottomRadius.Value
-            local topY = root.Position.Y + Options.SparklerHeight.Value
-            local bottomY = root.Position.Y - 8
+            local anchor = root.Position -- 毎フレーム追従
+            local topY = anchor.Y + Options.SparklerHeight.Value
+            local bottomY = anchor.Y - 8
             local speed = Options.OrbitSpeed.Value
             local interval = math.max(0.02, 0.3 / speed)
 
@@ -340,18 +341,17 @@ function startLiveOrbit()
 
             local currentY = liveState and topY or bottomY
             local radius = liveState and topRadius or bottomRadius
-            angleOffset = angleOffset + dt * speed
 
             for i, s in ipairs(spawned) do
                 local stick = s:FindFirstChild("Stick")
                 if stick then
                     setCollision(s, false)
 
-                    local angle = angleOffset + (i - 1) * (math.pi * 2 / n)
+                    local angle = (i - 1) * (math.pi * 2 / n)
                     local pos = Vector3.new(
-                        root.Position.X + math.cos(angle) * radius,
+                        anchor.X + math.cos(angle) * radius,
                         currentY,
-                        root.Position.Z + math.sin(angle) * radius
+                        anchor.Z + math.sin(angle) * radius
                     )
                     local tangent = Vector3.new(-math.sin(angle), 0, math.cos(angle))
                     applyMotion(stick, method, pos, makeStickCFrame(pos, tangent))
@@ -435,17 +435,17 @@ OrbitGroup:AddDropdown("OrbitMethod", {
 
 OrbitGroup:AddSlider("OrbitHeight", {
     Text = "頭の上の高さ(中心)",
-    Default = 3, Min = -5, Max = 100, Rounding = 1, Suffix = "スタッド",
+    Default = 3, Min = -5, Max = 30, Rounding = 1, Suffix = "スタッド",
 })
 
 OrbitGroup:AddSlider("OrbitRadius", {
     Text = "半径",
-    Default = 6, Min = 1, Max = 100, Rounding = 1, Suffix = "スタッド",
+    Default = 6, Min = 1, Max = 30, Rounding = 1, Suffix = "スタッド",
 })
 
 OrbitGroup:AddSlider("OrbitSpeed", {
     Text = "速度",
-    Default = 2, Min = 0.1, Max = 200, Rounding = 1,
+    Default = 2, Min = 0.1, Max = 20, Rounding = 1,
 })
 
 -- アップグレード円
@@ -458,7 +458,7 @@ OrbitGroup:AddSlider("UpgradeDuration", {
 
 OrbitGroup:AddSlider("UpgradeMaxRadius", {
     Text = "目標半径",
-    Default = 15, Min = 5, Max =  500, Rounding = 1, Suffix = "スタッド",
+    Default = 15, Min = 5, Max = 30, Rounding = 1, Suffix = "スタッド",
 })
 
 -- 立体円
@@ -466,7 +466,7 @@ OrbitGroup:AddToggle("StereoOrbit", { Text = "立体円", Default = false })
 
 OrbitGroup:AddSlider("StereoRotationSpeed", {
     Text = "立体円の横回転速度",
-    Default = 1, Min = 0, Max = 100, Rounding = 1,
+    Default = 1, Min = 0, Max = 10, Rounding = 1,
 })
 
 -- 円形スーパースパークラー
@@ -503,15 +503,15 @@ OrbitGroup:AddToggle("TpLive", {
 
 OrbitGroup:AddSlider("SparklerHeight", {
     Text = "スパークラー高さ",
-    Default = 50, Min = 5, Max = 1500, Rounding = 1, Suffix = "スタッド",
+    Default = 50, Min = 5, Max = 150, Rounding = 1, Suffix = "スタッド",
 })
 
 OrbitGroup:AddSlider("LiveTopRadius", {
     Text = "上部半径",
-    Default = 6, Min = 1, Max = 500, Rounding = 1, Suffix = "スタッド",
+    Default = 6, Min = 1, Max = 50, Rounding = 1, Suffix = "スタッド",
 })
 
 OrbitGroup:AddSlider("LiveBottomRadius", {
     Text = "下部半径",
-    Default = 6, Min = 1, Max = 200, Rounding = 1, Suffix = "スタッド",
+    Default = 6, Min = 1, Max = 50, Rounding = 1, Suffix = "スタッド",
 })
