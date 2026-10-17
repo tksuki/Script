@@ -112,6 +112,22 @@ local function pruneSpawned()
     end
 end
 
+-- 表示名(ユーザー名) -> Player
+local playerMap = {}
+
+-- 基準にするキャラクター。「選択プレイヤーに付与」がオンなら選択中のプレイヤー、
+-- そうでない/見つからない場合は自分
+local function getTargetCharacter()
+    if Toggles.GiveToPlayer and Toggles.GiveToPlayer.Value and Options.SelectedPlayer then
+        local key = Options.SelectedPlayer.Value
+        local plr = key and playerMap[key]
+        if plr and plr.Parent and plr.Character then
+            return plr.Character
+        end
+    end
+    return LocalPlayer.Character
+end
+
 -- 1本スポーンして登録
 local function spawnOne()
     local char = LocalPlayer.Character
@@ -228,7 +244,7 @@ function startOrbit()
             local dt = now - lastTime
             lastTime = now
 
-            local char = LocalPlayer.Character
+            local char = getTargetCharacter()
             local head = char and char:FindFirstChild("Head")
             if not head then return end
 
@@ -320,7 +336,7 @@ function startLiveOrbit()
             local dt = now - lastTime
             lastTime = now
 
-            local char = LocalPlayer.Character
+            local char = getTargetCharacter()
             local root = char and char:FindFirstChild("HumanoidRootPart")
             if not root then return end
 
@@ -390,7 +406,7 @@ function startTpCircle()
         tpCircleConn = RunService.Heartbeat:Connect(function()
             local now = os.clock()
 
-            local char = LocalPlayer.Character
+            local char = getTargetCharacter()
             local head = char and char:FindFirstChild("Head")
             if not head then return end
 
@@ -639,3 +655,51 @@ OrbitGroup:AddSlider("TpCircleShift", {
     Text = "ずれ幅(tp円形・tpライブ共通)",
     Default = 5, Min = 0, Max = 180, Rounding = 1, Suffix = "度",
 })
+
+-- ===== プレイヤー選択 =====
+local PlayerGroup = Tabs.Main:AddLeftGroupbox("プレイヤー")
+
+local function buildPlayerList(leaving)
+    playerMap = {}
+    local list = {}
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= LocalPlayer and plr ~= leaving then
+            local label = plr.DisplayName .. " (" .. plr.Name .. ")"
+            playerMap[label] = plr
+            table.insert(list, label)
+        end
+    end
+    table.sort(list)
+    return list
+end
+
+PlayerGroup:AddDropdown("SelectedPlayer", {
+    Text = "プレイヤー選択",
+    Values = buildPlayerList(),
+    Default = nil,
+    Multi = false,
+    AllowNull = true,
+})
+
+PlayerGroup:AddToggle("GiveToPlayer", {
+    Text = "選択プレイヤーに付与",
+    Default = false,
+})
+
+-- 入退室で一覧を更新
+local function refreshPlayerList(leaving)
+    local list = buildPlayerList(leaving)
+    local dd = Options.SelectedPlayer
+    if not dd then return end
+
+    local current = dd.Value
+    pcall(function() dd:SetValues(list) end)
+
+    -- 退室などで選択中のプレイヤーが消えた場合は選択を外す
+    if current and not playerMap[current] then
+        pcall(function() dd:SetValue(nil) end)
+    end
+end
+
+Players.PlayerAdded:Connect(function() task.defer(refreshPlayerList) end)
+Players.PlayerRemoving:Connect(function(plr) refreshPlayerList(plr) end)
