@@ -597,7 +597,7 @@ OrbitGroup:AddToggle("TpLive", {
 
 OrbitGroup:AddSlider("SparklerHeight", {
     Text = "スパークラー高さ",
-    Default = 50, Min = 5, Max = 2000, Rounding = 1, Suffix = "スタッド",
+    Default = 50, Min = 5, Max = 20000, Rounding = 1, Suffix = "スタッド",
 })
 
 OrbitGroup:AddSlider("LiveTopRadius", {
