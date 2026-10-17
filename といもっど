@@ -21,12 +21,14 @@ local handled = {}
 local spawned = {}
 
 local spawning = false
-local orbitConn, liveConn
+local orbitConn, liveConn, tpCircleConn
 local angleOffset, stereoAngleOffset = 0, 0
 local liveState, lastSwitchTime = true, 0
+local tpCircleOuter, tpCircleLastSwitch, tpCircleAngle = true, 0, 0
 
 -- 前方宣言 (UIのコールバックから参照するため)
 local startOrbit, stopOrbit, startLiveOrbit, stopLiveOrbit
+local startTpCircle, stopTpCircle
 
 --------------------------------------------------------------------
 -- ユーティリティ
@@ -199,7 +201,7 @@ local function applyMotion(stick, method, pos, cf)
 end
 
 local function cleanupAll()
-    local anyRunning = orbitConn ~= nil or liveConn ~= nil
+    local anyRunning = orbitConn ~= nil or liveConn ~= nil or tpCircleConn ~= nil
     for _, s in ipairs(spawned) do
         local stick = s and s:FindFirstChild("Stick")
         if stick then removeMovers(stick) end
@@ -370,6 +372,71 @@ function stopLiveOrbit()
 end
 
 --------------------------------------------------------------------
+-- tp円形 (内側↔外側をtpし続け、外側に戻るたびに少しずつ角度をずらす)
+--------------------------------------------------------------------
+function startTpCircle()
+    if tpCircleConn then return end
+    tpCircleLastSwitch = os.clock()
+
+    task.spawn(function()
+        ensureSpawned()
+        if not Toggles.TpCircle.Value then return end
+
+        tpCircleConn = RunService.Heartbeat:Connect(function()
+            local now = os.clock()
+
+            local char = LocalPlayer.Character
+            local head = char and char:FindFirstChild("Head")
+            if not head then return end
+
+            pruneSpawned()
+            local n = #spawned
+            if n == 0 then return end
+
+            local method = Options.OrbitMethod.Value
+            local height = Options.OrbitHeight.Value
+            local speed = Options.OrbitSpeed.Value
+            local inner = Options.TpCircleInner.Value
+            local outer = math.max(Options.TpCircleOuter.Value, inner)
+            local shift = math.rad(Options.TpCircleShift.Value)
+            local interval = math.max(0.02, 0.3 / speed)
+
+            if now - tpCircleLastSwitch >= interval then
+                tpCircleLastSwitch = now
+                tpCircleOuter = not tpCircleOuter
+                -- 内側から外側へ戻るときに、横にずらした座標へtpする
+                if tpCircleOuter then
+                    tpCircleAngle = tpCircleAngle + shift
+                end
+            end
+
+            local radius = tpCircleOuter and outer or inner
+            local center = head.Position + Vector3.new(0, height, 0)
+
+            for i, s in ipairs(spawned) do
+                local stick = s:FindFirstChild("Stick")
+                if stick then
+                    setCollision(s, false)
+
+                    local angle = tpCircleAngle + (i - 1) * (math.pi * 2 / n)
+                    local pos = center + Vector3.new(math.cos(angle) * radius, 0, math.sin(angle) * radius)
+                    local tangent = Vector3.new(-math.sin(angle), 0, math.cos(angle))
+                    applyMotion(stick, method, pos, makeStickCFrame(pos, tangent))
+                end
+            end
+        end)
+    end)
+end
+
+function stopTpCircle()
+    if tpCircleConn then
+        tpCircleConn:Disconnect()
+        tpCircleConn = nil
+    end
+    cleanupAll()
+end
+
+--------------------------------------------------------------------
 -- UI
 --------------------------------------------------------------------
 local Window = Library:CreateWindow({
@@ -478,6 +545,9 @@ OrbitGroup:AddToggle("SuperSparklerOrbit", {
             if Toggles.TpLive and Toggles.TpLive.Value then
                 Toggles.TpLive:SetValue(false)
             end
+            if Toggles.TpCircle and Toggles.TpCircle.Value then
+                Toggles.TpCircle:SetValue(false)
+            end
             startOrbit()
         else
             stopOrbit()
@@ -493,6 +563,9 @@ OrbitGroup:AddToggle("TpLive", {
         if value then
             if Toggles.SuperSparklerOrbit and Toggles.SuperSparklerOrbit.Value then
                 Toggles.SuperSparklerOrbit:SetValue(false)
+            end
+            if Toggles.TpCircle and Toggles.TpCircle.Value then
+                Toggles.TpCircle:SetValue(false)
             end
             startLiveOrbit()
         else
@@ -514,4 +587,50 @@ OrbitGroup:AddSlider("LiveTopRadius", {
 OrbitGroup:AddSlider("LiveBottomRadius", {
     Text = "下部半径",
     Default = 6, Min = 1, Max = 1000, Rounding = 1, Suffix = "スタッド",
+})
+
+-- tp円形 (頭の上の高さ・速度は上の共通スライダーを使用)
+OrbitGroup:AddToggle("TpCircle", {
+    Text = "tp円形",
+    Default = false,
+    Callback = function(value)
+        if value then
+            if Toggles.SuperSparklerOrbit and Toggles.SuperSparklerOrbit.Value then
+                Toggles.SuperSparklerOrbit:SetValue(false)
+            end
+            if Toggles.TpLive and Toggles.TpLive.Value then
+                Toggles.TpLive:SetValue(false)
+            end
+            startTpCircle()
+        else
+            stopTpCircle()
+        end
+    end,
+})
+
+OrbitGroup:AddSlider("TpCircleInner", {
+    Text = "円内側半径",
+    Default = 3, Min = 1.5, Max = 50, Rounding = 1, Suffix = "スタッド",
+    Callback = function(value)
+        -- 外側半径の最小値を内側半径に合わせる
+        local outer = Options.TpCircleOuter
+        if outer then
+            if outer.SetMin then
+                pcall(function() outer:SetMin(value) end)
+            end
+            if outer.Value < value then
+                outer:SetValue(value)
+            end
+        end
+    end,
+})
+
+OrbitGroup:AddSlider("TpCircleOuter", {
+    Text = "円外側半径",
+    Default = 15, Min = 1.5, Max = 1500, Rounding = 1, Suffix = "スタッド",
+})
+
+OrbitGroup:AddSlider("TpCircleShift", {
+    Text = "ずれ幅(外側に戻るたび)",
+    Default = 5, Min = 0, Max = 180, Rounding = 1, Suffix = "度",
 })
