@@ -1,1 +1,517 @@
+local repo = "https://raw.githubusercontent.com/deividcomsono/Obsidian/main/"
+local Library = loadstring(game:HttpGet(repo .. "Library.lua"))()
 
+local Options = Library.Options
+local Toggles = Library.Toggles
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local LocalPlayer = Players.LocalPlayer
+
+--------------------------------------------------------------------
+-- 状態
+--------------------------------------------------------------------
+local PLOT_NAMES = { "Plot1", "Plot2", "Plot3", "Plot4", "Plot5" }
+
+local baseCFrame = CFrame.new(-477.087494, -5.53849745, -157.138687, -0.669130504, -0.46358481, 0.580821335, 0, 0.781572104, 0.62381494, -0.743144751, 0.417413592, -0.522973835)
+local baseRotation = baseCFrame - baseCFrame.Position
+
+local handled = {}
+local spawned = {}
+
+local spawning = false
+local orbitConn, liveConn
+local angleOffset, stereoAngleOffset = 0, 0
+local liveState, lastSwitchTime = true, 0
+
+-- 前方宣言 (UIのコールバックから参照するため)
+local startOrbit, stopOrbit, startLiveOrbit, stopLiveOrbit
+
+--------------------------------------------------------------------
+-- ユーティリティ
+--------------------------------------------------------------------
+local function setCollision(model, enabled)
+    for _, d in ipairs(model:GetDescendants()) do
+        if d:IsA("BasePart") then
+            d.CanCollide = enabled
+            d.CanTouch = enabled
+        end
+    end
+end
+
+local function isMe(obj)
+    local char = LocalPlayer.Character
+    if obj == char or obj == LocalPlayer then return true end
+    if obj.Name == LocalPlayer.Name then return true end
+    if obj:IsA("ObjectValue") and (obj.Value == char or obj.Value == LocalPlayer) then
+        return true
+    end
+    return false
+end
+
+local function getMyPlotName()
+    local plotItems = workspace:FindFirstChild("PlotItems")
+    local inPlots = plotItems and plotItems:FindFirstChild("PlayersInPlots")
+    if not inPlots then return nil end
+
+    for _, name in ipairs(PLOT_NAMES) do
+        local plotFolder = inPlots:FindFirstChild(name)
+        if plotFolder then
+            for _, child in ipairs(plotFolder:GetChildren()) do
+                if isMe(child) then return name end
+            end
+        end
+    end
+    return nil
+end
+
+local function findNewSparklers()
+    local found = {}
+    local plotItems = workspace:FindFirstChild("PlotItems")
+    if not plotItems then return found end
+
+    local myPlot = getMyPlotName()
+    local targets = myPlot and { myPlot } or PLOT_NAMES
+
+    for _, name in ipairs(targets) do
+        local plot = plotItems:FindFirstChild(name)
+        if plot then
+            for _, item in ipairs(plot:GetChildren()) do
+                if item.Name == "FireworkSparkler" and not handled[item] then
+                    table.insert(found, item)
+                end
+            end
+        end
+    end
+    return found
+end
+
+local function registerSparkler(sparkler)
+    if handled[sparkler] then return end
+    handled[sparkler] = true
+    table.insert(spawned, sparkler)
+
+    local stick = sparkler:FindFirstChild("Stick")
+    if not stick then return end
+
+    pcall(function()
+        ReplicatedStorage.GrabEvents.SetNetworkOwner:FireServer(stick, stick.CFrame)
+    end)
+end
+
+local function pruneSpawned()
+    for i = #spawned, 1, -1 do
+        local s = spawned[i]
+        if not s or not s.Parent then
+            table.remove(spawned, i)
+        end
+    end
+end
+
+-- 1本スポーンして登録
+local function spawnOne()
+    local char = LocalPlayer.Character
+    local root = char and char:FindFirstChild("HumanoidRootPart")
+    if not root then return end
+
+    local pos = (root.CFrame * CFrame.new(0, 0, -5)).Position
+    local ok, result = pcall(function()
+        return ReplicatedStorage.MenuToys.SpawnToyRemoteFunction:InvokeServer(
+            "FireworkSparkler",
+            CFrame.new(pos) * baseRotation,
+            Vector3.new(0, 132, 0)
+        )
+    end)
+
+    task.wait(0.01)
+
+    if ok and typeof(result) == "Instance" then
+        registerSparkler(result)
+    end
+    for _, s in ipairs(findNewSparklers()) do
+        registerSparkler(s)
+    end
+end
+
+-- 回転・ライブ機能が単体で動くよう、足りなければ自動で用意する
+local function ensureSpawned()
+    pruneSpawned()
+    if #spawned > 0 then return end
+
+    for _, s in ipairs(findNewSparklers()) do
+        registerSparkler(s)
+    end
+
+    if #spawned == 0 then
+        local count = Options.SparklerCount and Options.SparklerCount.Value or 10
+        for _ = 1, count do
+            spawnOne()
+            task.wait(0.05)
+        end
+    end
+end
+
+--------------------------------------------------------------------
+-- 移動処理 (共通)
+--------------------------------------------------------------------
+local function removeMovers(stick)
+    local bp = stick:FindFirstChild("OrbitBP")
+    local bg = stick:FindFirstChild("OrbitBG")
+    if bp then bp:Destroy() end
+    if bg then bg:Destroy() end
+end
+
+-- 棒の長い軸をX軸(円の接線方向)に固定したCFrame
+local function makeStickCFrame(pos, tangent)
+    local up = Vector3.new(0, 1, 0)
+    return CFrame.fromMatrix(pos, tangent, up, tangent:Cross(up))
+end
+
+local function applyMotion(stick, method, pos, cf)
+    if method == "BP/BG" then
+        local bp = stick:FindFirstChild("OrbitBP")
+        if not bp then
+            bp = Instance.new("BodyPosition")
+            bp.Name = "OrbitBP"
+            bp.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+            bp.P = 100000
+            bp.D = 1000
+            bp.Parent = stick
+        end
+        local bg = stick:FindFirstChild("OrbitBG")
+        if not bg then
+            bg = Instance.new("BodyGyro")
+            bg.Name = "OrbitBG"
+            bg.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
+            bg.P = 100000
+            bg.D = 1000
+            bg.Parent = stick
+        end
+        bp.Position = pos
+        bg.CFrame = cf
+    else
+        removeMovers(stick)
+        stick.CFrame = cf
+        stick.AssemblyLinearVelocity = Vector3.zero
+        stick.AssemblyAngularVelocity = Vector3.zero
+    end
+end
+
+local function cleanupAll()
+    local anyRunning = orbitConn ~= nil or liveConn ~= nil
+    for _, s in ipairs(spawned) do
+        local stick = s and s:FindFirstChild("Stick")
+        if stick then removeMovers(stick) end
+        if not anyRunning and s and s.Parent then
+            setCollision(s, true)
+        end
+    end
+end
+
+--------------------------------------------------------------------
+-- 円形スーパースパークラー
+--------------------------------------------------------------------
+function startOrbit()
+    if orbitConn then return end
+    local lastTime = os.clock()
+
+    task.spawn(function()
+        ensureSpawned()
+        if not Toggles.SuperSparklerOrbit.Value then return end
+
+        orbitConn = RunService.Heartbeat:Connect(function()
+            local now = os.clock()
+            local dt = now - lastTime
+            lastTime = now
+
+            local char = LocalPlayer.Character
+            local head = char and char:FindFirstChild("Head")
+            if not head then return end
+
+            pruneSpawned()
+            local n = #spawned
+            if n == 0 then return end
+
+            local method = Options.OrbitMethod.Value
+            local height = Options.OrbitHeight.Value
+            local radius = Options.OrbitRadius.Value
+
+            if Toggles.UpgradeOrbit.Value then
+                local duration = math.max(Options.UpgradeDuration.Value, 0.1)
+                local maxRad = Options.UpgradeMaxRadius.Value
+                local minRad = 5
+                local t = now % (duration * 2)
+                if t > duration then t = duration * 2 - t end
+                radius = minRad + (maxRad - minRad) * (t / duration)
+            end
+
+            angleOffset = angleOffset + dt * Options.OrbitSpeed.Value
+
+            local stereo = Toggles.StereoOrbit.Value
+            local stereoRotCF = CFrame.new()
+            if stereo then
+                stereoAngleOffset = stereoAngleOffset + dt * Options.StereoRotationSpeed.Value
+                stereoRotCF = CFrame.Angles(0, stereoAngleOffset, 0)
+            end
+
+            local center = head.Position + Vector3.new(0, height, 0)
+
+            for i, s in ipairs(spawned) do
+                local stick = s:FindFirstChild("Stick")
+                if stick then
+                    setCollision(s, false)
+
+                    local angle = angleOffset + (i - 1) * (math.pi * 2 / n)
+                    local pos, tangent
+
+                    if stereo then
+                        local ringType = i % 3
+                        local basePos
+                        if ringType == 1 then
+                            basePos = Vector3.new(math.cos(angle) * radius, 0, math.sin(angle) * radius)
+                            tangent = Vector3.new(-math.sin(angle), 0, math.cos(angle))
+                        elseif ringType == 2 then
+                            basePos = Vector3.new(math.cos(angle) * radius, math.sin(angle) * radius, 0)
+                            tangent = Vector3.new(-math.sin(angle), math.cos(angle), 0)
+                        else
+                            basePos = Vector3.new(0, math.sin(angle) * radius, math.cos(angle) * radius)
+                            tangent = Vector3.new(0, math.cos(angle), -math.sin(angle))
+                        end
+                        pos = center + (stereoRotCF * basePos)
+                        tangent = stereoRotCF * tangent
+                    else
+                        pos = center + Vector3.new(math.cos(angle) * radius, 0, math.sin(angle) * radius)
+                        tangent = Vector3.new(-math.sin(angle), 0, math.cos(angle))
+                    end
+
+                    applyMotion(stick, method, pos, makeStickCFrame(pos, tangent))
+                end
+            end
+        end)
+    end)
+end
+
+function stopOrbit()
+    if orbitConn then
+        orbitConn:Disconnect()
+        orbitConn = nil
+    end
+    cleanupAll()
+end
+
+--------------------------------------------------------------------
+-- tpライブ会場
+--------------------------------------------------------------------
+function startLiveOrbit()
+    if liveConn then return end
+    local lastTime = os.clock()
+    lastSwitchTime = lastTime
+
+    task.spawn(function()
+        ensureSpawned()
+        if not Toggles.TpLive.Value then return end
+
+        liveConn = RunService.Heartbeat:Connect(function()
+            local now = os.clock()
+            local dt = now - lastTime
+            lastTime = now
+
+            local char = LocalPlayer.Character
+            local root = char and char:FindFirstChild("HumanoidRootPart")
+            if not root then return end
+
+            pruneSpawned()
+            local n = #spawned
+            if n == 0 then return end
+
+            local method = Options.OrbitMethod.Value
+            local topRadius = Options.LiveTopRadius.Value
+            local bottomRadius = Options.LiveBottomRadius.Value
+            local topY = root.Position.Y + Options.SparklerHeight.Value
+            local bottomY = root.Position.Y - 8
+            local speed = Options.OrbitSpeed.Value
+            local interval = math.max(0.02, 0.3 / speed)
+
+            if now - lastSwitchTime >= interval then
+                lastSwitchTime = now
+                liveState = not liveState
+            end
+
+            local currentY = liveState and topY or bottomY
+            local radius = liveState and topRadius or bottomRadius
+            angleOffset = angleOffset + dt * speed
+
+            for i, s in ipairs(spawned) do
+                local stick = s:FindFirstChild("Stick")
+                if stick then
+                    setCollision(s, false)
+
+                    local angle = angleOffset + (i - 1) * (math.pi * 2 / n)
+                    local pos = Vector3.new(
+                        root.Position.X + math.cos(angle) * radius,
+                        currentY,
+                        root.Position.Z + math.sin(angle) * radius
+                    )
+                    local tangent = Vector3.new(-math.sin(angle), 0, math.cos(angle))
+                    applyMotion(stick, method, pos, makeStickCFrame(pos, tangent))
+                end
+            end
+        end)
+    end)
+end
+
+function stopLiveOrbit()
+    if liveConn then
+        liveConn:Disconnect()
+        liveConn = nil
+    end
+    cleanupAll()
+end
+
+--------------------------------------------------------------------
+-- UI
+--------------------------------------------------------------------
+local Window = Library:CreateWindow({
+    Title = "Sparkler Menu",
+    Footer = "Obsidian UI",
+    Center = true,
+    AutoShow = true,
+})
+
+local Tabs = {
+    Main = Window:AddTab("メイン", "house"),
+}
+
+local Group = Tabs.Main:AddLeftGroupbox("スパークラー")
+local OrbitGroup = Tabs.Main:AddRightGroupbox("回転")
+
+-- ===== スパークラー =====
+Group:AddSlider("SparklerCount", {
+    Text = "スパークラー本数",
+    Default = 10, Min = 1, Max = 30, Rounding = 0, Suffix = "本",
+})
+
+Group:AddToggle("SparklerSpawn", {
+    Text = "スパークラースポーン",
+    Default = false,
+    Callback = function(value)
+        if not value then
+            spawning = false
+            return
+        end
+        if spawning then return end
+        spawning = true
+
+        task.spawn(function()
+            local count = Options.SparklerCount.Value
+
+            -- 既存のものは対象外にする
+            for _, s in ipairs(findNewSparklers()) do
+                handled[s] = true
+            end
+
+            for _ = 1, count do
+                if not Toggles.SparklerSpawn.Value then break end
+                spawnOne()
+                task.wait(0.25)
+            end
+
+            spawning = false
+            if Toggles.SparklerSpawn.Value then
+                Toggles.SparklerSpawn:SetValue(false)
+            end
+        end)
+    end,
+})
+
+-- ===== 回転 =====
+OrbitGroup:AddDropdown("OrbitMethod", {
+    Text = "回転方式",
+    Values = { "BP/BG", "CFrame" },
+    Default = 1,
+    Multi = false,
+})
+
+OrbitGroup:AddSlider("OrbitHeight", {
+    Text = "頭の上の高さ(中心)",
+    Default = 3, Min = -5, Max = 30, Rounding = 1, Suffix = "スタッド",
+})
+
+OrbitGroup:AddSlider("OrbitRadius", {
+    Text = "半径",
+    Default = 6, Min = 1, Max = 30, Rounding = 1, Suffix = "スタッド",
+})
+
+OrbitGroup:AddSlider("OrbitSpeed", {
+    Text = "速度",
+    Default = 2, Min = 0.1, Max = 20, Rounding = 1,
+})
+
+-- アップグレード円
+OrbitGroup:AddToggle("UpgradeOrbit", { Text = "アップグレード円", Default = false })
+
+OrbitGroup:AddSlider("UpgradeDuration", {
+    Text = "変化時間",
+    Default = 1, Min = 0.1, Max = 5, Rounding = 1, Suffix = "秒",
+})
+
+OrbitGroup:AddSlider("UpgradeMaxRadius", {
+    Text = "目標半径",
+    Default = 15, Min = 5, Max = 30, Rounding = 1, Suffix = "スタッド",
+})
+
+-- 立体円
+OrbitGroup:AddToggle("StereoOrbit", { Text = "立体円", Default = false })
+
+OrbitGroup:AddSlider("StereoRotationSpeed", {
+    Text = "立体円の横回転速度",
+    Default = 1, Min = 0, Max = 10, Rounding = 1,
+})
+
+-- 円形スーパースパークラー
+OrbitGroup:AddToggle("SuperSparklerOrbit", {
+    Text = "円形スーパースパークラー",
+    Default = false,
+    Callback = function(value)
+        if value then
+            if Toggles.TpLive and Toggles.TpLive.Value then
+                Toggles.TpLive:SetValue(false)
+            end
+            startOrbit()
+        else
+            stopOrbit()
+        end
+    end,
+})
+
+-- tpライブ会場
+OrbitGroup:AddToggle("TpLive", {
+    Text = "tpライブ会場",
+    Default = false,
+    Callback = function(value)
+        if value then
+            if Toggles.SuperSparklerOrbit and Toggles.SuperSparklerOrbit.Value then
+                Toggles.SuperSparklerOrbit:SetValue(false)
+            end
+            startLiveOrbit()
+        else
+            stopLiveOrbit()
+        end
+    end,
+})
+
+OrbitGroup:AddSlider("SparklerHeight", {
+    Text = "スパークラー高さ",
+    Default = 50, Min = 5, Max = 150, Rounding = 1, Suffix = "スタッド",
+})
+
+OrbitGroup:AddSlider("LiveTopRadius", {
+    Text = "上部半径",
+    Default = 6, Min = 1, Max = 50, Rounding = 1, Suffix = "スタッド",
+})
+
+OrbitGroup:AddSlider("LiveBottomRadius", {
+    Text = "下部半径",
+    Default = 6, Min = 1, Max = 50, Rounding = 1, Suffix = "スタッド",
+})
