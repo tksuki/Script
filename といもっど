@@ -24,6 +24,7 @@ local spawning = false
 local orbitConn, liveConn, tpCircleConn
 local angleOffset, stereoAngleOffset = 0, 0
 local liveState, lastSwitchTime = true, 0
+local liveAngle = 0
 local tpCircleOuter, tpCircleLastSwitch, tpCircleAngle = true, 0, 0
 
 -- 前方宣言 (UIのコールバックから参照するため)
@@ -339,6 +340,10 @@ function startLiveOrbit()
             if now - lastSwitchTime >= interval then
                 lastSwitchTime = now
                 liveState = not liveState
+                -- 上に戻るたびに、ずれ幅ぶん横にずらした座標へtpする
+                if liveState then
+                    liveAngle = liveAngle + math.rad(Options.TpCircleShift.Value)
+                end
             end
 
             local currentY = liveState and topY or bottomY
@@ -349,7 +354,7 @@ function startLiveOrbit()
                 if stick then
                     setCollision(s, false)
 
-                    local angle = (i - 1) * (math.pi * 2 / n)
+                    local angle = liveAngle + (i - 1) * (math.pi * 2 / n)
                     local pos = Vector3.new(
                         anchor.X + math.cos(angle) * radius,
                         currentY,
@@ -631,6 +636,6 @@ OrbitGroup:AddSlider("TpCircleOuter", {
 })
 
 OrbitGroup:AddSlider("TpCircleShift", {
-    Text = "ずれ幅(外側に戻るたび)",
+    Text = "ずれ幅(tp円形・tpライブ共通)",
     Default = 5, Min = 0, Max = 180, Rounding = 1, Suffix = "度",
 })
