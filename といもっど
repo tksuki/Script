@@ -1345,7 +1345,15 @@ local function startRain()
                 resetRainBall(st, spacing, height)
             end
 
-            local cf = CFrame.new(rainCenter.X + st.dx, st.y, rainCenter.Z + st.dz) * (entry.rot or ballRotation)
+            -- 雪の時だけ、縦軸まわりにゆっくり回転させる (速度はスライダー、度/秒)
+            local rot = entry.rot or ballRotation
+            if entry.rot then
+                st.spin = (st.spin or math.random() * math.pi * 2)
+                    + math.rad(Options.SnowSpinSpeed.Value) * dt
+                rot = CFrame.Angles(0, st.spin, 0) * entry.rot
+            end
+
+            local cf = CFrame.new(rainCenter.X + st.dx, st.y, rainCenter.Z + st.dz) * rot
             local part = entry.part
             if entry.obj:IsA("Model") then
                 entry.obj:PivotTo(cf)
@@ -1380,6 +1388,11 @@ RainGroup:AddSlider("RainSpeed", {
 RainGroup:AddSlider("RainHeight", {
     Text = "雨高さ",
     Default = 150, Min = 50, Max = 300, Rounding = 0, Suffix = "スタッド",
+})
+
+RainGroup:AddSlider("SnowSpinSpeed", {
+    Text = "雪の回転速度 (雪の雨のみ)",
+    Default = 30, Min = 0, Max = 360, Rounding = 0, Suffix = "度/秒",
 })
 
 RainGroup:AddToggle("RainRandomSpeed", {
