@@ -1,5 +1,9 @@
-game:GetService("ReplicatedStorage").MenuToys.SpawnToyRemoteFunction:InvokeServer(table.unpack({
-    [1] = "Snowflake",
-    [2] = CFrame.new(49.1397209, -5.54983377, 31.5049782, -0.999659359, -0.015688533, 0.020855967, 0, 0.799142838, 0.601141155, -0.0260979179, 0.600936353, -0.798870683),
-    [3] = Vector3.new(0, 178.5050048828125, 0),
+game:GetService("ReplicatedStorage").GrabEvents.SetNetworkOwner:FireServer(table.unpack({
+    [1] = workspace.yajusaiko4545SpawnedInToys.Snowflake.Part,
+    [2] = CFrame.new(215.136917, -5.48987579, 431.117554, 0.802479744, -0.430239469, 0.413425118, 0, 0.692876518, 0.721056342, -0.596679389, -0.57863313, 0.556019366),
+}))
+
+game:GetService("ReplicatedStorage").GrabEvents.SetNetworkOwner:FireServer(table.unpack({
+    [1] = workspace.PlotItems.Plot3.Snowflake.Part,
+    [2] = CFrame.new(248.190109, -5.48655367, 456.075104, -0.197102219, 0.713424563, -0.67244041, 0, 0.685895622, 0.727699935, 0.98038286, 0.143431276, -0.13519156),
 }))
