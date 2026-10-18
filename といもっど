@@ -1075,6 +1075,7 @@ local rainConn
 local rainState = {}      -- [ballListの要素] = { dx, dz, y, offset, cell }
 local rainCells = {}      -- 使用中の格子マス (雨間隔ごとに1マス1個)
 local rainLastSpacing
+local rainLastRadius
 local rainCenter = Vector3.new(0, 0, 0)
 
 -- マップのリスポーン地点 (有効なSpawnLocationを優先)
@@ -1096,8 +1097,13 @@ local function findRespawnPos()
 end
 
 -- 半径750の円の中で、雨間隔ごとの格子のうち空いているマスをランダムに選ぶ
+local function getRainRadius()
+    return (Options.RainRadius and Options.RainRadius.Value) or RAIN_RADIUS
+end
+
 local function pickCell(spacing)
-    local maxI = math.max(1, math.floor(RAIN_RADIUS / spacing))
+    local radius = getRainRadius()
+    local maxI = math.max(1, math.floor(radius / spacing))
     for _ = 1, 12 do
         local ix = math.random(-maxI, maxI)
         local iz = math.random(-maxI, maxI)
@@ -1111,7 +1117,7 @@ local function pickCell(spacing)
     end
     -- 空きが見つからない時(個数が多い時)は重なりを許して円の中のどこかに置く
     local ang = math.random() * math.pi * 2
-    local r = RAIN_RADIUS * math.sqrt(math.random())
+    local r = radius * math.sqrt(math.random())
     return nil, math.cos(ang) * r, math.sin(ang) * r
 end
 
@@ -1140,6 +1146,7 @@ local function stopRain()
     rainState = {}
     rainCells = {}
     rainLastSpacing = nil
+    rainLastRadius = nil
 end
 
 local function startRain()
@@ -1149,6 +1156,7 @@ local function startRain()
     rainState = {}
     rainCells = {}
     rainLastSpacing = nil
+    rainLastRadius = nil
 
     if #ballList == 0 then
         print("[雨降らし] 発光球体がありません。先に発光球体をスポーンしてください (出た分から順に雨になります)")
@@ -1160,9 +1168,11 @@ local function startRain()
         local height = Options.RainHeight.Value
         local randomSpeed = Toggles.RainRandomSpeed.Value
 
-        -- 雨間隔が変わったら、全部の位置を配り直す
-        if spacing ~= rainLastSpacing then
+        -- 雨間隔または雨半径が変わったら、全部の位置を配り直す
+        local radiusNow = getRainRadius()
+        if spacing ~= rainLastSpacing or radiusNow ~= rainLastRadius then
             rainLastSpacing = spacing
+            rainLastRadius = radiusNow
             rainCells = {}
             for _, st in pairs(rainState) do
                 st.cell, st.dx, st.dz = pickCell(spacing)
@@ -1221,6 +1231,11 @@ local RainGroup = Tabs.Main:AddLeftGroupbox("雨降らし")
 RainGroup:AddSlider("RainInterval", {
     Text = "雨間隔",
     Default = 15, Min = 5, Max = 50, Rounding = 0, Suffix = "スタッド",
+})
+
+RainGroup:AddSlider("RainRadius", {
+    Text = "雨半径 (リスポーン地点基準)",
+    Default = 750, Min = 100, Max = 750, Rounding = 0, Suffix = "スタッド",
 })
 
 RainGroup:AddSlider("RainSpeed", {
