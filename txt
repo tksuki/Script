@@ -1,1 +1,5 @@
-https://xgf.nu/8AKSS
+game:GetService("ReplicatedStorage").MenuToys.SpawnToyRemoteFunction:InvokeServer(table.unpack({
+    [1] = "Snowflake",
+    [2] = CFrame.new(49.1397209, -5.54983377, 31.5049782, -0.999659359, -0.015688533, 0.020855967, 0, 0.799142838, 0.601141155, -0.0260979179, 0.600936353, -0.798870683),
+    [3] = Vector3.new(0, 178.5050048828125, 0),
+}))
