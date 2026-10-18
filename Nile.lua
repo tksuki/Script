@@ -2,6 +2,6 @@
 -- Service: Testing Service
 -- Generated for: 1yajusaiko4545
 
-getgenv().SCRIPT_KEY = "nile-e6a5c1b3-5e2a-4f72-96aa-483d9f29cf76"
+getgenv().SCRIPT_KEY = "nile-774d46c9-61f2-4fe1-bb83-d4cc421b5661"
 
 loadstring(game:HttpGet("https://api.jnkie.com/api/v1/luascripts/public/0c237fdefab6050afef9e14c974903d107432c6eee626c0dceb9561b6cd7d3cc/download"))()
