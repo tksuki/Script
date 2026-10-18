@@ -1066,7 +1066,119 @@ BallGroup:AddToggle("BallSpawn", {
 
 
 --------------------------------------------------------------------
--- 雨降らし (発光球体で出した物を使う)
+-- 雪スポーン (左下) ※出した物は雨降らしでも使われる
+--------------------------------------------------------------------
+local handledSnow = {}
+local spawningSnow = false
+local snowRotation = CFrame.new(49.1397209, -5.54983377, 31.5049782, -0.999659359, -0.015688533, 0.020855967, 0, 0.799142838, 0.601141155, -0.0260979179, 0.600936353, -0.798870683)
+snowRotation = snowRotation - snowRotation.Position
+
+local function registerSnow(snow)
+    if handledSnow[snow] then return end
+    handledSnow[snow] = true
+
+    local part = getBallPart(snow)
+    if not part then return end
+
+    -- 雨降らしで使えるように一覧に追加 (rotは雪用の向き)
+    table.insert(ballList, { obj = snow, part = part, rot = snowRotation })
+
+    -- 対象はSnowflake。plot内はPlotItems.PlotN、plot外は<ユーザー名>SpawnedInToys
+    -- (インスタンスから直接取るのでフォルダ名・Plot番号は自動で合う)
+    sendSNO5(part)
+end
+
+local function findNewSnow()
+    local found = {}
+
+    local function scan(folder)
+        if not folder then return end
+        for _, item in ipairs(folder:GetChildren()) do
+            if item.Name == "Snowflake" and not handledSnow[item] then
+                table.insert(found, item)
+            end
+        end
+    end
+
+    local plotItems = workspace:FindFirstChild("PlotItems")
+    if plotItems then
+        local myPlot = getMyPlotName()
+        local targets = myPlot and { myPlot } or PLOT_NAMES
+        for _, name in ipairs(targets) do
+            scan(plotItems:FindFirstChild(name))
+        end
+    end
+    scan(getMySpawnedFolder())
+
+    return found
+end
+
+local function spawnSnowOne()
+    local char = LocalPlayer.Character
+    local root = char and char:FindFirstChild("HumanoidRootPart")
+    if not root then return false end
+
+    local pos = (root.CFrame * CFrame.new(0, 0, -5)).Position -- 自分の前
+    local ok, result = pcall(function()
+        return ReplicatedStorage.MenuToys.SpawnToyRemoteFunction:InvokeServer(
+            "Snowflake",
+            CFrame.new(pos) * snowRotation,
+            Vector3.new(0, 178.5050048828125, 0)
+        )
+    end)
+
+    task.wait(0.01)
+
+    if ok and typeof(result) == "Instance" then
+        registerSnow(result)
+    else
+        for _, s in ipairs(findNewSnow()) do
+            registerSnow(s)
+        end
+    end
+    if ok and typeof(result) == "Instance" then return result end
+    return false
+end
+
+local SnowGroup = Tabs.Main:AddLeftGroupbox("雪スポーン")
+
+SnowGroup:AddSlider("SnowCount", {
+    Text = "雪の数",
+    Default = 10, Min = 1, Max = 600, Rounding = 0, Suffix = "個",
+})
+
+SnowGroup:AddToggle("SnowSpawn", {
+    Text = "雪スポーン",
+    Default = false,
+    Callback = function(value)
+        if not value then
+            spawningSnow = false
+            return
+        end
+        if spawningSnow then return end
+        spawningSnow = true
+
+        task.spawn(function()
+            -- 既存のものは対象外にする
+            for _, s in ipairs(findNewSnow()) do
+                handledSnow[s] = true
+            end
+
+            runSpawnLoop("Snowflake",
+                function() return Toggles.SnowSpawn.Value end,
+                function() return Options.SnowCount.Value end,
+                spawnSnowOne, registerSnow)
+
+            spawningSnow = false
+            if Toggles.SnowSpawn.Value then
+                Toggles.SnowSpawn:SetValue(false)
+            end
+        end)
+    end,
+})
+
+--------------------------------------------------------------------
+-- 雨降らし (発光球体・雪で出した物を使う)
 --------------------------------------------------------------------
 local RAIN_RADIUS = 750      -- リスポーン地点を中心にした半径
 local RAIN_RESET_BELOW = 10  -- リスポーン地点よりこれだけ下がったら上に戻す
@@ -1211,7 +1323,7 @@ local function startRain()
                 resetRainBall(st, spacing, height)
             end
 
-            local cf = CFrame.new(rainCenter.X + st.dx, st.y, rainCenter.Z + st.dz) * ballRotation
+            local cf = CFrame.new(rainCenter.X + st.dx, st.y, rainCenter.Z + st.dz) * (entry.rot or ballRotation)
             local part = entry.part
             if entry.obj:IsA("Model") then
                 entry.obj:PivotTo(cf)
