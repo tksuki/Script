@@ -1073,21 +1073,41 @@ local spawningSnow = false
 local snowRotation = CFrame.new(49.1397209, -5.54983377, 31.5049782, -0.999659359, -0.015688533, 0.020855967, 0, 0.799142838, 0.601141155, -0.0260979179, 0.600936353, -0.798870683)
 snowRotation = snowRotation - snowRotation.Position
 
+-- 雪専用のSNO
+-- 送る対象: Snowflake.Part / 座標: そのSnowflakeの座標
+--   plot外: workspace.<自分のユーザー名>SpawnedInToys.Snowflake.Part
+--   plot内: workspace.PlotItems.PlotN.Snowflake.Part (PlotNは出た場所から自動)
+-- Partは雪のインスタンスから直接取るので、ユーザー名もPlot番号も自動で正しいものになる
+local function sendSnowSNO(snow, fallbackPart)
+    task.spawn(function()
+        for _ = 1, SNO_COUNT do
+            if not snow.Parent then break end -- 消えたら中止
+
+            local part = snow:FindFirstChild("Part", true) or fallbackPart
+            if part and part.Parent then
+                local cf = part.CFrame -- そのSnowflakeの今の座標
+                pcall(function()
+                    ReplicatedStorage.GrabEvents.SetNetworkOwner:FireServer(part, cf)
+                end)
+            end
+            task.wait(SNO_INTERVAL)
+        end
+    end)
+end
+
 local function registerSnow(snow)
     if handledSnow[snow] then return end
     handledSnow[snow] = true
 
-    -- Snowflakeの中の「Part」に送る (見つからなければ最初のBasePartで代用)
+    -- Snowflakeの中の「Part」 (見つからなければ最初のBasePartで代用)
     local part = snow:FindFirstChild("Part", true) or getBallPart(snow)
     if not part then return end
 
     -- 雨降らしで使えるように一覧に追加 (rotは雪用の向き)
     table.insert(ballList, { obj = snow, part = part, rot = snowRotation })
 
-    -- plot内はPlotItems.PlotN、plot外は<ユーザー名>SpawnedInToysにいる個体を
-    -- インスタンスから直接取るので、フォルダ名・Plot番号は自動で合う
-    -- 0.05秒かけて0.01秒間隔で5回、座標はPartの座標
-    sendSNO5(part)
+    -- 0.05秒かけて0.01秒間隔でPartにSNOを5回
+    sendSnowSNO(snow, part)
 end
 
 local function findNewSnow()
