@@ -1077,14 +1077,16 @@ local function registerSnow(snow)
     if handledSnow[snow] then return end
     handledSnow[snow] = true
 
-    local part = getBallPart(snow)
+    -- Snowflakeの中の「Part」に送る (見つからなければ最初のBasePartで代用)
+    local part = snow:FindFirstChild("Part", true) or getBallPart(snow)
     if not part then return end
 
     -- 雨降らしで使えるように一覧に追加 (rotは雪用の向き)
     table.insert(ballList, { obj = snow, part = part, rot = snowRotation })
 
-    -- 対象はSnowflake。plot内はPlotItems.PlotN、plot外は<ユーザー名>SpawnedInToys
-    -- (インスタンスから直接取るのでフォルダ名・Plot番号は自動で合う)
+    -- plot内はPlotItems.PlotN、plot外は<ユーザー名>SpawnedInToysにいる個体を
+    -- インスタンスから直接取るので、フォルダ名・Plot番号は自動で合う
+    -- 0.05秒かけて0.01秒間隔で5回、座標はPartの座標
     sendSNO5(part)
 end
 
