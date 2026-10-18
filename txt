@@ -1,1 +1,4 @@
-https://xgf.nu/wiHua
+game:GetService("ReplicatedStorage").GrabEvents.SetNetworkOwner:FireServer(table.unpack({
+    [1] = workspace.yajusaiko4545SpawnedInToys.BallMagicLight.SoundPart,
+    [2] = CFrame.new(-55.7683716, -5.62450695, -25.0462475, 0.0697564706, -0.448526025, 0.891043544, 0, 0.893219292, 0.44962132, -0.997563958, -0.0313639976, 0.0623078346),
+}))
