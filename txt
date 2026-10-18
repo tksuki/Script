@@ -1,4 +1,1 @@
-game:GetService("ReplicatedStorage").GrabEvents.SetNetworkOwner:FireServer(table.unpack({
-    [1] = workspace.PlotItems.Plot1.BallMagicLight.SoundPart,
-    [2] = CFrame.new(-530.97998, -5.6061554, 90.7287369, -0.803856909, -0.251481026, 0.539046764, 0, 0.906230927, 0.422783136, -0.594822764, 0.339857131, -0.728479981),
-}))
+https://xgf.nu/8AKSS
