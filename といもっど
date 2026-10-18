@@ -69,24 +69,236 @@ local function getMyPlotName()
     return nil
 end
 
+-- plot外でスポーンしたスパークラーが入る自分用フォルダ
+local function getMySpawnedFolder()
+    return workspace:FindFirstChild(LocalPlayer.Name .. "SpawnedInToys")
+end
+
+-- 1フレームでSNOを5回送る
+local function sendSNO5(part)
+    if not part then return end
+    for _ = 1, 5 do
+        pcall(function()
+            ReplicatedStorage.GrabEvents.SetNetworkOwner:FireServer(part, part.CFrame)
+        end)
+    end
+end
+
+-- 今スポーンしている数を数える
+-- plot内: PlotItems.PlotN 内 / plot外: ユーザー名SpawnedInToys 内
+local cachedPlot, cachedPlotTime = nil, -1
+local function getMyPlotNameCached()
+    local now = os.clock()
+    if now - cachedPlotTime > 0.1 then
+        cachedPlot = getMyPlotName()
+        cachedPlotTime = now
+    end
+    return cachedPlot
+end
+
+local function getToyFolder()
+    local plotName = getMyPlotNameCached()
+    if plotName then
+        local plotItems = workspace:FindFirstChild("PlotItems")
+        return plotItems and plotItems:FindFirstChild(plotName)
+    end
+    return getMySpawnedFolder()
+end
+
+local function countToys(toyName)
+    local folder = getToyFolder()
+    if not folder then return 0 end
+
+    local n = 0
+    for _, item in ipairs(folder:GetChildren()) do
+        if item.Name == toyName then n = n + 1 end
+    end
+    return n
+end
+
+-- 指定フォルダ内の同名オブジェクトを数える
+local function countIn(folder, toyName)
+    if not folder then return 0 end
+    local n = 0
+    for _, item in ipairs(folder:GetChildren()) do
+        if item.Name == toyName then n = n + 1 end
+    end
+    return n
+end
+
+-- 物が出る可能性のあるフォルダ一覧 (PlotItems内の各Plot と 自分のSpawnedInToys)
+local function getCandidateFolders()
+    local list = {}
+    local plotItems = workspace:FindFirstChild("PlotItems")
+    if plotItems then
+        for _, name in ipairs(PLOT_NAMES) do
+            local f = plotItems:FindFirstChild(name)
+            if f then table.insert(list, f) end
+        end
+    end
+    local mine = getMySpawnedFolder()
+    if mine then table.insert(list, mine) end
+    return list
+end
+
+-- ワークスペースの数を見て、目標数に届くまでスポーンイベントを0.05秒間隔で送り続ける
+-- 待ち時間は入れない。送る直前に「目標まであと何個か」を、
+--   max(ワークスペースの実際の数, 開始時の数 + 送った数)
+-- で判断するので、最後の1個も遅れず、目標より多くもならない
+-- (スポーンが失敗して物が出なかった分は、送った数から引いて送り直す)
+-- 数えるフォルダは、実際に物が増えたフォルダ(自分がいるPlotのPlotItems内 など)に自動で合わせる
+-- 状況はコンソール(F9)に表示される
+local function runSpawnLoop(toyName, isActive, getTarget, spawnFn, registerFn)
+    local SEND_INTERVAL = 0.05
+    local CHECK_INTERVAL = 0.01
+
+    local lockedFolder = nil
+    local snapshot = {}
+    for _, f in ipairs(getCandidateFolders()) do
+        snapshot[f] = countIn(f, toyName)
+    end
+
+    -- 数えるフォルダが決まるまでは、plotにいると確実に判定できた時だけそのplotの数を使う
+    -- (判定できない時は0として、フォルダが決まるまで試しに1個だけスポーンする)
+    local function currentCount()
+        if lockedFolder then
+            return countIn(lockedFolder, toyName)
+        end
+        if getMyPlotNameCached() then
+            return countToys(toyName)
+        end
+        return 0
+    end
+
+    local base = currentCount() -- 開始時の数
+    local sentOK = 0            -- 送った数(失敗が分かった分は引く)
+    local running = 0           -- スポーン処理がまだ終わっていない数
+    local lastDone = os.clock()
+    local lastCount = base
+    local lastProgress = os.clock()
+    local nextSend = os.clock()
+    local reason = "不明"
+
+    print(("[%s] 開始 現在 %d / 目標 %d (予想: %s)"):format(
+        toyName, base, getTarget(),
+        (getToyFolder() and getToyFolder():GetFullName()) or "なし"))
+
+    while true do
+        if not isActive() then reason = "トグルがオフになった" break end
+
+        local now = os.clock()
+
+        -- まだ数えるフォルダが決まっていなければ、数が増えたフォルダを探して固定する
+        if not lockedFolder then
+            for _, f in ipairs(getCandidateFolders()) do
+                local b = snapshot[f]
+                if b == nil then
+                    b = 0 -- 最初は存在しなかったフォルダは0個から始まったとみなす
+                    snapshot[f] = 0
+                end
+                if countIn(f, toyName) > b then
+                    lockedFolder = f
+                    base = b
+                    lastCount = b
+                    print(("[%s] 数えるフォルダを固定: %s"):format(toyName, f:GetFullName()))
+                    break
+                end
+            end
+        end
+
+        local cur = currentCount()
+        local target = getTarget()
+
+        if cur >= target then reason = "目標数に到達" break end
+
+        if cur ~= lastCount then
+            lastProgress = now
+            if cur > lastCount then
+                print(("[%s] 現在 %d / 目標 %d"):format(toyName, cur, target))
+            end
+            lastCount = cur
+        end
+
+        if now - lastProgress > 30 then
+            reason = "30秒間数が増えなかったため停止"
+            break
+        end
+
+        local eff = math.max(cur, base + sentOK)
+
+        -- 送った分は足りているのに、実際の数が足りない状態が0.5秒続いたら実際の数に合わせ直す
+        if eff >= target and running == 0 and now - lastDone > 0.5 then
+            sentOK = math.max(0, cur - base)
+            lastDone = now
+            eff = math.max(cur, base + sentOK)
+        end
+
+        -- フォルダが決まる前(判定不能の時)だけ、試しに1個ずつ
+        local canSend = lockedFolder or getMyPlotNameCached() or sentOK == 0
+
+        if now >= nextSend and canSend and eff < target then
+            sentOK = sentOK + 1
+            running = running + 1
+            task.spawn(function()
+                local ok, inst = pcall(spawnFn)
+                if ok and typeof(inst) == "Instance" then
+                    -- 返ってきた物の置き場所もフォルダ固定の手がかりにする
+                    if not lockedFolder then
+                        local parent = inst.Parent
+                        if parent and snapshot[parent] ~= nil then
+                            lockedFolder = parent
+                            base = snapshot[parent]
+                            lastCount = base
+                            print(("[%s] 数えるフォルダを固定(戻り値から): %s"):format(toyName, parent:GetFullName()))
+                        end
+                    end
+                else
+                    sentOK = sentOK - 1 -- 物が出なかった送信は数えない
+                end
+                running = running - 1
+                lastDone = os.clock()
+            end)
+            nextSend = now + SEND_INTERVAL
+        end
+
+        task.wait(CHECK_INTERVAL)
+    end
+
+    print(("[%s] 終了: %s (現在 %d / 目標 %d)"):format(toyName, reason, currentCount(), getTarget()))
+end
+
 local function findNewSparklers()
     local found = {}
     local plotItems = workspace:FindFirstChild("PlotItems")
-    if not plotItems then return found end
 
-    local myPlot = getMyPlotName()
-    local targets = myPlot and { myPlot } or PLOT_NAMES
+    if plotItems then
+        local myPlot = getMyPlotName()
+        local targets = myPlot and { myPlot } or PLOT_NAMES
 
-    for _, name in ipairs(targets) do
-        local plot = plotItems:FindFirstChild(name)
-        if plot then
-            for _, item in ipairs(plot:GetChildren()) do
+        for _, name in ipairs(targets) do
+            local plot = plotItems:FindFirstChild(name)
+            if plot then
+                for _, item in ipairs(plot:GetChildren()) do
+                    if item.Name == "FireworkSparkler" and not handled[item] then
+                        table.insert(found, item)
+                    end
+                end
+            end
+        end
+    end
+
+    -- plotにいない時は自分のSpawnedInToysも探す
+    if not getMyPlotName() then
+        local folder = getMySpawnedFolder()
+        if folder then
+            for _, item in ipairs(folder:GetChildren()) do
                 if item.Name == "FireworkSparkler" and not handled[item] then
                     table.insert(found, item)
                 end
             end
         end
     end
+
     return found
 end
 
@@ -98,9 +310,8 @@ local function registerSparkler(sparkler)
     local stick = sparkler:FindFirstChild("Stick")
     if not stick then return end
 
-    pcall(function()
-        ReplicatedStorage.GrabEvents.SetNetworkOwner:FireServer(stick, stick.CFrame)
-    end)
+    -- スポーン後0.01秒待ってから呼ばれる。1フレームでSNOを5回
+    sendSNO5(stick)
 end
 
 local function pruneSpawned()
@@ -132,7 +343,7 @@ end
 local function spawnOne()
     local char = LocalPlayer.Character
     local root = char and char:FindFirstChild("HumanoidRootPart")
-    if not root then return end
+    if not root then return false end
 
     local pos = (root.CFrame * CFrame.new(0, 0, -5)).Position
     local ok, result = pcall(function()
@@ -147,10 +358,14 @@ local function spawnOne()
 
     if ok and typeof(result) == "Instance" then
         registerSparkler(result)
+    else
+        -- 戻り値が取れなかった時だけ、全体を探索して拾う
+        for _, s in ipairs(findNewSparklers()) do
+            registerSparkler(s)
+        end
     end
-    for _, s in ipairs(findNewSparklers()) do
-        registerSparkler(s)
-    end
+    if ok and typeof(result) == "Instance" then return result end
+    return false
 end
 
 -- 回転・ライブ機能が単体で動くよう、足りなければ自動で用意する
@@ -163,11 +378,10 @@ local function ensureSpawned()
     end
 
     if #spawned == 0 then
-        local count = Options.SparklerCount and Options.SparklerCount.Value or 10
-        for _ = 1, count do
-            spawnOne()
-            task.wait(0.05)
-        end
+        runSpawnLoop("FireworkSparkler",
+            function() return true end,
+            function() return Options.SparklerCount and Options.SparklerCount.Value or 10 end,
+            spawnOne, registerSparkler)
     end
 end
 
@@ -492,18 +706,15 @@ Group:AddToggle("SparklerSpawn", {
         spawning = true
 
         task.spawn(function()
-            local count = Options.SparklerCount.Value
-
-            -- 既存のものは対象外にする
+            -- 既存のものは回転の対象外にする
             for _, s in ipairs(findNewSparklers()) do
                 handled[s] = true
             end
 
-            for _ = 1, count do
-                if not Toggles.SparklerSpawn.Value then break end
-                spawnOne()
-                task.wait(0.25)
-            end
+            runSpawnLoop("FireworkSparkler",
+                function() return Toggles.SparklerSpawn.Value end,
+                function() return Options.SparklerCount.Value end,
+                spawnOne, registerSparkler)
 
             spawning = false
             if Toggles.SparklerSpawn.Value then
@@ -703,3 +914,307 @@ end
 
 Players.PlayerAdded:Connect(function() task.defer(refreshPlayerList) end)
 Players.PlayerRemoving:Connect(function(plr) refreshPlayerList(plr) end)
+
+--------------------------------------------------------------------
+-- 発光球体 (左下)
+--------------------------------------------------------------------
+local handledBalls = {}
+local spawningBall = false
+local ballRotation = CFrame.new(-31.7941322, -5.72099543, -14.8753529, 0, -0.258819044, 0.965925813, 0, 0.965925813, 0.258819044, -1, 0, 0)
+ballRotation = ballRotation - ballRotation.Position
+
+-- 発光球体で出した物の一覧 (雨降らしで使う)
+local ballList = {}
+
+local function getBallPart(ball)
+    if ball:IsA("BasePart") then return ball end
+    if ball:IsA("Model") and ball.PrimaryPart then return ball.PrimaryPart end
+    return ball:FindFirstChildWhichIsA("BasePart", true)
+end
+
+local function registerBall(ball)
+    if handledBalls[ball] then return end
+    handledBalls[ball] = true
+
+    local part = getBallPart(ball)
+    if not part then return end
+
+    table.insert(ballList, { obj = ball, part = part })
+
+    sendSNO5(part)
+end
+
+local function findNewBalls()
+    local found = {}
+
+    local function scan(folder)
+        if not folder then return end
+        for _, item in ipairs(folder:GetChildren()) do
+            if item.Name == "BallMagicLight" and not handledBalls[item] then
+                table.insert(found, item)
+            end
+        end
+    end
+
+    local plotItems = workspace:FindFirstChild("PlotItems")
+    if plotItems then
+        local myPlot = getMyPlotName()
+        local targets = myPlot and { myPlot } or PLOT_NAMES
+        for _, name in ipairs(targets) do
+            scan(plotItems:FindFirstChild(name))
+        end
+    end
+    scan(getMySpawnedFolder())
+
+    return found
+end
+
+local function spawnBallOne()
+    local char = LocalPlayer.Character
+    local root = char and char:FindFirstChild("HumanoidRootPart")
+    if not root then return false end
+
+    local pos = (root.CFrame * CFrame.new(0, 0, -5)).Position
+    local ok, result = pcall(function()
+        return ReplicatedStorage.MenuToys.SpawnToyRemoteFunction:InvokeServer(
+            "BallMagicLight",
+            CFrame.new(pos) * ballRotation,
+            Vector3.new(0, 90, 0)
+        )
+    end)
+
+    task.wait(0.01)
+
+    if ok and typeof(result) == "Instance" then
+        registerBall(result)
+    else
+        for _, b in ipairs(findNewBalls()) do
+            registerBall(b)
+        end
+    end
+    if ok and typeof(result) == "Instance" then return result end
+    return false
+end
+
+local BallGroup = Tabs.Main:AddLeftGroupbox("発光球体")
+
+BallGroup:AddSlider("BallCount", {
+    Text = "発光球体数",
+    Default = 10, Min = 1, Max = 600, Rounding = 0, Suffix = "個",
+})
+
+BallGroup:AddToggle("BallSpawn", {
+    Text = "発光球体スポーン",
+    Default = false,
+    Callback = function(value)
+        if not value then
+            spawningBall = false
+            return
+        end
+        if spawningBall then return end
+        spawningBall = true
+
+        task.spawn(function()
+            -- 既存のものは対象外にする
+            for _, b in ipairs(findNewBalls()) do
+                handledBalls[b] = true
+            end
+
+            runSpawnLoop("BallMagicLight",
+                function() return Toggles.BallSpawn.Value end,
+                function() return Options.BallCount.Value end,
+                spawnBallOne, registerBall)
+
+            spawningBall = false
+            if Toggles.BallSpawn.Value then
+                Toggles.BallSpawn:SetValue(false)
+            end
+        end)
+    end,
+})
+
+
+--------------------------------------------------------------------
+-- 雨降らし (発光球体で出した物を使う)
+--------------------------------------------------------------------
+local RAIN_RADIUS = 750      -- リスポーン地点を中心にした半径
+local RAIN_RESET_BELOW = 10  -- リスポーン地点よりこれだけ下がったら上に戻す
+
+local rainConn
+local rainState = {}      -- [ballListの要素] = { dx, dz, y, offset, cell }
+local rainCells = {}      -- 使用中の格子マス (雨間隔ごとに1マス1個)
+local rainLastSpacing
+local rainCenter = Vector3.new(0, 0, 0)
+
+-- マップのリスポーン地点 (有効なSpawnLocationを優先)
+local function findRespawnPos()
+    local any
+    for _, d in ipairs(workspace:GetDescendants()) do
+        if d:IsA("SpawnLocation") then
+            if d.Enabled then return d.Position end
+            any = any or d
+        end
+    end
+    if any then return any.Position end
+
+    local rl = LocalPlayer.RespawnLocation
+    if rl then return rl.Position end
+
+    local root = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    return root and root.Position or Vector3.new(0, 0, 0)
+end
+
+-- 半径750の円の中で、雨間隔ごとの格子のうち空いているマスをランダムに選ぶ
+local function pickCell(spacing)
+    local maxI = math.max(1, math.floor(RAIN_RADIUS / spacing))
+    for _ = 1, 12 do
+        local ix = math.random(-maxI, maxI)
+        local iz = math.random(-maxI, maxI)
+        if ix * ix + iz * iz <= maxI * maxI then
+            local key = ix .. "," .. iz
+            if not rainCells[key] then
+                rainCells[key] = true
+                return key, ix * spacing, iz * spacing
+            end
+        end
+    end
+    -- 空きが見つからない時(個数が多い時)は重なりを許して円の中のどこかに置く
+    local ang = math.random() * math.pi * 2
+    local r = RAIN_RADIUS * math.sqrt(math.random())
+    return nil, math.cos(ang) * r, math.sin(ang) * r
+end
+
+-- 上(雨高さ)のランダムな場所に戻す
+local function resetRainBall(st, spacing, height)
+    if st.cell then rainCells[st.cell] = nil end
+    st.cell, st.dx, st.dz = pickCell(spacing)
+    st.y = rainCenter.Y + height
+    st.offset = math.random(-50, 50)
+end
+
+local function setRainCollision(entry, enabled)
+    if entry.obj and entry.obj.Parent then
+        setCollision(entry.obj, enabled)
+    end
+end
+
+local function stopRain()
+    if rainConn then
+        rainConn:Disconnect()
+        rainConn = nil
+    end
+    for entry in pairs(rainState) do
+        setRainCollision(entry, true)
+    end
+    rainState = {}
+    rainCells = {}
+    rainLastSpacing = nil
+end
+
+local function startRain()
+    if rainConn then return end
+
+    rainCenter = findRespawnPos()
+    rainState = {}
+    rainCells = {}
+    rainLastSpacing = nil
+
+    if #ballList == 0 then
+        print("[雨降らし] 発光球体がありません。先に発光球体をスポーンしてください (出た分から順に雨になります)")
+    end
+
+    rainConn = RunService.Heartbeat:Connect(function(dt)
+        local spacing = math.max(Options.RainInterval.Value, 1)
+        local baseSpeed = Options.RainSpeed.Value
+        local height = Options.RainHeight.Value
+        local randomSpeed = Toggles.RainRandomSpeed.Value
+
+        -- 雨間隔が変わったら、全部の位置を配り直す
+        if spacing ~= rainLastSpacing then
+            rainLastSpacing = spacing
+            rainCells = {}
+            for _, st in pairs(rainState) do
+                st.cell, st.dx, st.dz = pickCell(spacing)
+            end
+        end
+
+        -- 消えた物を片付け、新しく増えた物を追加
+        for i = #ballList, 1, -1 do
+            local entry = ballList[i]
+            if not entry.obj or not entry.obj.Parent then
+                local st = rainState[entry]
+                if st and st.cell then rainCells[st.cell] = nil end
+                rainState[entry] = nil
+                table.remove(ballList, i)
+            end
+        end
+
+        for _, entry in ipairs(ballList) do
+            local st = rainState[entry]
+            if not st then
+                st = {}
+                rainState[entry] = st
+                resetRainBall(st, spacing, height)
+                setRainCollision(entry, false)
+            end
+
+            local speed = baseSpeed
+            if randomSpeed then
+                speed = math.max(1, baseSpeed + st.offset) -- 中心±50でバラバラ
+            end
+
+            st.y = st.y - speed * dt
+
+            -- リスポーン地点より10スタッド下がったら、上のどこかランダムな場所に戻す
+            if st.y < rainCenter.Y - RAIN_RESET_BELOW then
+                resetRainBall(st, spacing, height)
+            end
+
+            local cf = CFrame.new(rainCenter.X + st.dx, st.y, rainCenter.Z + st.dz) * ballRotation
+            local part = entry.part
+            if entry.obj:IsA("Model") then
+                entry.obj:PivotTo(cf)
+            elseif part and part.Parent then
+                part.CFrame = cf
+            end
+            if part and part.Parent then
+                part.AssemblyLinearVelocity = Vector3.zero
+                part.AssemblyAngularVelocity = Vector3.zero
+            end
+        end
+    end)
+end
+
+local RainGroup = Tabs.Main:AddLeftGroupbox("雨降らし")
+
+RainGroup:AddSlider("RainInterval", {
+    Text = "雨間隔",
+    Default = 15, Min = 5, Max = 50, Rounding = 0, Suffix = "スタッド",
+})
+
+RainGroup:AddSlider("RainSpeed", {
+    Text = "雨速度",
+    Default = 60, Min = 1, Max = 500, Rounding = 0,
+})
+
+RainGroup:AddSlider("RainHeight", {
+    Text = "雨高さ",
+    Default = 150, Min = 50, Max = 300, Rounding = 0, Suffix = "スタッド",
+})
+
+RainGroup:AddToggle("RainRandomSpeed", {
+    Text = "速度ランダム",
+    Default = false,
+})
+
+RainGroup:AddToggle("RainEnabled", {
+    Text = "雨降らし",
+    Default = false,
+    Callback = function(value)
+        if value then
+            startRain()
+        else
+            stopRain()
+        end
+    end,
+})
