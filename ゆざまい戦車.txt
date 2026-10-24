@@ -1,0 +1,1009 @@
+-- Toy Box Tank V3 Smartphone Edition (完全版)
+-- 車体: 左スティック  砲塔/砲身: 右ドラッグ
+-- 視点切替ボタン: 三人称 <-> 前斜め上
+-- 上昇ボタン（押している間）
+-- 速度スライダー（右側・縦）
+
+local genv = getgenv and getgenv() or _G
+genv.__ToyBoxTank = genv.__ToyBoxTank or {}
+
+if genv.__ToyBoxTank.Unload then
+    pcall(genv.__ToyBoxTank.Unload)
+end
+
+local shared = genv.__PoopHubShared or {}
+genv.__PoopHubShared = shared
+shared.Library = nil
+
+local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/uhfork/Obsidian/refs/heads/main/Library.lua"))()
+shared.Library = Library
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
+local UserInputService = game:GetService("UserInputService")
+local localPlayer = Players.LocalPlayer
+
+local menuToys = ReplicatedStorage:WaitForChild("MenuToys")
+local destroyToyRemote = menuToys:WaitForChild("DestroyToy")
+local setNetworkOwnerRemote = ReplicatedStorage:WaitForChild("GrabEvents"):WaitForChild("SetNetworkOwner")
+
+----------------------------------------------------------------
+-- 設定（固定）
+----------------------------------------------------------------
+local PLATE = 10.2
+local PLATE_NAME = "PalletLightBrown"
+local SEARCH_RADIUS = 120
+local FOLLOW_SPEED = 60
+
+local heightOffset = -1.5
+local moveSpeed = 25
+local turnRateDeg = 45
+local turretRateDeg = 180
+local groundFollow = true
+
+local camDist = 140
+local CAM_PIVOT_H = 32
+local CAM_BACK_OFFSET = 15
+local CAM_SENSITIVITY = 0.35
+local CAM_PITCH_MIN = -85
+local CAM_PITCH_MAX = 60
+
+local DEFAULT_FOV = 70
+local BARREL_MIN = math.rad(-15)
+local BARREL_MAX = math.rad(45)
+local BARREL_RATE = math.rad(90)
+local VERT_SPEED = 40
+local TRACK_HALF = 2 * PLATE
+
+local VIEW_THIRD = 1
+local VIEW_FRONT = 2
+local VIEW_NAMES = { "三人称", "前斜め上" }
+
+local FRONT_CAM_DIST = 100
+local FRONT_CAM_PITCH = 45
+local FRONT_CAM_TARGET_H = 4
+
+----------------------------------------------------------------
+-- 戦車レイアウト
+----------------------------------------------------------------
+local layout = {}
+
+local H = math.pi / 2
+local Q = math.sqrt(0.5)
+local SHIFT = CFrame.new(0, 0, 0.5)
+local BARREL_PIVOT = Vector3.zero
+
+local function toRoblox(cf3)
+    local p = cf3.Position
+    local x = cf3:VectorToWorldSpace(Vector3.xAxis)
+    local n = cf3:VectorToWorldSpace(Vector3.zAxis)
+    local pos = Vector3.new(p.X, p.Y, -p.Z) * PLATE
+    return CFrame.fromMatrix(pos, Vector3.new(x.X, x.Y, -x.Z), Vector3.new(n.X, n.Y, -n.Z))
+end
+
+local function add(cf3, kind)
+    if kind == "hull" then
+        table.insert(layout, { kind = "hull", cf = toRoblox(SHIFT * cf3) })
+    else
+        table.insert(layout, { kind = kind, cf = toRoblox(cf3) })
+    end
+end
+
+local function panel(base, pos, rot, nu, nv, skip, kind)
+    local g = base * CFrame.new(pos[1], pos[2], pos[3]) * CFrame.Angles(rot[1], rot[2], rot[3])
+    for i = 0, nu - 1 do
+        for j = 0, nv - 1 do
+            if not (skip and skip(i, j)) then
+                add(g * CFrame.new(i - (nu - 1) / 2, j - (nv - 1) / 2, 0), kind)
+            end
+        end
+    end
+end
+
+local trackPath = { { -2.5, 0 }, { 2.5, 0 }, { 2.5 + Q, Q }, { 2.5, 2 * Q }, { -2.5, 2 * Q }, { -2.5 - Q, Q } }
+local trackSegs = {}
+local TRACK_LEN = 0
+for i, P in ipairs(trackPath) do
+    local N = trackPath[i % 6 + 1]
+    local dz, dy = N[1] - P[1], N[2] - P[2]
+    local len = math.sqrt(dz * dz + dy * dy)
+    table.insert(trackSegs, {
+        z = P[1], y = P[2], dz = dz, dy = dy, len = len,
+        a = math.atan2(dz, dy), start = TRACK_LEN,
+    })
+    TRACK_LEN = TRACK_LEN + len
+end
+local TRACK_N = math.floor(TRACK_LEN + 0.5)
+
+local function trackCF3(side, u)
+    u = u % TRACK_LEN
+    local seg = trackSegs[#trackSegs]
+    for _, s in ipairs(trackSegs) do
+        if u < s.start + s.len then
+            seg = s
+            break
+        end
+    end
+    local f = (u - seg.start) / seg.len
+    return CFrame.new(2 * side, seg.y + seg.dy * f, seg.z + seg.dz * f) * CFrame.Angles(seg.a, 0, 0)
+end
+
+local function wheelCF3(side, z, off, spin)
+    return CFrame.new(2 * side, Q, z) * CFrame.Angles(0, H, 0) * CFrame.Angles(0, 0, spin + off)
+end
+
+do
+    local I = CFrame.new()
+
+    panel(I, { 0, 1.7, -0.5 }, { -H, 0, 0 }, 3, 5, function(i, j) return i == 1 and j == 2 end, "hull")
+    panel(I, { 0, 0.7, -0.5 }, { H, 0, 0 }, 3, 5, function(i, j) return i == 1 end, "hull")
+    for _, s in ipairs({ -1, 1 }) do
+        panel(I, { 1.5 * s, 1.2, -0.5 }, { 0, H, 0 }, 5, 1, nil, "hull")
+    end
+    panel(I, { 0, 1.346, 2.354 }, { -math.pi / 4, 0, 0 }, 3, 1, nil, "hull")
+
+    local ND = 1 - Q
+    local NZ = math.sqrt(1 - ND * ND)
+    local NA = math.atan2(NZ, ND)
+    panel(I, { 0, 0.7 + ND / 2, 2 + Q - NZ / 2 }, { NA, 0, 0 }, 3, 1, nil, "hull")
+    panel(I, { 0, 1.7 - Q / 2, -3 - Q / 2 }, { math.pi / 4, 0, 0 }, 3, 1, nil, "hull")
+    panel(I, { 0, 0.7 + ND / 2, -3 - Q + NZ / 2 }, { -NA, 0, 0 }, 3, 1, nil, "hull")
+
+    for _, s in ipairs({ -1, 1 }) do
+        for k = 0, TRACK_N - 1 do
+            table.insert(layout, { kind = "track", side = s, k = k })
+        end
+        for _, z in ipairs({ -2.5, 0, 2.5 }) do
+            table.insert(layout, { kind = "wheel", side = s, z = z, off = 0 })
+            table.insert(layout, { kind = "wheel", side = s, z = z, off = math.pi / 4 })
+        end
+    end
+
+    local AP = 1 / (2 * math.tan(math.pi / 8))
+    local A = math.pi / 4
+    local Y1 = 1.7
+    local Y2 = Y1 + math.cos(A)
+    for k = 0, 7 do
+        local g = CFrame.Angles(0, k * math.pi / 4, 0)
+        panel(g, { 0, Y1 + math.cos(A) / 2, AP - math.sin(A) / 2 }, { -A, 0, 0 }, 1, 1, nil, "turret")
+    end
+    panel(CFrame.Angles(0, math.pi / 8, 0), { 0, Y2, 0 }, { -H, 0, 0 }, 1, 1, nil, "turret")
+
+    local barrelY = Y1 + 0.35
+    BARREL_PIVOT = Vector3.new(0, barrelY * PLATE, 0)
+    for i = 0, 2 do
+        add(CFrame.new(0, barrelY, 1.1 + i) * CFrame.Angles(-H, 0, 0), "barrel")
+    end
+end
+
+local TOTAL = #layout
+
+----------------------------------------------------------------
+-- 状態
+----------------------------------------------------------------
+local entries = {}
+local filterModels = {}
+local connections = {}
+local active = false
+local starting = false
+local unloaded = false
+
+local hullPos = Vector3.zero
+local hullYaw = 0
+local turretYaw = 0
+local barrelPitch = 0
+local curSpeed = 0
+local curTurn = 0
+local groundGap = 3
+local trackPhase = { [-1] = 0, [1] = 0 }
+local wheelSpin = { [-1] = 0, [1] = 0 }
+
+local controlling = false
+local viewMode = VIEW_THIRD
+local camYaw = 0
+local camPitch = -25
+local smoothPivot = nil
+local smoothFov = DEFAULT_FOV
+
+-- タッチ入力状態
+local stickX, stickY = 0, 0
+local btnUp = false
+local btnUpTouch = nil
+
+-- 前方宣言（HUDのボタンから呼ぶため）
+local stopControl, startControl
+
+local camera = Workspace.CurrentCamera
+
+local function getRootPart()
+    local character = localPlayer.Character
+    if not character then return nil end
+    return character:FindFirstChild("HumanoidRootPart") or character:FindFirstChild("Torso")
+end
+
+local function getMainPart(model)
+    return model:FindFirstChild("PyramidOctagon", true)
+        or model:FindFirstChild("SquareTaper", true)
+        or model:FindFirstChild("SoundPart", true)
+        or model:FindFirstChild("Handle", true)
+        or model:FindFirstChildWhichIsA("BasePart", true)
+end
+
+local function getFrames()
+    local base = CFrame.new(hullPos) * CFrame.Angles(0, hullYaw, 0) * CFrame.new(0, heightOffset, 0)
+    local turretCF = base * CFrame.Angles(0, turretYaw - hullYaw, 0)
+    local pivotY = BARREL_PIVOT.Y
+    local barrelCF = turretCF
+        * CFrame.new(0, pivotY, 0)
+        * CFrame.Angles(barrelPitch, 0, 0)
+        * CFrame.new(0, -pivotY, 0)
+    return base, turretCF, barrelCF
+end
+
+local function getTarget(item, base, turretCF, barrelCF)
+    local kind = item.kind
+    if kind == "hull" then
+        return base * item.cf
+    elseif kind == "turret" then
+        return turretCF * item.cf
+    elseif kind == "barrel" then
+        return barrelCF * item.cf
+    elseif kind == "track" then
+        local u = item.k + 0.5 + trackPhase[item.side]
+        return base * toRoblox(SHIFT * trackCF3(item.side, u))
+    else
+        return base * toRoblox(SHIFT * wheelCF3(item.side, item.z, item.off, wheelSpin[item.side]))
+    end
+end
+
+----------------------------------------------------------------
+-- 板検知
+----------------------------------------------------------------
+local function getPalletModelFromPart(part)
+    local current = part
+    while current and current ~= Workspace do
+        if current:IsA("Model") and current.Name == PLATE_NAME then
+            return current
+        end
+        current = current.Parent
+    end
+    return nil
+end
+
+local function collectNearbyBoards(requiredCount, timeout)
+    local found, seen = {}, {}
+    local deadline = os.clock() + (timeout or 20)
+    while os.clock() < deadline and #found < requiredCount do
+        local root = getRootPart()
+        if root then
+            for _, part in ipairs(Workspace:GetPartBoundsInRadius(root.Position, SEARCH_RADIUS)) do
+                local model = getPalletModelFromPart(part)
+                if model and not seen[model] then
+                    local mainPart = getMainPart(model)
+                    if mainPart and mainPart:IsDescendantOf(Workspace) then
+                        seen[model] = true
+                        pcall(function()
+                            setNetworkOwnerRemote:FireServer(mainPart, mainPart.CFrame)
+                        end)
+                        table.insert(found, { model = model, part = mainPart })
+                        if #found >= requiredCount then break end
+                    end
+                end
+            end
+        end
+        if #found < requiredCount then task.wait(0.05) end
+    end
+    return found
+end
+
+local function setupBoardPhysics(part)
+    part.CanCollide = false
+    part.CanTouch = false
+    part.CanQuery = true
+    local bodyVelocity = part:FindFirstChild("ToyBoxForce") or Instance.new("BodyVelocity")
+    bodyVelocity.Name = "ToyBoxForce"
+    bodyVelocity.MaxForce = Vector3.new(1, 1, 1) * 1e8
+    bodyVelocity.Parent = part
+
+    local bodyGyro = part:FindFirstChild("ToyBoxGyro") or Instance.new("BodyGyro")
+    bodyGyro.Name = "ToyBoxGyro"
+    bodyGyro.MaxTorque = Vector3.new(1, 1, 1) * 1e8
+    bodyGyro.P = 200000
+    bodyGyro.D = 2000
+    bodyGyro.Parent = part
+    return bodyVelocity, bodyGyro
+end
+
+local function updateTank(dt)
+    local base, turretCF, barrelCF = getFrames()
+    for _, entry in ipairs(entries) do
+        local part = entry.part
+        if part and part.Parent then
+            local target = getTarget(entry.item, base, turretCF, barrelCF)
+
+            local dist = (target.Position - part.Position).Magnitude
+            if dist > 50 then
+                pcall(function()
+                    part.CFrame = target
+                    part.AssemblyLinearVelocity = Vector3.zero
+                    part.AssemblyAngularVelocity = Vector3.zero
+                end)
+                entry.lastPos = target.Position
+            else
+                local ff = Vector3.zero
+                if entry.lastPos and dt > 0 then
+                    ff = (target.Position - entry.lastPos) / dt
+                    if ff.Magnitude > 150 then ff = Vector3.zero end
+                end
+                entry.lastPos = target.Position
+                pcall(function()
+                    if entry.bodyVelocity and entry.bodyVelocity.Parent then
+                        entry.bodyVelocity.Velocity = (target.Position - part.Position) * FOLLOW_SPEED + ff
+                    end
+                    if entry.bodyGyro and entry.bodyGyro.Parent then
+                        entry.bodyGyro.CFrame = target
+                    end
+                end)
+            end
+        end
+    end
+end
+
+----------------------------------------------------------------
+-- HUD（スマホ用）
+----------------------------------------------------------------
+local function make(class, props, parent)
+    local inst = Instance.new(class)
+    for k, v in pairs(props) do inst[k] = v end
+    inst.Parent = parent
+    return inst
+end
+
+local gui = Instance.new("ScreenGui")
+gui.Name = "ToyBoxTankHUD_Mobile"
+gui.ResetOnSpawn = false
+gui.IgnoreGuiInset = true
+gui.Enabled = false
+pcall(function() gui.Parent = (gethui and gethui()) or localPlayer:WaitForChild("PlayerGui") end)
+if not gui.Parent then gui.Parent = localPlayer:WaitForChild("PlayerGui") end
+
+-- 小さい画面向けに自動縮小（縦600px未満で縮小、最小0.7）
+do
+    local vp = camera and camera.ViewportSize or Vector2.new(1000, 600)
+    make("UIScale", { Scale = math.clamp(vp.Y / 600, 0.7, 1) }, gui)
+end
+
+local HUD_COLOR = Color3.fromRGB(0, 255, 200)
+local BTN_COLOR = Color3.fromRGB(30, 30, 30)
+
+-- 十字レティクル
+local crosshair = make("Frame", {
+    AnchorPoint = Vector2.new(0.5, 0.5),
+    Position = UDim2.fromScale(0.5, 0.5),
+    Size = UDim2.fromOffset(60, 60),
+    BackgroundTransparency = 1,
+}, gui)
+make("Frame", { AnchorPoint = Vector2.new(0.5,0.5), Position = UDim2.fromScale(0.5,0.5), Size = UDim2.fromOffset(2,28), BackgroundColor3 = HUD_COLOR, BorderSizePixel = 0, BackgroundTransparency = 0.2 }, crosshair)
+make("Frame", { AnchorPoint = Vector2.new(0.5,0.5), Position = UDim2.fromScale(0.5,0.5), Size = UDim2.fromOffset(28,2), BackgroundColor3 = HUD_COLOR, BorderSizePixel = 0, BackgroundTransparency = 0.2 }, crosshair)
+make("Frame", { AnchorPoint = Vector2.new(0.5,0.5), Position = UDim2.fromScale(0.5,0.5), Size = UDim2.fromOffset(4,4), BackgroundColor3 = HUD_COLOR, BorderSizePixel = 0 }, crosshair)
+
+local statusLabel = make("TextLabel", {
+    Size = UDim2.fromOffset(700, 24), Position = UDim2.new(0, 20, 0, 8),
+    BackgroundTransparency = 1, Text = "", TextColor3 = HUD_COLOR,
+    Font = Enum.Font.Code, TextSize = 15, TextXAlignment = Enum.TextXAlignment.Left,
+}, gui)
+
+-- ============ 左スティック ============
+local STICK_BASE_SIZE = 160
+local STICK_KNOB_SIZE = 70
+
+local stickBase = make("Frame", {
+    AnchorPoint = Vector2.new(0.5, 0.5),
+    Position = UDim2.new(0, 130, 1, -130),
+    Size = UDim2.fromOffset(STICK_BASE_SIZE, STICK_BASE_SIZE),
+    BackgroundColor3 = Color3.fromRGB(20, 20, 20),
+    BackgroundTransparency = 0.5,
+    BorderSizePixel = 2,
+}, gui)
+stickBase.BorderColor3 = HUD_COLOR
+make("UICorner", { CornerRadius = UDim.new(1, 0) }, stickBase)
+
+local stickKnob = make("Frame", {
+    AnchorPoint = Vector2.new(0.5, 0.5),
+    Position = UDim2.fromScale(0.5, 0.5),
+    Size = UDim2.fromOffset(STICK_KNOB_SIZE, STICK_KNOB_SIZE),
+    BackgroundColor3 = HUD_COLOR,
+    BackgroundTransparency = 0.2,
+    BorderSizePixel = 0,
+}, stickBase)
+make("UICorner", { CornerRadius = UDim.new(1, 0) }, stickKnob)
+
+local stickCenter = Vector2.zero
+local stickTouchId = nil
+
+local function updateStick(inputPos)
+    local delta = Vector2.new(inputPos.X, inputPos.Y) - stickCenter
+    local maxR = (STICK_BASE_SIZE - STICK_KNOB_SIZE) / 2
+    local mag = delta.Magnitude
+    -- UIScale対応: 画面座標 -> GUI座標
+    local scale = 1
+    local sc = gui:FindFirstChildOfClass("UIScale")
+    if sc then scale = sc.Scale end
+    local guiDelta = delta / scale
+    if guiDelta.Magnitude > maxR then
+        guiDelta = guiDelta.Unit * maxR
+    end
+    stickKnob.Position = UDim2.new(0.5, guiDelta.X, 0.5, guiDelta.Y)
+    stickX = guiDelta.X / maxR
+    stickY = guiDelta.Y / maxR
+end
+
+local function resetStick()
+    stickX, stickY = 0, 0
+    stickKnob.Position = UDim2.fromScale(0.5, 0.5)
+    stickTouchId = nil
+end
+
+-- ============ 右側カメラドラッグエリア（位置判定用のみ） ============
+local camArea = make("Frame", {
+    Position = UDim2.new(0.45, 0, 0, 0),
+    Size = UDim2.new(0.55, 0, 1, 0),
+    BackgroundTransparency = 1,
+}, gui)
+
+local camTouchId = nil
+local lastCamPos = nil
+
+-- ============ ボタン群 ============
+local function makeButton(text, pos, size, color)
+    local btn = make("TextButton", {
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = pos,
+        Size = size,
+        BackgroundColor3 = color or BTN_COLOR,
+        BackgroundTransparency = 0.25,
+        Text = text,
+        TextColor3 = HUD_COLOR,
+        Font = Enum.Font.GothamBold,
+        TextSize = 16,
+        BorderSizePixel = 0,
+        AutoButtonColor = true,
+    }, gui)
+    make("UICorner", { CornerRadius = UDim.new(0, 12) }, btn)
+    return btn
+end
+
+local btnUpObj = makeButton("上昇", UDim2.new(1, -90, 1, -220), UDim2.fromOffset(140, 60))
+local btnViewObj = makeButton("視点", UDim2.new(1, -90, 1, -300), UDim2.fromOffset(140, 60))
+local btnStopObj = makeButton("終了", UDim2.new(1, -90, 1, -380), UDim2.fromOffset(140, 60), Color3.fromRGB(60, 20, 20))
+
+-- 速度スライダー（右側縦）
+local speedMin, speedMax = 10, 400
+local speedTouchId = nil
+
+local speedSliderFrame = make("Frame", {
+    AnchorPoint = Vector2.new(1, 1),
+    Position = UDim2.new(1, -20, 0.5, 0),
+    Size = UDim2.fromOffset(70, 220),
+    BackgroundColor3 = Color3.fromRGB(20, 20, 20),
+    BackgroundTransparency = 0.5,
+    BorderSizePixel = 0,
+}, gui)
+speedSliderFrame.Active = true
+make("UICorner", { CornerRadius = UDim.new(0, 12) }, speedSliderFrame)
+
+local speedFill = make("Frame", {
+    AnchorPoint = Vector2.new(0.5, 1),
+    Position = UDim2.new(0.5, 0, 1, -10),
+    Size = UDim2.new(0, 30, 0, 10),
+    BackgroundColor3 = HUD_COLOR,
+    BackgroundTransparency = 0.3,
+    BorderSizePixel = 0,
+}, speedSliderFrame)
+make("UICorner", { CornerRadius = UDim.new(0, 8) }, speedFill)
+
+local speedLabel = make("TextLabel", {
+    Position = UDim2.new(0, 0, 0, 4),
+    Size = UDim2.new(1, 0, 0, 20),
+    BackgroundTransparency = 1,
+    Text = "25",
+    TextColor3 = HUD_COLOR,
+    Font = Enum.Font.Code,
+    TextSize = 14,
+}, speedSliderFrame)
+
+local function applySpeedRel(rel)
+    rel = math.clamp(rel, 0, 1)
+    moveSpeed = speedMin + (speedMax - speedMin) * rel
+    speedFill.Size = UDim2.new(0, 30, rel, -10)
+    speedLabel.Text = tostring(math.floor(moveSpeed + 0.5))
+end
+
+local function setSpeedFromY(y)
+    local rel = (y - speedSliderFrame.AbsolutePosition.Y) / speedSliderFrame.AbsoluteSize.Y
+    applySpeedRel(1 - rel)
+end
+
+-- 初期表示（現在の moveSpeed に合わせる）
+applySpeedRel((moveSpeed - speedMin) / (speedMax - speedMin))
+
+speedSliderFrame.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.Touch then
+        speedTouchId = input
+        setSpeedFromY(input.Position.Y)
+    end
+end)
+
+-- ============ ボタン入力 ============
+btnUpObj.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.Touch then
+        btnUp = true
+        btnUpTouch = input
+        btnUpObj.BackgroundColor3 = HUD_COLOR
+    end
+end)
+
+btnViewObj.MouseButton1Click:Connect(function()
+    if controlling then
+        if viewMode == VIEW_THIRD then viewMode = VIEW_FRONT else viewMode = VIEW_THIRD end
+        smoothPivot = nil
+    end
+end)
+
+btnStopObj.MouseButton1Click:Connect(function()
+    if controlling then stopControl() end
+end)
+
+-- ============ スティック・カメラのタッチ処理 ============
+table.insert(connections, UserInputService.TouchStarted:Connect(function(input, gpe)
+    if not controlling or gpe then return end
+    local pos = input.Position
+    local sb, ss = stickBase.AbsolutePosition, stickBase.AbsoluteSize
+    local inStick = pos.X >= sb.X - 40 and pos.X <= sb.X + ss.X + 40
+                and pos.Y >= sb.Y - 40 and pos.Y <= sb.Y + ss.Y + 40
+    if inStick and not stickTouchId then
+        stickTouchId = input
+        stickCenter = Vector2.new(sb.X + ss.X / 2, sb.Y + ss.Y / 2)
+        updateStick(pos)
+    elseif not camTouchId and pos.X > camArea.AbsolutePosition.X then
+        camTouchId = input
+        lastCamPos = pos
+    end
+end))
+
+table.insert(connections, UserInputService.TouchMoved:Connect(function(input)
+    if input == speedTouchId then
+        setSpeedFromY(input.Position.Y)
+    elseif not controlling then
+        return
+    elseif input == stickTouchId then
+        updateStick(input.Position)
+    elseif input == camTouchId and lastCamPos then
+        local delta = input.Position - lastCamPos
+        camYaw = camYaw - delta.X * CAM_SENSITIVITY
+        camPitch = math.clamp(camPitch - delta.Y * CAM_SENSITIVITY, CAM_PITCH_MIN, CAM_PITCH_MAX)
+        lastCamPos = input.Position
+    end
+end))
+
+table.insert(connections, UserInputService.TouchEnded:Connect(function(input)
+    if input == speedTouchId then speedTouchId = nil end
+    if input == btnUpTouch then
+        btnUpTouch = nil
+        btnUp = false
+        btnUpObj.BackgroundColor3 = BTN_COLOR
+    end
+    if input == stickTouchId then
+        resetStick()
+    elseif input == camTouchId then
+        camTouchId = nil
+        lastCamPos = nil
+    end
+end))
+
+----------------------------------------------------------------
+-- 標準タッチ操作の無効化 / カメラ復元 / 操作開始・終了
+----------------------------------------------------------------
+local function setDefaultControls(enable)
+    pcall(function()
+        local controls = require(localPlayer.PlayerScripts:WaitForChild("PlayerModule", 2)):GetControls()
+        if enable then controls:Enable() else controls:Disable() end
+    end)
+end
+
+local function restoreCamera()
+    pcall(function()
+        camera = Workspace.CurrentCamera
+        camera.FieldOfView = DEFAULT_FOV
+        camera.CameraType = Enum.CameraType.Custom
+        local char = localPlayer.Character
+        local hum = char and char:FindFirstChildOfClass("Humanoid")
+        if hum then camera.CameraSubject = hum end
+    end)
+    smoothFov = DEFAULT_FOV
+end
+
+function stopControl()
+    controlling = false
+    resetStick()
+    camTouchId = nil
+    lastCamPos = nil
+    speedTouchId = nil
+    btnUp = false
+    btnUpTouch = nil
+    btnUpObj.BackgroundColor3 = BTN_COLOR
+    curSpeed = 0
+    curTurn = 0
+    smoothPivot = nil
+    viewMode = VIEW_THIRD
+    gui.Enabled = false
+    restoreCamera()
+    setDefaultControls(true)
+end
+
+function startControl()
+    if controlling then return end
+    if not active then
+        Library:Notify({ Title = "戦車", Description = "先に『戦車を有効化』で組み立ててください", Time = 3 })
+        return
+    end
+    controlling = true
+    camera = Workspace.CurrentCamera
+
+    camYaw = math.deg(turretYaw)
+    camPitch = -25
+    viewMode = VIEW_THIRD
+
+    smoothPivot = nil
+    smoothFov = DEFAULT_FOV
+    resetStick()
+    camTouchId = nil
+    lastCamPos = nil
+
+    setDefaultControls(false)
+    camera.CameraType = Enum.CameraType.Scriptable
+    gui.Enabled = true
+end
+
+local function toggleControl()
+    if controlling then stopControl() else startControl() end
+end
+
+----------------------------------------------------------------
+-- 毎フレーム制御
+----------------------------------------------------------------
+local groundParams = RaycastParams.new()
+groundParams.FilterType = Enum.RaycastFilterType.Exclude
+groundParams.IgnoreWater = true
+
+local function groundHit(pos, rayHeight)
+    local list = table.clone(filterModels)
+    if localPlayer.Character then table.insert(list, localPlayer.Character) end
+    groundParams.FilterDescendantsInstances = list
+    return Workspace:Raycast(pos + Vector3.new(0, rayHeight, 0), Vector3.new(0, -(rayHeight + 600), 0), groundParams)
+end
+
+local function wrapAngle(a)
+    return (a + math.pi) % (2 * math.pi) - math.pi
+end
+
+local function stepControl(dt)
+    local fw = -stickY          -- 上に倒すと前進
+    local turn = -stickX        -- 右に倒すと右旋回
+    local vert = btnUp and 1 or 0
+
+    curSpeed = curSpeed + (fw * moveSpeed - curSpeed) * math.clamp(dt * 3, 0, 1)
+    curTurn  = curTurn  + (turn * math.rad(turnRateDeg) - curTurn) * math.clamp(dt * 6, 0, 1)
+
+    hullYaw = hullYaw + curTurn * dt
+    local look = CFrame.Angles(0, hullYaw, 0).LookVector
+    hullPos = hullPos + look * curSpeed * dt
+
+    if groundFollow then
+        groundGap = groundGap + vert * VERT_SPEED * dt
+        local hit = groundHit(hullPos, 30)
+        if hit then
+            local targetY = hit.Position.Y + groundGap
+            hullPos = Vector3.new(hullPos.X, hullPos.Y + (targetY - hullPos.Y) * math.clamp(dt * 8, 0, 1), hullPos.Z)
+        end
+    else
+        hullPos = hullPos + Vector3.new(0, vert * VERT_SPEED * dt, 0)
+    end
+
+    local vRight = curSpeed + curTurn * TRACK_HALF
+    local vLeft  = curSpeed - curTurn * TRACK_HALF
+    local sideSpeed = { [1] = vRight, [-1] = vLeft }
+    for side, v in pairs(sideSpeed) do
+        trackPhase[side] = (trackPhase[side] - v / PLATE * dt) % TRACK_LEN
+        wheelSpin[side]  = (wheelSpin[side]  + v / (0.707 * PLATE) * dt) % (2 * math.pi)
+    end
+
+    local targetYaw = math.rad(camYaw)
+    local diff = wrapAngle(targetYaw - turretYaw)
+    local maxStep = math.rad(turretRateDeg) * dt
+    turretYaw = turretYaw + math.clamp(diff, -maxStep, maxStep)
+
+    local targetPitch = math.clamp(math.rad(camPitch), BARREL_MIN, BARREL_MAX)
+    barrelPitch = barrelPitch + math.clamp(targetPitch - barrelPitch, -BARREL_RATE * dt, BARREL_RATE * dt)
+
+    local root = getRootPart()
+    if root then
+        root.CFrame = CFrame.new(hullPos + Vector3.new(0, heightOffset + 14, 0))
+        root.AssemblyLinearVelocity = Vector3.zero
+        root.AssemblyAngularVelocity = Vector3.zero
+        local char = localPlayer.Character
+        if char then
+            for _, d in ipairs(char:GetDescendants()) do
+                if d:IsA("BasePart") then
+                    d.CanCollide = false
+                    d.CanTouch = false
+                    d.CanQuery = false
+                end
+            end
+        end
+    end
+end
+
+local function stepCamera(dt)
+    if not controlling then return end
+    camera = Workspace.CurrentCamera
+    if not camera then return end
+
+    if camera.CameraType ~= Enum.CameraType.Scriptable then
+        camera.CameraType = Enum.CameraType.Scriptable
+    end
+
+    if viewMode == VIEW_THIRD then
+        local rot = CFrame.fromEulerAnglesYXZ(math.rad(camPitch), math.rad(camYaw), 0)
+        local turretLook = CFrame.Angles(0, math.rad(camYaw), 0).LookVector
+        local pivotTarget = hullPos
+            + Vector3.new(0, heightOffset + CAM_PIVOT_H, 0)
+            - turretLook * CAM_BACK_OFFSET
+        smoothPivot = smoothPivot and smoothPivot:Lerp(pivotTarget, math.clamp(dt * 12, 0, 1)) or pivotTarget
+        camera.CFrame = CFrame.new(smoothPivot) * rot * CFrame.new(0, 0, camDist)
+    else
+        local focus = hullPos + Vector3.new(0, heightOffset + FRONT_CAM_TARGET_H, 0)
+        local pitch = math.rad(FRONT_CAM_PITCH)
+        local yaw = math.rad(camYaw)
+        local dir = Vector3.new(
+            -math.sin(yaw) * math.cos(pitch),
+            math.sin(pitch),
+            -math.cos(yaw) * math.cos(pitch)
+        )
+        local camPos = focus + dir * FRONT_CAM_DIST
+        camera.CFrame = CFrame.lookAt(camPos, focus)
+        camera.Focus = CFrame.new(focus)
+    end
+
+    local speedT = math.clamp(math.abs(curSpeed) / 300, 0, 1)
+    local targetFov = DEFAULT_FOV + speedT * 20
+    smoothFov = smoothFov + (targetFov - smoothFov) * math.clamp(dt * 4, 0, 1)
+    camera.FieldOfView = smoothFov
+
+    local heading = ((-camYaw) % 360 + 360) % 360
+    statusLabel.Text = string.format("SPD %d | 砲塔 %03d° | 砲身 %+03d° | 車体 %03d° | 視点 %s",
+        math.floor(math.abs(curSpeed) + 0.5),
+        math.floor(heading + 0.5) % 360,
+        math.floor(math.deg(barrelPitch) + 0.5),
+        math.floor(((-math.deg(hullYaw)) % 360 + 360) + 0.5) % 360,
+        VIEW_NAMES[viewMode] or "?")
+end
+
+----------------------------------------------------------------
+-- メインループ
+----------------------------------------------------------------
+table.insert(connections, RunService.Heartbeat:Connect(function(dt)
+    if not active then return end
+    if controlling then
+        stepControl(dt)
+        stepCamera(dt)
+    end
+    updateTank(dt)
+end))
+
+----------------------------------------------------------------
+-- 停止・削除・作成
+----------------------------------------------------------------
+local function stopHold()
+    stopControl()
+    active = false
+
+    for _, entry in ipairs(entries) do
+        pcall(function()
+            local part = entry.part
+            if part and part.Parent then
+                part.CanCollide = true
+                part.CanTouch = true
+                part.CanQuery = true
+                part.AssemblyLinearVelocity = Vector3.zero
+                part.AssemblyAngularVelocity = Vector3.zero
+            end
+        end)
+        pcall(function()
+            if entry.bodyVelocity then entry.bodyVelocity:Destroy() end
+            if entry.bodyGyro then entry.bodyGyro:Destroy() end
+        end)
+    end
+
+    table.clear(entries)
+    table.clear(filterModels)
+end
+
+local function removePlates()
+    local models = {}
+    for _, entry in ipairs(entries) do
+        table.insert(models, entry.model)
+    end
+    stopHold()
+    for _, model in ipairs(models) do
+        if model and model.Parent then
+            pcall(function() destroyToyRemote:FireServer(model) end)
+            task.wait(0.03)
+        end
+    end
+end
+
+local function createAll()
+    stopHold()
+    local root = getRootPart()
+    if not root then return false end
+
+    local found = collectNearbyBoards(TOTAL, 20)
+    if #found < TOTAL then
+        Library:Notify({
+            Title = "戦車",
+            Description = string.format("板が足りません（%d / %d 枚）", #found, TOTAL),
+            Time = 4,
+        })
+        return false
+    end
+
+    for _, item in ipairs(found) do table.insert(filterModels, item.model) end
+    local _, yaw = root.CFrame:ToOrientation()
+    hullPos = root.Position
+    hullYaw = yaw
+    turretYaw = yaw
+    barrelPitch = 0
+    curSpeed, curTurn = 0, 0
+    trackPhase[-1], trackPhase[1] = 0, 0
+    wheelSpin[-1], wheelSpin[1] = 0, 0
+
+    local hit = groundHit(hullPos, 0)
+    groundGap = hit and (hullPos.Y - hit.Position.Y) or 3
+
+    local base, turretCF, barrelCF = getFrames()
+    for index, found_ in ipairs(found) do
+        local item = layout[index]
+        local target = getTarget(item, base, turretCF, barrelCF)
+        pcall(function()
+            for _, d in ipairs(found_.model:GetDescendants()) do
+                if d:IsA("BasePart") then
+                    d.CanCollide = false
+                    d.CanTouch = false
+                    d.CanQuery = true
+                end
+            end
+        end)
+        local bv, bg
+        pcall(function()
+            bv, bg = setupBoardPhysics(found_.part)
+            bv.Velocity = (target.Position - found_.part.Position) * FOLLOW_SPEED
+            bg.CFrame = target
+        end)
+        table.insert(entries, {
+            model = found_.model,
+            part = found_.part,
+            item = item,
+            bodyVelocity = bv,
+            bodyGyro = bg,
+            lastPos = target.Position,
+        })
+    end
+
+    active = true
+    return true
+end
+
+local function startHold()
+    if starting then return false end
+    starting = true
+    local okCall, result = pcall(createAll)
+    starting = false
+    return okCall and result
+end
+
+local function unload()
+    if unloaded then return end
+    unloaded = true
+    stopControl()
+    stopHold()
+    for _, c in ipairs(connections) do
+        pcall(function() c:Disconnect() end)
+    end
+    table.clear(connections)
+    pcall(function() gui:Destroy() end)
+    genv.__ToyBoxTank.Unload = nil
+    pcall(function()
+        if Library.Unload then
+            Library:Unload()
+        elseif Library.Destroy then
+            Library:Destroy()
+        elseif Library.Window and Library.Window.Destroy then
+            Library.Window:Destroy()
+        end
+    end)
+end
+
+genv.__ToyBoxTank.Unload = unload
+
+----------------------------------------------------------------
+-- UI（シンプル）
+----------------------------------------------------------------
+local window = Library:CreateWindow({
+    Title = "戦車（スマホ）",
+    SubTitle = string.format("板%d枚 / 画面下のボタンで操作", TOTAL),
+    Footer = "左スティックで移動 / 右ドラッグで砲塔 / 視点ボタンで切替",
+    AutoShow = true,
+    NotifySide = "Right",
+})
+
+local tab = window:AddTab("戦車", "package", "板の戦車を作成")
+local mainGroup = tab:AddLeftGroupbox("操作")
+
+mainGroup:AddLabel(string.format("%sを手動で%d枚出してから有効化", PLATE_NAME, TOTAL))
+mainGroup:AddLabel("左スティック=移動 / 右ドラッグ=カメラ / ボタンで各操作")
+
+mainGroup:AddToggle("TankToggle", {
+    Text = "戦車を有効化（組み立て）",
+    Default = false,
+    Callback = function(arg)
+        if arg then
+            local ok = startHold()
+            if not ok and Library.Toggles and Library.Toggles.TankToggle then
+                Library.Toggles.TankToggle:SetValue(false)
+            end
+        else
+            stopHold()
+        end
+    end,
+})
+
+mainGroup:AddButton({
+    Text = "操作 ON/OFF",
+    Func = function() toggleControl() end,
+})
+
+mainGroup:AddButton({
+    Text = "視点切替",
+    Func = function()
+        if controlling then
+            if viewMode == VIEW_THIRD then viewMode = VIEW_FRONT else viewMode = VIEW_THIRD end
+            smoothPivot = nil
+        end
+    end,
+})
+
+mainGroup:AddButton({
+    Text = "戦車を作り直す（今の位置で再検知）",
+    Func = function()
+        if active then startHold() end
+    end,
+})
+
+mainGroup:AddButton({
+    Text = "板を削除",
+    Func = function() removePlates() end,
+})
+
+mainGroup:AddButton({
+    Text = "UIをアンロード",
+    Func = function() unload() end,
+})
+
+Library:Notify({
+    Title = "戦車（スマホ）",
+    Description = string.format("板を%d枚出して『戦車を有効化』→ 操作ボタンで開始\n左スティック=移動 / 右ドラッグ=カメラ / 上昇・視点・終了ボタン", TOTAL),
+    Time = 5,
+})

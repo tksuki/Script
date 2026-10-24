@@ -1,0 +1,503 @@
+-- =====================================================
+-- イモキル (Kill All / Kill Aura / Selected Kill)
+-- 依存: Infinite Yield (optional), Obsidian Library
+-- =====================================================
+
+-- ライブラリ読み込み（UI に必要）
+loadstring(game:HttpGet('https://raw.githubusercontent.com/EdgeIY/infiniteyield/master/source'))()
+local repo = "https://raw.githubusercontent.com/deividcomsono/Obsidian/main/"
+local Library = loadstring(game:HttpGet(repo .. "Library.lua"))()
+local ThemeManager = loadstring(game:HttpGet(repo .. "addons/ThemeManager.lua"))()
+local SaveManager = loadstring(game:HttpGet(repo .. "addons/SaveManager.lua"))()
+local Options = Library.Options
+local Toggles = Library.Toggles
+
+-- サービス
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
+
+-- =====================================================
+-- ヘルパー関数
+-- =====================================================
+local function ExtractUsername(selected)
+    if type(selected) ~= "string" then return nil end
+    return selected:match("%(@(.+)%)$")
+end
+
+local function GetTargetablePlayerNames()
+    local names = {}
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer then
+            table.insert(names, player.DisplayName .. " (@" .. player.Name .. ")")
+        end
+    end
+    table.sort(names, function(a, b) return a:lower() < b:lower() end)
+    return names
+end
+
+local function RefreshAllPlayerLists()
+    local newList = GetTargetablePlayerNames()
+    if Options.TargetPlayer then Options.TargetPlayer:SetValues(newList) end
+end
+
+Players.PlayerAdded:Connect(RefreshAllPlayerLists)
+Players.PlayerRemoving:Connect(RefreshAllPlayerLists)
+
+-- ホワイトリスト（フレンド除外）
+local globalFriendWhitelist = false
+local function isTargetable(player, respectWhitelist)
+    if not player or player == LocalPlayer then return false end
+    if respectWhitelist and globalFriendWhitelist then
+        local isFriend = false
+        pcall(function() isFriend = LocalPlayer:IsFriendsWith(player.UserId) end)
+        if isFriend then return false end
+    end
+    return true
+end
+
+-- =====================================================
+-- イモキル (本体)
+-- =====================================================
+local Imokill = {}
+Imokill.isRunning = false          -- Kill All
+Imokill.isKillAura = false         -- Kill Aura
+Imokill.isSelectedKill = false     -- Selected Kill
+Imokill.selectedPlayer = nil
+Imokill.currentBlobman = nil
+Imokill.killAuraConnection = nil
+Imokill.selectedKillConnection = nil
+Imokill.selectedPlayerConnection = nil
+Imokill.selectedKillAuraConnection = nil
+
+local TP_WAIT = 0.02
+local GRAB_WAIT = 0.005
+local RETRY_WAIT = 0.005
+local MAX_RETRIES = 5
+local MAX_BLOBMAN_DISTANCE = 500
+local SELECTED_AURA_RANGE = 40
+local AURA_RANGE = 40
+
+local function GetSeatedBlobman()
+    local char = LocalPlayer.Character
+    if not char then return nil end
+    local humanoid = char:FindFirstChildOfClass("Humanoid")
+    if not humanoid then return nil end
+    local seat = humanoid.SeatPart
+    if not seat or not seat:IsA("VehicleSeat") then return nil end
+    local obj = seat
+    while obj do
+        if obj:IsA("Model") and obj.Name == "CreatureBlobman" then
+            return obj
+        end
+        obj = obj.Parent
+    end
+    return nil
+end
+
+function Imokill.SpawnBlobman()
+    local seatedBlobman = GetSeatedBlobman()
+    if seatedBlobman then
+        Imokill.currentBlobman = seatedBlobman
+        return seatedBlobman
+    end
+
+    if Imokill.currentBlobman and Imokill.currentBlobman.Parent then
+        local blobmanPos = nil
+        if Imokill.currentBlobman.PrimaryPart then
+            blobmanPos = Imokill.currentBlobman.PrimaryPart.Position
+        else
+            local part = Imokill.currentBlobman:FindFirstChildWhichIsA("BasePart")
+            if part then blobmanPos = part.Position end
+        end
+        local character = LocalPlayer.Character
+        local rootPart = character and character:FindFirstChild("HumanoidRootPart")
+        local localPos = rootPart and rootPart.Position
+        if blobmanPos and localPos and (blobmanPos - localPos).Magnitude < MAX_BLOBMAN_DISTANCE then
+            local seat = Imokill.currentBlobman:FindFirstChild("VehicleSeat")
+            if seat then
+                local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+                if humanoid then
+                    seat:Sit(humanoid)
+                    task.wait(0.05)
+                end
+            end
+            return Imokill.currentBlobman
+        else
+            pcall(function() Imokill.currentBlobman:Destroy() end)
+            Imokill.currentBlobman = nil
+        end
+    end
+
+    local character = LocalPlayer.Character
+    if not character then return nil end
+    local rootPart = character:FindFirstChild("HumanoidRootPart")
+    if not rootPart then return nil end
+
+    local spawnPos = rootPart.CFrame * CFrame.new(0, 0, -5)
+    pcall(function()
+        ReplicatedStorage.MenuToys.SpawnToyRemoteFunction:InvokeServer("CreatureBlobman", spawnPos, Vector3.new(0, 127, 0))
+    end)
+
+    local toyFolderName = LocalPlayer.Name .. "SpawnedInToys"
+    local blobman = nil
+    local startTime = tick()
+    repeat
+        local toyFolder = Workspace:FindFirstChild(toyFolderName)
+        if toyFolder then blobman = toyFolder:FindFirstChild("CreatureBlobman") end
+        if blobman then break end
+        task.wait()
+    until tick() - startTime > 2
+    if not blobman then return nil end
+
+    Imokill.currentBlobman = blobman
+    local seat = blobman:FindFirstChild("VehicleSeat")
+    if seat then
+        local humanoid = character:FindFirstChildOfClass("Humanoid")
+        if humanoid then seat:Sit(humanoid) end
+    end
+    task.wait(0.05)
+    return blobman
+end
+
+function Imokill.KillPlayer(targetPlayer)
+    if not targetPlayer or not targetPlayer.Character then return false end
+    local humanoid = targetPlayer.Character:FindFirstChildOfClass("Humanoid")
+    if not humanoid then return false end
+    for _ = 1, MAX_RETRIES do
+        local success = pcall(function()
+            humanoid.BreakJointsOnDeath = false
+            humanoid:ChangeState(Enum.HumanoidStateType.Dead)
+        end)
+        if success and humanoid.Health <= 0 then return true end
+        task.wait(RETRY_WAIT)
+    end
+    return false
+end
+
+function Imokill.GrabRelease(blobman, targetRoot)
+    if not blobman or not targetRoot then return end
+    pcall(function()
+        local script = blobman:FindFirstChild("BlobmanSeatAndOwnerScript")
+        if script then
+            script.CreatureGrab:FireServer(blobman.LeftDetector, targetRoot, blobman.LeftDetector.LeftWeld)
+            script.CreatureRelease:FireServer(blobman.LeftDetector.LeftWeld)
+        end
+    end)
+end
+
+function Imokill.ProcessPlayer(targetPlayer)
+    if not targetPlayer or not targetPlayer.Character then return false end
+    local humanoid = targetPlayer.Character:FindFirstChildOfClass("Humanoid")
+    if not humanoid or humanoid.Health <= 0 then return false end
+    local targetRoot = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if not targetRoot then return false end
+    local localChar = LocalPlayer.Character
+    if not localChar then return false end
+    local myRoot = localChar:FindFirstChild("HumanoidRootPart")
+    if not myRoot then return false end
+
+    local originalCFrame = myRoot.CFrame
+    local originalVel = myRoot.AssemblyLinearVelocity
+    local originalAngVel = myRoot.AssemblyAngularVelocity
+
+    pcall(function()
+        myRoot.CFrame = targetRoot.CFrame
+        myRoot.AssemblyLinearVelocity = Vector3.zero
+        myRoot.AssemblyAngularVelocity = Vector3.zero
+        RunService.Heartbeat:Wait()
+        humanoid.BreakJointsOnDeath = false
+        humanoid:ChangeState(Enum.HumanoidStateType.Dead)
+        local blobman = GetSeatedBlobman()
+        if blobman then Imokill.GrabRelease(blobman, targetRoot) end
+    end)
+
+    if myRoot and myRoot.Parent then
+        myRoot.CFrame = originalCFrame
+        myRoot.AssemblyLinearVelocity = originalVel or Vector3.zero
+        myRoot.AssemblyAngularVelocity = originalAngVel or Vector3.zero
+        myRoot.Velocity = Vector3.zero
+        myRoot.RotVelocity = Vector3.zero
+    end
+    return true
+end
+
+function Imokill.ProcessAllPlayers()
+    local localChar = LocalPlayer.Character
+    if not localChar or not localChar:FindFirstChild("HumanoidRootPart") then return end
+    local rootPart = localChar.HumanoidRootPart
+    local blobman = Imokill.SpawnBlobman()
+    if not blobman then return end
+
+    local targets = {}
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and isTargetable(player, true) and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+            table.insert(targets, player)
+        end
+    end
+
+    for _, player in ipairs(targets) do
+        if not Imokill.isRunning then break end
+        local targetChar = player.Character
+        if not targetChar then continue end
+        local humanoid = targetChar:FindFirstChildOfClass("Humanoid")
+        if not humanoid or humanoid.Health <= 0 then continue end
+        local targetRoot = targetChar:FindFirstChild("HumanoidRootPart")
+        if not targetRoot then continue end
+
+        rootPart.CFrame = targetRoot.CFrame
+        task.wait(TP_WAIT)
+        Imokill.KillPlayer(player)
+        for _ = 1, 2 do
+            Imokill.GrabRelease(blobman, targetRoot)
+            task.wait(GRAB_WAIT)
+        end
+    end
+end
+
+function Imokill.SetupKillAura()
+    if Imokill.killAuraConnection then
+        Imokill.killAuraConnection:Disconnect()
+        Imokill.killAuraConnection = nil
+    end
+    Imokill.killAuraConnection = RunService.Heartbeat:Connect(function()
+        if not Imokill.isKillAura then return end
+        local localChar = LocalPlayer.Character
+        if not localChar or not localChar:FindFirstChild("HumanoidRootPart") then return end
+        local localRoot = localChar.HumanoidRootPart
+        if not Imokill.currentBlobman or not Imokill.currentBlobman.Parent then
+            Imokill.currentBlobman = Imokill.SpawnBlobman()
+            if not Imokill.currentBlobman then return end
+        end
+        for _, player in ipairs(Players:GetPlayers()) do
+            if player ~= LocalPlayer and isTargetable(player, true) and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+                local targetRoot = player.Character.HumanoidRootPart
+                if (localRoot.Position - targetRoot.Position).Magnitude <= AURA_RANGE then
+                    Imokill.KillPlayer(player)
+                    Imokill.GrabRelease(Imokill.currentBlobman, targetRoot)
+                end
+            end
+        end
+    end)
+end
+
+function Imokill.UpdateKillAuraConnection()
+    if Imokill.isKillAura then
+        if not Imokill.killAuraConnection then Imokill.SetupKillAura() end
+    else
+        if Imokill.killAuraConnection then
+            Imokill.killAuraConnection:Disconnect()
+            Imokill.killAuraConnection = nil
+        end
+    end
+end
+
+local function StartSelectedKillAura()
+    if Imokill.selectedKillAuraConnection then
+        Imokill.selectedKillAuraConnection:Disconnect()
+        Imokill.selectedKillAuraConnection = nil
+    end
+    if not Imokill.selectedPlayer then return end
+    Imokill.selectedKillAuraConnection = RunService.Heartbeat:Connect(function()
+        if not Imokill.isSelectedKill or not Imokill.selectedPlayer then return end
+        local targetPlayer = Imokill.selectedPlayer
+        if not targetPlayer.Parent then return end
+        local localChar = LocalPlayer.Character
+        if not localChar then return end
+        local localRoot = localChar:FindFirstChild("HumanoidRootPart")
+        if not localRoot then return end
+        local targetChar = targetPlayer.Character
+        if not targetChar then return end
+        local targetRoot = targetChar:FindFirstChild("HumanoidRootPart")
+        if not targetRoot then return end
+        if (localRoot.Position - targetRoot.Position).Magnitude <= SELECTED_AURA_RANGE then
+            local blobman = GetSeatedBlobman()
+            if not blobman then blobman = Imokill.SpawnBlobman() end
+            if blobman then
+                Imokill.KillPlayer(targetPlayer)
+                Imokill.GrabRelease(blobman, targetRoot)
+            end
+        end
+    end)
+end
+
+function Imokill.StartSelectedKillLoop()
+    if Imokill.selectedKillConnection then
+        Imokill.selectedKillConnection:Disconnect()
+        Imokill.selectedKillConnection = nil
+    end
+    if Imokill.selectedPlayerConnection then
+        Imokill.selectedPlayerConnection:Disconnect()
+        Imokill.selectedPlayerConnection = nil
+    end
+    if not Imokill.selectedPlayer then return end
+
+    task.spawn(function()
+        while Imokill.isSelectedKill do
+            if Imokill.selectedPlayer and Imokill.selectedPlayer.Parent then
+                pcall(Imokill.ProcessPlayer, Imokill.selectedPlayer)
+            end
+            RunService.Heartbeat:Wait()
+        end
+    end)
+
+    Imokill.selectedPlayerConnection = Imokill.selectedPlayer.CharacterAdded:Connect(function()
+        if Imokill.isSelectedKill then
+            task.spawn(function() pcall(Imokill.ProcessPlayer, Imokill.selectedPlayer) end)
+        end
+    end)
+
+    StartSelectedKillAura()
+end
+
+local function StopSelectedKill()
+    Imokill.isSelectedKill = false
+    if Imokill.selectedKillConnection then
+        Imokill.selectedKillConnection:Disconnect()
+        Imokill.selectedKillConnection = nil
+    end
+    if Imokill.selectedPlayerConnection then
+        Imokill.selectedPlayerConnection:Disconnect()
+        Imokill.selectedPlayerConnection = nil
+    end
+    if Imokill.selectedKillAuraConnection then
+        Imokill.selectedKillAuraConnection:Disconnect()
+        Imokill.selectedKillAuraConnection = nil
+    end
+end
+
+-- =====================================================
+-- UI 構築
+-- =====================================================
+local Window = Library:CreateWindow({
+    Title = "イモキル",
+    Icon = 73528271282556,
+    Center = true,
+    AutoShow = true,
+    Resizable = true,
+    ToggleKeybind = Enum.KeyCode.RightShift
+})
+
+local TargetTab = Window:AddTab("Kill", "skull")
+local KillGroup = TargetTab:AddLeftGroupbox("イモキル", "skull")
+
+-- ターゲット選択ドロップダウン
+KillGroup:AddDropdown("TargetPlayer", {
+    Text = "Select Target (for Selected Kill)",
+    Values = GetTargetablePlayerNames(),
+    Default = "",
+    Callback = function(Value) end
+})
+
+-- ホワイトリストトグル
+KillGroup:AddToggle("WhitelistFriends", {
+    Text = "Whitelist Friends (Kill All / Kill Aura only)",
+    Default = false,
+    Callback = function(Value)
+        globalFriendWhitelist = Value
+        RefreshAllPlayerLists()
+        Library:Notify("Friend Whitelist: " .. (Value and "Enabled" or "Disabled"), 2)
+    end
+})
+
+-- Kill All トグル
+KillGroup:AddToggle("ImokillAll", {
+    Text = "Kill All (全員対象・ループ)",
+    Default = false,
+    Callback = function(Value)
+        Imokill.isRunning = Value
+        if Value then
+            if Toggles.ImokillAura and not Toggles.ImokillAura.Value then
+                Toggles.ImokillAura:SetValue(true)
+            end
+            Imokill.UpdateKillAuraConnection()
+            task.spawn(function()
+                while Imokill.isRunning do
+                    Imokill.ProcessAllPlayers()
+                    task.wait(0)
+                end
+            end)
+            Library:Notify("Kill All: Activated", 2)
+        else
+            Imokill.UpdateKillAuraConnection()
+            Library:Notify("Kill All: Deactivated", 2)
+        end
+    end
+})
+
+-- Kill Aura トグル
+KillGroup:AddToggle("ImokillAura", {
+    Text = "Kill Aura (範囲内全員・独立動作)",
+    Default = false,
+    Callback = function(Value)
+        Imokill.isKillAura = Value
+        if Value then
+            if Toggles.ImokillAll then Toggles.ImokillAll:SetValue(false) end
+            Imokill.SpawnBlobman()
+            Library:Notify("Kill Aura: Activated", 2)
+        else
+            Library:Notify("Kill Aura: Deactivated", 2)
+        end
+        Imokill.UpdateKillAuraConnection()
+    end
+})
+
+-- Selected Kill トグル
+KillGroup:AddToggle("BlobmanSelectedKill", {
+    Text = "Selected Kill (専用Aura付き・自動ループ)",
+    Default = false,
+    Callback = function(Value)
+        if Value then
+            local selectedName = ExtractUsername(Options.TargetPlayer.Value)
+            if not selectedName then
+                Library:Notify("Select a player from the dropdown first", 3)
+                Toggles.BlobmanSelectedKill:SetValue(false)
+                return
+            end
+            Imokill.selectedPlayer = Players:FindFirstChild(selectedName)
+            if not Imokill.selectedPlayer then
+                Library:Notify("Player not found", 3)
+                Toggles.BlobmanSelectedKill:SetValue(false)
+                return
+            end
+            Imokill.isSelectedKill = true
+            Imokill.StartSelectedKillLoop()
+            Library:Notify("Selected Kill: Activated on " .. selectedName, 2)
+        else
+            StopSelectedKill()
+            Library:Notify("Selected Kill: Deactivated", 2)
+        end
+    end
+})
+
+-- 設定タブ
+local UISettingsTab = Window:AddTab("UI Settings", "settings")
+local MenuGroup = UISettingsTab:AddLeftGroupbox("Menu", "wrench")
+MenuGroup:AddLabel("Menu bind"):AddKeyPicker("MenuKeybind", { Default = "C", NoUI = true, Text = "Menu keybind" })
+Library.ToggleKeybind = Options.MenuKeybind
+
+ThemeManager:SetLibrary(Library)
+SaveManager:SetLibrary(Library)
+SaveManager:IgnoreThemeSettings()
+SaveManager:SetIgnoreIndexes({ "MenuKeybind" })
+ThemeManager:SetFolder("Imokill")
+SaveManager:SetFolder("Imokill")
+SaveManager:SetSubFolder("config")
+ThemeManager:ApplyToTab(UISettingsTab)
+SaveManager:BuildConfigSection(UISettingsTab)
+SaveManager:LoadAutoloadConfig()
+
+-- 終了時処理
+game:BindToClose(function()
+    Imokill.isRunning = false
+    Imokill.isKillAura = false
+    Imokill.isSelectedKill = false
+    if Imokill.killAuraConnection then Imokill.killAuraConnection:Disconnect() end
+    if Imokill.selectedKillConnection then Imokill.selectedKillConnection:Disconnect() end
+    if Imokill.selectedPlayerConnection then Imokill.selectedPlayerConnection:Disconnect() end
+    if Imokill.selectedKillAuraConnection then Imokill.selectedKillAuraConnection:Disconnect() end
+end)
+
+print("イモキル fully loaded (Kill All / Kill Aura / Selected Kill)")
