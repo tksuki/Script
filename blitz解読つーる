@@ -1,0 +1,201 @@
+-- Test obf 4 : ログ取得用ハーネス (エグゼキューター用)
+-- 使い方: 自分専用の空のPlace・使い捨てアカウントで、これを丸ごと実行する
+-- 出力: コンソール + エグゼキューターの workspace フォルダの t4_log.txt / t4_dump_N.lua
+-- 途中でクライアントが固まったら「罠に入った」合図。30秒ほど待って閉じて、t4_log.txt を送ってください。
+
+local URL = "https://raw.githubusercontent.com/tksuki/Script/refs/heads/main/Test%20obf%204"
+local RUN_PAYLOAD = true        -- false にすると診断だけ行い、難読化コードは実行しない
+local BLOCK_NAMECALL = true     -- gameへの通信/テレポート系メソッド呼び出しを止める (検査が通らない場合は false)
+
+local LOG = "t4_log.txt"
+local hasAppend = type(appendfile) == "function"
+if type(writefile) == "function" then pcall(writefile, LOG, "") end
+
+local function emit(...)
+	local parts = table.pack(...)
+	for i = 1, parts.n do parts[i] = tostring(parts[i]) end
+	local line = table.concat(parts, " ")
+	print(line)
+	if hasAppend then pcall(appendfile, LOG, line .. "\n") end
+end
+
+local function try(label, f)
+	local ok, r = pcall(f)
+	emit(("[DIAG] %s = %s"):format(label, ok and tostring(r) or ("ERR " .. tostring(r))))
+end
+
+local function cinfo(f)
+	if type(f) ~= "function" then return "not-function:" .. type(f) end
+	local ok, s = pcall(debug.info, f, "s")
+	return ok and tostring(s) or "?"
+end
+
+---------------------------------------------------------------------
+-- 1. 環境の診断 (VMの検査が見ている項目)
+---------------------------------------------------------------------
+emit("===== DIAG BEGIN =====")
+try("executor", function() return table.concat({identifyexecutor and identifyexecutor()}, " ") end)
+try("_VERSION", function() return _VERSION end)
+try("typeof(game)", function() return typeof(game) end)
+try("game.ClassName", function() return game.ClassName end)
+try("workspace.Parent == game", function() return workspace.Parent == game end)
+try("#Folder:GetChildren()", function() return #Instance.new("Folder"):GetChildren() end)
+try("getmetatable(game)", function() return getmetatable(game) end)
+try("getmetatable(Enum)", function() return getmetatable(Enum) end)
+try("typeof(Enum)", function() return typeof(Enum) end)
+try("type(Enum.PartType.Wedge)", function() return type(Enum.PartType.Wedge) end)
+try("typeof(Enum.PartType.Wedge)", function() return typeof(Enum.PartType.Wedge) end)
+try("getmetatable(Enum.PartType.Wedge)", function() return getmetatable(Enum.PartType.Wedge) end)
+try("Enum.PartType:FromName('Wedge')", function() return Enum.PartType:FromName("Wedge") end)
+try("typeof(game.DescendantRemoving)", function() return typeof(game.DescendantRemoving) end)
+try("typeof(connection)", function()
+	local c = game.DescendantRemoving:Connect(function() end)
+	local t = typeof(c)
+	c:Disconnect()
+	return t
+end)
+try("Instance.new('Path2D')", function() return Instance.new("Path2D").ClassName end)
+try("#StarterPlayer children", function() return #game:GetService("StarterPlayer"):GetChildren() end)
+try("RunService", function() return game:GetService("RunService").ClassName end)
+try("HttpService", function() return game:GetService("HttpService").ClassName end)
+
+local hs = game:GetService("HttpService")
+local rnd = Random.new(1)
+local inst = Instance.new("Folder")
+local funcs = {
+	{"HttpService.GetAsync", hs.GetAsync},
+	{"HttpService.PostAsync", hs.PostAsync},
+	{"HttpService.RequestAsync", hs.RequestAsync},
+	{"Random.NextInteger", rnd.NextInteger},
+	{"Random.NextNumber", rnd.NextNumber},
+	{"Random.NextUnitVector", rnd.NextUnitVector},
+	{"Random.Shuffle", rnd.Shuffle},
+	{"Instance.Clone", inst.Clone},
+	{"Instance.IsA", inst.IsA},
+	{"Instance.WaitForChild", inst.WaitForChild},
+	{"Instance.GetChildren", inst.GetChildren},
+	{"typeof", typeof}, {"getmetatable", getmetatable}, {"setmetatable", setmetatable},
+	{"pcall", pcall}, {"xpcall", xpcall}, {"select", select}, {"tostring", tostring},
+	{"getfenv", getfenv}, {"setfenv", setfenv}, {"loadstring", loadstring},
+	{"string.rep", string.rep}, {"string.byte", string.byte}, {"buffer.create", buffer and buffer.create},
+}
+for _, e in ipairs(funcs) do
+	emit(("[DIAG] debug.info(%s,'s') = %s"):format(e[1], cinfo(e[2])))
+end
+emit("===== DIAG END =====")
+
+if not RUN_PAYLOAD then return end
+
+---------------------------------------------------------------------
+-- 2. 難読化コードの取得
+---------------------------------------------------------------------
+local src
+do
+	local ok, r = pcall(function() return game:HttpGet(URL) end)
+	if not ok and type(request) == "function" then
+		local ok2, resp = pcall(request, {Url = URL, Method = "GET"})
+		if ok2 and resp and resp.Body then ok, r = true, resp.Body end
+	end
+	if not ok or type(r) ~= "string" then emit("[FATAL] 取得失敗:", tostring(r)) return end
+	src = r
+end
+emit("[FETCH] bytes =", #src)
+
+local f, err = loadstring(src, "=t4")
+if not f then emit("[FATAL] compile error:", tostring(err)) return end
+
+---------------------------------------------------------------------
+-- 3. 隔離した環境 (危険な関数を止めて記録する)
+---------------------------------------------------------------------
+local base = (getgenv and getgenv()) or getfenv(0)
+local env = setmetatable({}, {__index = base})
+local dumpN = 0
+
+local function blocked(name, ret)
+	return function(...)
+		emit("[BLOCKED]", name, "args:", select("#", ...), debug.traceback("", 2):sub(1, 200):gsub("\n", " | "))
+		return ret
+	end
+end
+
+local FAKE_RESP = {Success = false, StatusCode = 0, StatusMessage = "blocked", Body = ""}
+for _, n in ipairs({"request", "http_request", "setclipboard", "toclipboard", "queue_on_teleport",
+	"writefile", "appendfile", "delfile", "delfolder", "makefolder", "loadfile", "dofile"}) do
+	env[n] = blocked(n, n:find("request") and FAKE_RESP or nil)
+end
+env.syn = setmetatable({}, {__index = function(_, k) return blocked("syn." .. tostring(k), FAKE_RESP) end})
+env.http = setmetatable({}, {__index = function(_, k) return blocked("http." .. tostring(k), FAKE_RESP) end})
+env.fluxus = setmetatable({}, {__index = function(_, k) return blocked("fluxus." .. tostring(k), FAKE_RESP) end})
+
+-- loadstring / load : 渡された文字列を保存してから通常どおり実行
+local function wrapLoader(name, orig)
+	return function(s, ...)
+		dumpN += 1
+		emit(("[%s] #%d len=%s type=%s"):format(name, dumpN, type(s) == "string" and #s or "?", type(s)))
+		if type(s) == "string" then
+			emit("[" .. name .. "] head:", s:sub(1, 200):gsub("[%c]", "."))
+			if type(writefile) == "function" then pcall(writefile, ("t4_dump_%d.lua"):format(dumpN), s) end
+		end
+		return orig(s, ...)
+	end
+end
+if loadstring then env.loadstring = wrapLoader("LOADSTRING", loadstring) end
+if load then env.load = wrapLoader("LOAD", load) end
+
+env.print = function(...) emit("[PRINT]", ...) return print(...) end
+env.warn = function(...) emit("[WARN]", ...) return warn(...) end
+
+local realTask = task
+env.task = setmetatable({
+	spawn = function(fn, ...) emit("[task.spawn]") return realTask.spawn(fn, ...) end,
+	defer = function(fn, ...) emit("[task.defer]") return realTask.defer(fn, ...) end,
+	delay = function(t, fn, ...) emit("[task.delay]", t) return realTask.delay(t, fn, ...) end,
+}, {__index = realTask})
+
+-- game への通信・テレポート系メソッドを止める
+if BLOCK_NAMECALL and hookmetamethod and getnamecallmethod and newcclosure then
+	local BAD = {HttpGet = true, HttpGetAsync = true, HttpPost = true, HttpPostAsync = true,
+		GetAsync = true, PostAsync = true, RequestAsync = true,
+		Teleport = true, TeleportAsync = true, TeleportToPlaceInstance = true,
+		OpenBrowserWindow = true, OpenVideo = true, SetClipboard = true}
+	local old
+	local ok = pcall(function()
+		old = hookmetamethod(game, "__namecall", newcclosure(function(self, ...)
+			local m = getnamecallmethod()
+			if BAD[m] then
+				emit("[BLOCKED] namecall", m, "on", tostring(self))
+				return nil
+			end
+			return old(self, ...)
+		end))
+	end)
+	emit("[HOOK] namecall block installed =", ok)
+else
+	emit("[HOOK] namecall block NOT installed (executor unsupported or disabled)")
+end
+
+---------------------------------------------------------------------
+-- 4. 実行
+---------------------------------------------------------------------
+setfenv(f, env)
+emit("[RUN] start  ※ここから固まったら罠。30秒待って閉じる → t4_log.txt を送る")
+
+realTask.spawn(function()
+	local t0 = os.clock()
+	local res = table.pack(pcall(f))
+	emit(("[RUN] finished in %.2fs ok=%s nret=%d"):format(os.clock() - t0, tostring(res[1]), res.n - 1))
+	for i = 2, res.n do
+		local v = res[i]
+		emit(("[RET %d] type=%s value=%s"):format(i - 1, typeof(v), tostring(v):sub(1, 200)))
+		if type(v) == "table" then
+			local n = 0
+			for k, x in pairs(v) do
+				n += 1
+				if n > 40 then emit("  ...") break end
+				emit(("  [%s] = %s (%s)"):format(tostring(k), tostring(x):sub(1, 80), type(x)))
+			end
+		end
+	end
+	realTask.wait(5)
+	emit("[DONE] dumps =", dumpN)
+end)
