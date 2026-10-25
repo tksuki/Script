@@ -1,0 +1,237 @@
+--[[
+  executor_logger.lua
+  難読化済みスクリプト（Test.obf 3）の「動き」を記録するためのログ取りスクリプトです。
+
+  使い方
+    1. 難読化済みファイルを、エグゼキューターの workspace フォルダに
+       「Test.obf3.lua」という名前で置く（名前は下の TARGET_FILE で変更可）。
+    2. このスクリプトを実行する。
+    3. workspace フォルダに出来る次のファイルを確認・送付する:
+         obf_log.txt            ... 動作ログ（print / loadstring / Instance.new / HTTP 試行など）
+         obf_loadstring_*.lua   ... loadstring に渡された文字列（あれば）
+         obf_buf_*.bin          ... buffer.copy で作られた大きなバッファ
+
+  安全のためのブロック（ログだけ残して実行はさせない）
+    - HttpGet / HttpPost / request / RequestAsync / GetAsync / PostAsync
+    - setclipboard / queue_on_teleport
+  ※ 必ず「サブアカウント」で、空のゲーム（Baseplate など）の中で実行してください。
+  ※ 動作確認はしていません。エラーが出たらそのメッセージを教えてください。
+]]
+
+local TARGET_FILE = "Test.obf3.lua"
+local LOG_FILE = "obf_log.txt"
+local BUF_MIN_SIZE = 2000   -- この大きさ以上の buffer.copy の結果を保存する
+
+local realprint = print
+local realwarn = warn
+local realtostring = tostring
+local realpcall = pcall
+local realtype = type
+local realselect = select
+
+------------------------------------------------------------------
+-- ログ出力
+------------------------------------------------------------------
+local logbuf = {}
+local function flushlog()
+    if #logbuf == 0 then return end
+    local text = table.concat(logbuf, "\n") .. "\n"
+    logbuf = {}
+    if appendfile then
+        realpcall(appendfile, LOG_FILE, text)
+    elseif writefile then
+        local old = ""
+        if isfile and isfile(LOG_FILE) and readfile then
+            local ok, c = realpcall(readfile, LOG_FILE)
+            if ok then old = c end
+        end
+        realpcall(writefile, LOG_FILE, old .. text)
+    end
+end
+
+local function log(...)
+    local parts = {}
+    for i = 1, realselect("#", ...) do
+        local ok, s = realpcall(realtostring, (realselect(i, ...)))
+        parts[#parts + 1] = ok and s or "<?>"
+    end
+    local line = table.concat(parts, " ")
+    realprint("[LOG] " .. line)
+    logbuf[#logbuf + 1] = line
+    if #logbuf >= 20 then flushlog() end
+end
+
+-- ログファイルを初期化
+if writefile then realpcall(writefile, LOG_FILE, "") end
+log("=== logger start ===", os.date and os.date("%Y-%m-%d %H:%M:%S") or "")
+log("executor:", identifyexecutor and select(1, identifyexecutor()) or "unknown")
+
+------------------------------------------------------------------
+-- フック用ヘルパー
+------------------------------------------------------------------
+local function cclosure(f)
+    if newcclosure then
+        local ok, r = realpcall(newcclosure, f)
+        if ok and r then return r end
+    end
+    return f
+end
+
+-- fn を hookfunction で差し替える。使えなければ nil を返す。
+local function hookfn(fn, make)
+    if not hookfunction then return nil end
+    local old
+    local wrapper = cclosure(function(...) return make(old, ...) end)
+    local ok, res = realpcall(hookfunction, fn, wrapper)
+    if ok then old = res; return old end
+    return nil
+end
+
+local function summarize(v)
+    local t = realtype(v)
+    if t == "string" then
+        if #v > 80 then return string.format("%q...(len %d)", v:sub(1, 80), #v) end
+        return string.format("%q", v)
+    end
+    return realtostring(v)
+end
+
+local function summarizeArgs(...)
+    local p = {}
+    for i = 1, realselect("#", ...) do p[#p + 1] = summarize((realselect(i, ...))) end
+    return table.concat(p, ", ")
+end
+
+------------------------------------------------------------------
+-- print / warn
+------------------------------------------------------------------
+hookfn(print, function(old, ...)
+    log("print(" .. summarizeArgs(...) .. ")")
+    return old(...)
+end)
+hookfn(warn, function(old, ...)
+    log("warn(" .. summarizeArgs(...) .. ")")
+    return old(...)
+end)
+
+------------------------------------------------------------------
+-- loadstring: 渡された文字列を保存
+------------------------------------------------------------------
+local realLoad = loadstring
+local nload = 0
+if realLoad then
+    local hooked = hookfn(loadstring, function(old, src, ...)
+        nload += 1
+        local n = nload
+        if realtype(src) == "string" then
+            log(string.format("loadstring #%d length=%d head=%q", n, #src, src:sub(1, 100)))
+            if writefile and n > 1 then   -- #1 は難読化ファイル自体なので保存しない
+                realpcall(writefile, string.format("obf_loadstring_%d.lua", n), src)
+            end
+        end
+        return old(src, ...)
+    end)
+end
+
+------------------------------------------------------------------
+-- buffer.copy: 大きなバッファを保存
+------------------------------------------------------------------
+if buffer and buffer.copy then
+    local nbuf = 0
+    hookfn(buffer.copy, function(old, dst, dstoff, src, srcoff, count)
+        local r = table.pack(old(dst, dstoff, src, srcoff, count))
+        local ok, len = realpcall(buffer.len, dst)
+        if ok and len and len >= BUF_MIN_SIZE then
+            nbuf += 1
+            log(string.format("buffer.copy -> dst len=%d (srcoff=%s count=%s) saved #%d", len, realtostring(srcoff), realtostring(count), nbuf))
+            if writefile then
+                realpcall(function()
+                    writefile(string.format("obf_buf_%d_len%d.bin", nbuf, len), buffer.tostring(dst))
+                end)
+            end
+        end
+        return table.unpack(r, 1, r.n)
+    end)
+end
+
+------------------------------------------------------------------
+-- Instance.new
+------------------------------------------------------------------
+hookfn(Instance.new, function(old, class, ...)
+    log("Instance.new(" .. summarize(class) .. ")")
+    return old(class, ...)
+end)
+
+------------------------------------------------------------------
+-- 通信・クリップボードなどのブロック
+------------------------------------------------------------------
+local function blocker(name, fakeResult)
+    return function(old, ...)
+        log("BLOCKED " .. name .. "(" .. summarizeArgs(...) .. ")")
+        return fakeResult
+    end
+end
+
+for _, name in ipairs({ "request", "http_request" }) do
+    local f = getgenv and getgenv()[name] or _G[name]
+    if realtype(f) == "function" then
+        hookfn(f, blocker(name, { Success = false, StatusCode = 0, StatusMessage = "blocked", Body = "", Headers = {} }))
+    end
+end
+if syn and realtype(syn.request) == "function" then
+    hookfn(syn.request, blocker("syn.request", { Success = false, StatusCode = 0, Body = "", Headers = {} }))
+end
+if http and realtype(http.request) == "function" then
+    hookfn(http.request, blocker("http.request", { Success = false, StatusCode = 0, Body = "", Headers = {} }))
+end
+for _, name in ipairs({ "setclipboard", "toclipboard", "queue_on_teleport" }) do
+    local f = getgenv and getgenv()[name] or _G[name]
+    if realtype(f) == "function" then hookfn(f, blocker(name, nil)) end
+end
+
+-- game:HttpGet / HttpPost / HttpService:RequestAsync などは __namecall で止める
+local BLOCKED_METHODS = {
+    HttpGet = "", HttpGetAsync = "", HttpPost = "", HttpPostAsync = "",
+    RequestAsync = { Success = false, StatusCode = 0, StatusMessage = "blocked", Body = "", Headers = {} },
+    GetAsync = "", PostAsync = "",
+}
+if hookmetamethod and getnamecallmethod then
+    local oldnc
+    oldnc = hookmetamethod(game, "__namecall", cclosure(function(self, ...)
+        local m = getnamecallmethod()
+        if BLOCKED_METHODS[m] ~= nil then
+            log("BLOCKED :" .. realtostring(m) .. "(" .. summarizeArgs(...) .. ")")
+            return BLOCKED_METHODS[m]
+        end
+        return oldnc(self, ...)
+    end))
+else
+    log("WARNING: hookmetamethod/getnamecallmethod が無いので HttpService 経由の通信はブロックできません。実行を中止します。")
+    flushlog()
+    return
+end
+
+------------------------------------------------------------------
+-- 難読化ファイルの読み込みと実行
+------------------------------------------------------------------
+if not (readfile and isfile and isfile(TARGET_FILE)) then
+    log("ERROR: " .. TARGET_FILE .. " が workspace フォルダにありません。")
+    flushlog()
+    return
+end
+
+local src = readfile(TARGET_FILE)
+log("target file size:", #src)
+local fn, err = realLoad(src, "=Test.obf3")
+if not fn then
+    log("ERROR: loadstring failed:", err)
+    flushlog()
+    return
+end
+
+local started = os.clock()
+local ok, res = realpcall(fn)
+log("target finished: ok=" .. realtostring(ok) .. " result=" .. summarize(res) .. " time=" .. string.format("%.2f", os.clock() - started) .. "s")
+flushlog()
+log("=== logger end ===")
+flushlog()
