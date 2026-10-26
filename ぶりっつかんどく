@@ -1,0 +1,45 @@
+===== DIAG BEGIN =====
+[DIAG] executor = Delta
+[DIAG] _VERSION = Luau
+[DIAG] typeof(game) = Instance
+[DIAG] game.ClassName = DataModel
+[DIAG] workspace.Parent == game = true
+[DIAG] #Folder:GetChildren() = 0
+[DIAG] getmetatable(game) = The metatable is locked
+[DIAG] getmetatable(Enum) = The metatable is locked
+[DIAG] typeof(Enum) = Enums
+[DIAG] type(Enum.PartType.Wedge) = userdata
+[DIAG] typeof(Enum.PartType.Wedge) = EnumItem
+[DIAG] getmetatable(Enum.PartType.Wedge) = The metatable is locked
+[DIAG] Enum.PartType:FromName('Wedge') = Enum.PartType.Wedge
+[DIAG] typeof(game.DescendantRemoving) = RBXScriptSignal
+[DIAG] typeof(connection) = RBXScriptConnection
+[DIAG] Instance.new('Path2D') = Path2D
+[DIAG] #StarterPlayer children = 2
+[DIAG] RunService = RunService
+[DIAG] HttpService = HttpService
+[DIAG] debug.info(HttpService.GetAsync,'s') = [C]
+[DIAG] debug.info(HttpService.PostAsync,'s') = [C]
+[DIAG] debug.info(HttpService.RequestAsync,'s') = [C]
+[DIAG] debug.info(Random.NextInteger,'s') = [C]
+[DIAG] debug.info(Random.NextNumber,'s') = [C]
+[DIAG] debug.info(Random.NextUnitVector,'s') = [C]
+[DIAG] debug.info(Random.Shuffle,'s') = [C]
+[DIAG] debug.info(Instance.Clone,'s') = [C]
+[DIAG] debug.info(Instance.IsA,'s') = [C]
+[DIAG] debug.info(Instance.WaitForChild,'s') = [C]
+[DIAG] debug.info(Instance.GetChildren,'s') = [C]
+[DIAG] debug.info(typeof,'s') = [C]
+[DIAG] debug.info(getmetatable,'s') = [C]
+[DIAG] debug.info(setmetatable,'s') = [C]
+[DIAG] debug.info(pcall,'s') = [C]
+[DIAG] debug.info(xpcall,'s') = [C]
+[DIAG] debug.info(select,'s') = [C]
+[DIAG] debug.info(tostring,'s') = [C]
+[DIAG] debug.info(getfenv,'s') = [C]
+[DIAG] debug.info(setfenv,'s') = [C]
+[DIAG] debug.info(loadstring,'s') = [C]
+[DIAG] debug.info(string.rep,'s') = [C]
+[DIAG] debug.info(string.byte,'s') = [C]
+[DIAG] debug.info(buffer.create,'s') = [C]
+===== DIAG END =====
