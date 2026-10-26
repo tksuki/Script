@@ -18,7 +18,7 @@
 ]]
 
 local URL = "https://raw.githubusercontent.com/tksuki/Script/refs/heads/main/Test.obf%203"
-local RUN_PAYLOAD = false     -- false にすると診断だけ行い、難読化コードは実行しない
+local RUN_PAYLOAD = true     -- false にすると診断だけ行い、難読化コードは実行しない
 local BUF_MIN_SIZE = 2000    -- この大きさ以上の buffer.copy の結果を保存する
 
 local LOG = "o3_log.txt"
