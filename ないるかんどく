@@ -1,0 +1,19 @@
+===== DIAG BEGIN =====
+[DIAG] executor = Delta 1.0.743.1136 arm64
+[DIAG] _VERSION = Luau
+[DIAG] utf8 members = char,charpattern,codepoint,codes,graphemes,len,nfcnormalize,nfdnormalize,offset
+[DIAG] math members = abs,acos,asin,atan,atan2,ceil,clamp,cos,cosh,deg,e,exp,floor,fmod,frexp,huge,isfinite,isinf,isnan,ldexp,lerp,log,log10,map,max,min,modf,nan,noise,phi,pi,pow,rad,random,randomseed,round,sign,sin,sinh,sqrt,sqrt2,tan,tanh,tau
+[DIAG] debug members = dumpcodesize,dumpheap,dumprefs,getcallstack,getconstant,getconstants,getinfo,getmemorycategory,getmetatable,getproto,getprotos,getregistry,getstack,getupvalue,getupvalues,info,isvalidlevel,loadmodule,profilebegin,profileend,resetmemorycategory,setconstant,setmemorycategory,setmetatable,setstack,setupvalue,traceback,validlevel
+[DIAG] Path2D = Path2D
+[DIAG] Enum.AccessModifierType.Deny = EnumItem
+[DIAG] debug.info(print,'s') = [C]
+[DIAG] debug.info(pcall,'s') = [C]
+[DIAG] debug.info(select,'s') = [C]
+[DIAG] debug.info(tostring,'s') = [C]
+[DIAG] debug.info(getfenv,'s') = [C]
+[DIAG] debug.info(setfenv,'s') = [C]
+[DIAG] debug.info(loadstring,'s') = [C]
+[DIAG] debug.info(string.byte,'s') = [C]
+[DIAG] debug.info(utf8.nfcnormalize,'s') = [C]
+[DIAG] debug.info(buffer.copy,'s') = [C]
+===== DIAG END =====
