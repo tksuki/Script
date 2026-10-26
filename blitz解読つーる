@@ -7,6 +7,16 @@ local URL = "https://raw.githubusercontent.com/tksuki/Script/refs/heads/main/Tes
 local RUN_PAYLOAD = true        -- false にすると診断だけ行い、難読化コードは実行しない
 local BLOCK_NAMECALL = true     -- gameへの通信/テレポート系メソッド呼び出しを止める (検査が通らない場合は false)
 
+local SKIP_TASKS = true       -- task.spawn/defer/delay の中身を記録だけして実行しない (固まる原因の切り分け)
+local HIDE_EXEC = true        -- identifyexecutor など、エグゼキューター固有の関数を難読化コードから隠す
+local HIDDEN = {}
+for _, n in ipairs({"identifyexecutor", "getexecutorname", "iscclosure", "islclosure", "getgenv", "getrenv",
+	"getgc", "hookfunction", "hookmetamethod", "newcclosure", "checkcaller", "getthreadidentity",
+	"request", "http_request", "syn", "http", "fluxus", "setclipboard", "toclipboard", "queue_on_teleport",
+	"writefile", "appendfile", "readfile", "delfile", "delfolder", "makefolder", "loadfile", "dofile"}) do
+	HIDDEN[n] = true
+end
+
 local LOG = "t4_log.txt"
 local hasAppend = type(appendfile) == "function"
 if type(writefile) == "function" then pcall(writefile, LOG, "") end
@@ -111,6 +121,10 @@ local base = (getgenv and getgenv()) or getfenv(0)
 local seen, nread = {}, 0
 local env = setmetatable({}, {__index = function(_, k)
 	nread += 1
+	if HIDE_EXEC and HIDDEN[k] then
+		if not seen[k] then seen[k] = true; emit("[HIDDEN-READ]", tostring(k)) end
+		return nil
+	end
 	local v = base[k]
 	if not seen[k] then
 		seen[k] = true
@@ -178,10 +192,52 @@ env.print = function(...) emit("[PRINT]", ...) return print(...) end
 env.warn = function(...) emit("[WARN]", ...) return warn(...) end
 
 local realTask = task
+local function describe(tag, fn)
+	if type(fn) ~= "function" then emit(tag, "arg is", typeof(fn)) return end
+	local p = table.pack(pcall(debug.info, fn, "slna"))
+	emit(tag, "src/line/name/args:", tostring(p[2]), tostring(p[3]), tostring(p[4]), tostring(p[5]), ("t=%.3f"):format(os.clock()))
+	if debug.getconstants then
+		local ok, cs = pcall(debug.getconstants, fn)
+		if ok and type(cs) == "table" then
+			local out = {}
+			for _, c in pairs(cs) do
+				out[#out + 1] = tostring(c):sub(1, 30)
+				if #out >= 50 then break end
+			end
+			emit(tag, "consts:", table.concat(out, " | "))
+		end
+	end
+	if debug.getupvalues then
+		local ok, ups = pcall(debug.getupvalues, fn)
+		if ok and type(ups) == "table" then
+			local out = {}
+			for _, u in pairs(ups) do
+				out[#out + 1] = typeof(u)
+				if #out >= 40 then break end
+			end
+			emit(tag, "upvalues:", #out, table.concat(out, ","))
+		end
+	end
+	emit(tag, "traceback:", (debug.traceback("", 2):gsub("\n", " | ")))
+end
+local function dummyThread() return coroutine.create(function() end) end
 env.task = setmetatable({
-	spawn = function(fn, ...) emit("[task.spawn]") return realTask.spawn(fn, ...) end,
-	defer = function(fn, ...) emit("[task.defer]") return realTask.defer(fn, ...) end,
-	delay = function(t, fn, ...) emit("[task.delay]", t) return realTask.delay(t, fn, ...) end,
+	spawn = function(fn, ...)
+		describe("[task.spawn]", fn)
+		if SKIP_TASKS then emit("[task.spawn] SKIPPED") return dummyThread() end
+		return realTask.spawn(fn, ...)
+	end,
+	defer = function(fn, ...)
+		describe("[task.defer]", fn)
+		if SKIP_TASKS then emit("[task.defer] SKIPPED") return dummyThread() end
+		return realTask.defer(fn, ...)
+	end,
+	delay = function(t, fn, ...)
+		emit("[task.delay] seconds =", t)
+		describe("[task.delay]", fn)
+		if SKIP_TASKS then emit("[task.delay] SKIPPED") return dummyThread() end
+		return realTask.delay(t, fn, ...)
+	end,
 }, {__index = realTask})
 
 -- game への通信・テレポート系メソッドを止める
@@ -209,6 +265,7 @@ end
 ---------------------------------------------------------------------
 -- 4. 実行
 ---------------------------------------------------------------------
+if HIDE_EXEC then for n in pairs(HIDDEN) do env[n] = nil end end
 setfenv(f, env)
 emit(("[RUN] start t=%.3f  ※固まっても最低2〜3分は待ってから閉じて、t4_log.txt を送る"):format(os.clock()))
 
