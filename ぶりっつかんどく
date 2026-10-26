@@ -45,43 +45,46 @@
 ===== DIAG END =====
 [FETCH] bytes = 1369269
 [HOOK] namecall block installed = true
-[RUN] start t=21.630  ※固まっても最低2〜3分は待ってから閉じて、t4_log.txt を送る
-[GLOBAL #1] bit32 (table) t=21.630
-[GLOBAL #3] select (function) t=21.630
-[GLOBAL #7] string (table) t=21.630
-[GLOBAL #14] table (table) t=21.630
-[GLOBAL #17] getfenv (function) t=21.631
-[GLOBAL #20] coroutine (table) t=21.631
-[GLOBAL #21] unpack (function) t=21.631
-[GLOBAL #31] tostring (function) t=21.631
-[GLOBAL #32] buffer (table) t=21.631
-[GLOBAL #33] pcall (function) t=21.631
-[GLOBAL #34] error (function) t=21.631
-[GLOBAL #35] setfenv (function) t=21.688
-[GLOBAL #36] Enum (userdata) t=21.711
-[GLOBAL #39] Instance (table) t=21.711
-[GLOBAL #40] game (userdata) t=21.711
-[GLOBAL #41] xpcall (function) t=21.711
-[GLOBAL #42] math (table) t=21.711
-[GLOBAL #44] Vector3 (table) t=21.711
-[GLOBAL #45] rawget (function) t=21.711
-[GLOBAL #47] Path2DControlPoint (table) t=21.711
-[GLOBAL #49] UDim (table) t=21.712
-[GLOBAL #50] islclosure (function) t=21.712
-[GLOBAL #51] setmetatable (function) t=21.712
-[GLOBAL #53] iscclosure (function) t=21.712
-[GLOBAL #55] CFrame (table) t=21.712
-[GLOBAL #58] tonumber (function) t=21.712
-[GLOBAL #59] utf8 (table) t=21.712
-[GLOBAL #61] identifyexecutor (function) t=21.712
-[GLOBAL #63] Vector2 (table) t=21.712
-[GLOBAL #68] debug (table) t=21.712
-[GLOBAL #69] assert (function) t=21.712
-[GLOBAL #70] UDim2 (table) t=21.713
-[GLOBAL #72] workspace (userdata) t=21.713
-[GLOBAL #74] next (function) t=21.713
-[GLOBAL #78] Random (table) t=21.713
-[GLOBAL #79] rawset (function) t=21.713
-[task.spawn]
-[task.spawn]
-[task.delay] 325
+[RUN] start t=18.275  ※固まっても最低2〜3分は待ってから閉じて、t4_log.txt を送る
+[GLOBAL #1] bit32 (table) t=18.275
+[GLOBAL #3] select (function) t=18.275
+[GLOBAL #7] string (table) t=18.275
+[GLOBAL #14] table (table) t=18.275
+[GLOBAL #17] getfenv (function) t=18.275
+[GLOBAL #20] coroutine (table) t=18.275
+[GLOBAL #21] unpack (function) t=18.275
+[GLOBAL #31] tostring (function) t=18.276
+[GLOBAL #32] buffer (table) t=18.276
+[GLOBAL #33] pcall (function) t=18.276
+[GLOBAL #34] error (function) t=18.276
+[GLOBAL #35] setfenv (function) t=18.337
+[GLOBAL #36] Enum (userdata) t=18.359
+[GLOBAL #39] Instance (table) t=18.360
+[GLOBAL #40] game (userdata) t=18.360
+[GLOBAL #41] xpcall (function) t=18.360
+[GLOBAL #42] math (table) t=18.360
+[GLOBAL #44] Vector3 (table) t=18.360
+[GLOBAL #45] rawget (function) t=18.360
+[GLOBAL #47] Path2DControlPoint (table) t=18.360
+[GLOBAL #49] UDim (table) t=18.360
+[HIDDEN-READ] islclosure
+[GLOBAL #51] setmetatable (function) t=18.360
+[HIDDEN-READ] iscclosure
+[GLOBAL #55] CFrame (table) t=18.361
+[GLOBAL #58] tonumber (function) t=18.361
+[GLOBAL #59] utf8 (table) t=18.361
+[HIDDEN-READ] identifyexecutor
+[GLOBAL #63] Vector2 (table) t=18.361
+[GLOBAL #68] debug (table) t=18.361
+[GLOBAL #69] assert (function) t=18.361
+[GLOBAL #70] UDim2 (table) t=18.361
+[GLOBAL #72] workspace (userdata) t=18.361
+[GLOBAL #74] next (function) t=18.361
+[GLOBAL #78] Random (table) t=18.362
+[GLOBAL #79] rawset (function) t=18.362
+[task.spawn] src/line/name/args: TCShv-=t4 3  0 t=18.379
+[task.spawn] consts: string | :(%d+)[:
+] | Luraph Script: | (internal) | :  | 1
+[task.spawn] upvalues: 13 table,number,table,table,table,table,table,table,table,table,table,table,table
+[task.spawn] traceback:  | TCShvGBGtgNSFHwAt:226 function spawn | TCShv-=t4:3 | TCShv-=t4:3 | TCShv-=t4:3 | TCShv-=t4:3 function X | TCShv-=t4:3 | TCShvGBGtgNSFHwAt:274 | 
+[task.spawn] SKIPPED
