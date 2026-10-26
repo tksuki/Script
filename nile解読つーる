@@ -1,237 +1,252 @@
 --[[
-  executor_logger.lua
-  難読化済みスクリプト（Test.obf 3）の「動き」を記録するためのログ取りスクリプトです。
+  executor_logger_obf3.lua
+  GitHub 上の Test.obf 3 を取得して実行し、その「動き」を記録するログ取りスクリプトです。
 
   使い方
-    1. 難読化済みファイルを、エグゼキューターの workspace フォルダに
-       「Test.obf3.lua」という名前で置く（名前は下の TARGET_FILE で変更可）。
-    2. このスクリプトを実行する。
-    3. workspace フォルダに出来る次のファイルを確認・送付する:
-         obf_log.txt            ... 動作ログ（print / loadstring / Instance.new / HTTP 試行など）
-         obf_loadstring_*.lua   ... loadstring に渡された文字列（あれば）
-         obf_buf_*.bin          ... buffer.copy で作られた大きなバッファ
+    - 使い捨てアカウント・自分専用の空の Place で、このスクリプトを丸ごと実行する。
+    - 出力: コンソール と、エグゼキューターの workspace フォルダの次のファイル
+        o3_log.txt            ... 動作ログ（1行ごとに追記するので、固まっても残ります）
+        o3_loadstring_N.lua   ... loadstring に渡された文字列
+        o3_buf_N_lenM.bin     ... buffer.copy で作られた大きなバッファ（M = サイズ）
+    - 途中でクライアントが固まったら、検査に引っかかって罠（無限ループ）に入った合図です。
+      30秒ほど待ってから閉じて、o3_log.txt を送ってください。
 
-  安全のためのブロック（ログだけ残して実行はさせない）
-    - HttpGet / HttpPost / request / RequestAsync / GetAsync / PostAsync
-    - setclipboard / queue_on_teleport
-  ※ 必ず「サブアカウント」で、空のゲーム（Baseplate など）の中で実行してください。
+  安全のため、本体の取得が終わったあとに次をブロックします（ログだけ残して実行させない）。
+    HttpGet / HttpPost / request / RequestAsync / GetAsync / PostAsync /
+    setclipboard / queue_on_teleport / Teleport 系 / OpenBrowserWindow
   ※ 動作確認はしていません。エラーが出たらそのメッセージを教えてください。
 ]]
 
-local TARGET_FILE = "Test.obf3.lua"
-local LOG_FILE = "obf_log.txt"
-local BUF_MIN_SIZE = 2000   -- この大きさ以上の buffer.copy の結果を保存する
+local URL = "https://raw.githubusercontent.com/tksuki/Script/refs/heads/main/Test.obf%203"
+local RUN_PAYLOAD = true     -- false にすると診断だけ行い、難読化コードは実行しない
+local BUF_MIN_SIZE = 2000    -- この大きさ以上の buffer.copy の結果を保存する
 
-local realprint = print
-local realwarn = warn
-local realtostring = tostring
-local realpcall = pcall
-local realtype = type
-local realselect = select
+local LOG = "o3_log.txt"
+local realprint, realwarn, realtostring, realpcall, realtype, realselect =
+	print, warn, tostring, pcall, type, select
+local hasAppend = realtype(appendfile) == "function"
+if realtype(writefile) == "function" then realpcall(writefile, LOG, "") end
 
-------------------------------------------------------------------
--- ログ出力
-------------------------------------------------------------------
-local logbuf = {}
-local function flushlog()
-    if #logbuf == 0 then return end
-    local text = table.concat(logbuf, "\n") .. "\n"
-    logbuf = {}
-    if appendfile then
-        realpcall(appendfile, LOG_FILE, text)
-    elseif writefile then
-        local old = ""
-        if isfile and isfile(LOG_FILE) and readfile then
-            local ok, c = realpcall(readfile, LOG_FILE)
-            if ok then old = c end
-        end
-        realpcall(writefile, LOG_FILE, old .. text)
-    end
+local function emit(...)
+	local parts = table.pack(...)
+	for i = 1, parts.n do
+		local ok, s = realpcall(realtostring, parts[i])
+		parts[i] = ok and s or "<?>"
+	end
+	local line = table.concat(parts, " ")
+	realprint(line)
+	if hasAppend then realpcall(appendfile, LOG, line .. "\n") end
 end
 
-local function log(...)
-    local parts = {}
-    for i = 1, realselect("#", ...) do
-        local ok, s = realpcall(realtostring, (realselect(i, ...)))
-        parts[#parts + 1] = ok and s or "<?>"
-    end
-    local line = table.concat(parts, " ")
-    realprint("[LOG] " .. line)
-    logbuf[#logbuf + 1] = line
-    if #logbuf >= 20 then flushlog() end
+local function try(label, f)
+	local ok, r = realpcall(f)
+	emit(("[DIAG] %s = %s"):format(label, ok and realtostring(r) or ("ERR " .. realtostring(r))))
 end
 
--- ログファイルを初期化
-if writefile then realpcall(writefile, LOG_FILE, "") end
-log("=== logger start ===", os.date and os.date("%Y-%m-%d %H:%M:%S") or "")
-log("executor:", identifyexecutor and select(1, identifyexecutor()) or "unknown")
-
-------------------------------------------------------------------
--- フック用ヘルパー
-------------------------------------------------------------------
-local function cclosure(f)
-    if newcclosure then
-        local ok, r = realpcall(newcclosure, f)
-        if ok and r then return r end
-    end
-    return f
-end
-
--- fn を hookfunction で差し替える。使えなければ nil を返す。
-local function hookfn(fn, make)
-    if not hookfunction then return nil end
-    local old
-    local wrapper = cclosure(function(...) return make(old, ...) end)
-    local ok, res = realpcall(hookfunction, fn, wrapper)
-    if ok then old = res; return old end
-    return nil
+local function cinfo(f)
+	if realtype(f) ~= "function" then return "not-function:" .. realtype(f) end
+	local ok, s = realpcall(debug.info, f, "s")
+	return ok and realtostring(s) or "?"
 end
 
 local function summarize(v)
-    local t = realtype(v)
-    if t == "string" then
-        if #v > 80 then return string.format("%q...(len %d)", v:sub(1, 80), #v) end
-        return string.format("%q", v)
-    end
-    return realtostring(v)
+	if realtype(v) == "string" then
+		if #v > 80 then return ("%q...(len %d)"):format(v:sub(1, 80), #v) end
+		return ("%q"):format(v)
+	end
+	return realtostring(v)
 end
 
 local function summarizeArgs(...)
-    local p = {}
-    for i = 1, realselect("#", ...) do p[#p + 1] = summarize((realselect(i, ...))) end
-    return table.concat(p, ", ")
+	local p = {}
+	for i = 1, realselect("#", ...) do p[#p + 1] = summarize((realselect(i, ...))) end
+	return table.concat(p, ", ")
 end
 
-------------------------------------------------------------------
--- print / warn
-------------------------------------------------------------------
-hookfn(print, function(old, ...)
-    log("print(" .. summarizeArgs(...) .. ")")
-    return old(...)
+---------------------------------------------------------------------
+-- 1. 環境の診断（VM の検査が見ている項目。罠に入った場合の手がかりになります）
+---------------------------------------------------------------------
+emit("===== DIAG BEGIN =====")
+try("executor", function() return identifyexecutor and table.concat({ identifyexecutor() }, " ") or "none" end)
+try("_VERSION", function() return _VERSION end)
+try("utf8 members", function()
+	local t = {}
+	for k in pairs(utf8) do t[#t + 1] = k end
+	table.sort(t)
+	return table.concat(t, ",")
 end)
-hookfn(warn, function(old, ...)
-    log("warn(" .. summarizeArgs(...) .. ")")
-    return old(...)
+try("math members", function()
+	local t = {}
+	for k in pairs(math) do t[#t + 1] = k end
+	table.sort(t)
+	return table.concat(t, ",")
 end)
+try("debug members", function()
+	local t = {}
+	for k in pairs(debug) do t[#t + 1] = k end
+	table.sort(t)
+	return table.concat(t, ",")
+end)
+try("Path2D", function() return Instance.new("Path2D").ClassName end)
+try("Enum.AccessModifierType.Deny", function() return typeof(Enum.AccessModifierType.Deny) end)
+for _, e in ipairs({
+	{ "print", print }, { "pcall", pcall }, { "select", select }, { "tostring", tostring },
+	{ "getfenv", getfenv }, { "setfenv", setfenv }, { "loadstring", loadstring },
+	{ "string.byte", string.byte }, { "utf8.nfcnormalize", utf8.nfcnormalize },
+	{ "buffer.copy", buffer and buffer.copy },
+}) do
+	emit(("[DIAG] debug.info(%s,'s') = %s"):format(e[1], cinfo(e[2])))
+end
+emit("===== DIAG END =====")
 
-------------------------------------------------------------------
--- loadstring: 渡された文字列を保存
-------------------------------------------------------------------
+if not RUN_PAYLOAD then return end
+
+---------------------------------------------------------------------
+-- 2. 本体の取得（※ブロックを入れる前に行う）
+---------------------------------------------------------------------
+local src
+do
+	local ok, r = realpcall(function() return game:HttpGet(URL) end)
+	if (not ok or realtype(r) ~= "string") and realtype(request) == "function" then
+		local ok2, resp = realpcall(request, { Url = URL, Method = "GET" })
+		if ok2 and resp and realtype(resp.Body) == "string" then ok, r = true, resp.Body end
+	end
+	if not ok or realtype(r) ~= "string" then
+		emit("[FATAL] 取得失敗:", realtostring(r))
+		return
+	end
+	src = r
+end
+emit("[FETCH] bytes =", #src)
+
 local realLoad = loadstring
-local nload = 0
-if realLoad then
-    local hooked = hookfn(loadstring, function(old, src, ...)
-        nload += 1
-        local n = nload
-        if realtype(src) == "string" then
-            log(string.format("loadstring #%d length=%d head=%q", n, #src, src:sub(1, 100)))
-            if writefile and n > 1 then   -- #1 は難読化ファイル自体なので保存しない
-                realpcall(writefile, string.format("obf_loadstring_%d.lua", n), src)
-            end
-        end
-        return old(src, ...)
-    end)
-end
-
-------------------------------------------------------------------
--- buffer.copy: 大きなバッファを保存
-------------------------------------------------------------------
-if buffer and buffer.copy then
-    local nbuf = 0
-    hookfn(buffer.copy, function(old, dst, dstoff, src, srcoff, count)
-        local r = table.pack(old(dst, dstoff, src, srcoff, count))
-        local ok, len = realpcall(buffer.len, dst)
-        if ok and len and len >= BUF_MIN_SIZE then
-            nbuf += 1
-            log(string.format("buffer.copy -> dst len=%d (srcoff=%s count=%s) saved #%d", len, realtostring(srcoff), realtostring(count), nbuf))
-            if writefile then
-                realpcall(function()
-                    writefile(string.format("obf_buf_%d_len%d.bin", nbuf, len), buffer.tostring(dst))
-                end)
-            end
-        end
-        return table.unpack(r, 1, r.n)
-    end)
-end
-
-------------------------------------------------------------------
--- Instance.new
-------------------------------------------------------------------
-hookfn(Instance.new, function(old, class, ...)
-    log("Instance.new(" .. summarize(class) .. ")")
-    return old(class, ...)
-end)
-
-------------------------------------------------------------------
--- 通信・クリップボードなどのブロック
-------------------------------------------------------------------
-local function blocker(name, fakeResult)
-    return function(old, ...)
-        log("BLOCKED " .. name .. "(" .. summarizeArgs(...) .. ")")
-        return fakeResult
-    end
-end
-
-for _, name in ipairs({ "request", "http_request" }) do
-    local f = getgenv and getgenv()[name] or _G[name]
-    if realtype(f) == "function" then
-        hookfn(f, blocker(name, { Success = false, StatusCode = 0, StatusMessage = "blocked", Body = "", Headers = {} }))
-    end
-end
-if syn and realtype(syn.request) == "function" then
-    hookfn(syn.request, blocker("syn.request", { Success = false, StatusCode = 0, Body = "", Headers = {} }))
-end
-if http and realtype(http.request) == "function" then
-    hookfn(http.request, blocker("http.request", { Success = false, StatusCode = 0, Body = "", Headers = {} }))
-end
-for _, name in ipairs({ "setclipboard", "toclipboard", "queue_on_teleport" }) do
-    local f = getgenv and getgenv()[name] or _G[name]
-    if realtype(f) == "function" then hookfn(f, blocker(name, nil)) end
-end
-
--- game:HttpGet / HttpPost / HttpService:RequestAsync などは __namecall で止める
-local BLOCKED_METHODS = {
-    HttpGet = "", HttpGetAsync = "", HttpPost = "", HttpPostAsync = "",
-    RequestAsync = { Success = false, StatusCode = 0, StatusMessage = "blocked", Body = "", Headers = {} },
-    GetAsync = "", PostAsync = "",
-}
-if hookmetamethod and getnamecallmethod then
-    local oldnc
-    oldnc = hookmetamethod(game, "__namecall", cclosure(function(self, ...)
-        local m = getnamecallmethod()
-        if BLOCKED_METHODS[m] ~= nil then
-            log("BLOCKED :" .. realtostring(m) .. "(" .. summarizeArgs(...) .. ")")
-            return BLOCKED_METHODS[m]
-        end
-        return oldnc(self, ...)
-    end))
-else
-    log("WARNING: hookmetamethod/getnamecallmethod が無いので HttpService 経由の通信はブロックできません。実行を中止します。")
-    flushlog()
-    return
-end
-
-------------------------------------------------------------------
--- 難読化ファイルの読み込みと実行
-------------------------------------------------------------------
-if not (readfile and isfile and isfile(TARGET_FILE)) then
-    log("ERROR: " .. TARGET_FILE .. " が workspace フォルダにありません。")
-    flushlog()
-    return
-end
-
-local src = readfile(TARGET_FILE)
-log("target file size:", #src)
 local fn, err = realLoad(src, "=Test.obf3")
 if not fn then
-    log("ERROR: loadstring failed:", err)
-    flushlog()
-    return
+	emit("[FATAL] compile error:", realtostring(err))
+	return
 end
 
-local started = os.clock()
-local ok, res = realpcall(fn)
-log("target finished: ok=" .. realtostring(ok) .. " result=" .. summarize(res) .. " time=" .. string.format("%.2f", os.clock() - started) .. "s")
-flushlog()
-log("=== logger end ===")
-flushlog()
+---------------------------------------------------------------------
+-- 3. フックの設置
+---------------------------------------------------------------------
+local function cclosure(f)
+	if newcclosure then
+		local ok, r = realpcall(newcclosure, f)
+		if ok and r then return r end
+	end
+	return f
+end
+
+-- fn を hookfunction で差し替える。使えなければ nil を返す。
+local function hookfn(target, make)
+	if realtype(target) ~= "function" or not hookfunction then return nil end
+	local old
+	local wrapper = cclosure(function(...) return make(old, ...) end)
+	local ok, res = realpcall(hookfunction, target, wrapper)
+	if ok then old = res; return old end
+	return nil
+end
+
+hookfn(print, function(old, ...)
+	emit("[PRINT]", summarizeArgs(...))
+	return old(...)
+end)
+hookfn(warn, function(old, ...)
+	emit("[WARN]", summarizeArgs(...))
+	return old(...)
+end)
+
+-- loadstring: 渡された文字列を保存
+local nload = 0
+hookfn(loadstring, function(old, s, ...)
+	nload += 1
+	local n = nload
+	if realtype(s) == "string" then
+		emit(("[LOADSTRING] #%d len=%d head=%q"):format(n, #s, s:sub(1, 120):gsub("%c", ".")))
+		if realtype(writefile) == "function" then
+			realpcall(writefile, ("o3_loadstring_%d.lua"):format(n), s)
+		end
+	else
+		emit(("[LOADSTRING] #%d type=%s"):format(n, realtype(s)))
+	end
+	return old(s, ...)
+end)
+
+-- buffer.copy: 大きなバッファを保存
+if buffer and buffer.copy then
+	local nbuf = 0
+	hookfn(buffer.copy, function(old, dst, dstoff, src2, srcoff, count)
+		local r = table.pack(old(dst, dstoff, src2, srcoff, count))
+		local ok, len = realpcall(buffer.len, dst)
+		if ok and len and len >= BUF_MIN_SIZE then
+			nbuf += 1
+			emit(("[BUFFER.COPY] dst len=%d srcoff=%s count=%s saved #%d"):format(len, realtostring(srcoff), realtostring(count), nbuf))
+			if realtype(writefile) == "function" then
+				realpcall(function()
+					writefile(("o3_buf_%d_len%d.bin"):format(nbuf, len), buffer.tostring(dst))
+				end)
+			end
+		end
+		return table.unpack(r, 1, r.n)
+	end)
+end
+
+hookfn(Instance.new, function(old, class, ...)
+	emit("[Instance.new]", summarize(class))
+	return old(class, ...)
+end)
+
+-- 通信・クリップボードなどのブロック
+local FAKE_RESP = { Success = false, StatusCode = 0, StatusMessage = "blocked", Body = "", Headers = {} }
+local function blocker(name, ret)
+	return function(old, ...)
+		emit("[BLOCKED]", name, "(" .. summarizeArgs(...) .. ")")
+		return ret
+	end
+end
+local genv = (getgenv and getgenv()) or _G
+for _, name in ipairs({ "request", "http_request" }) do
+	hookfn(genv[name], blocker(name, FAKE_RESP))
+end
+if realtype(syn) == "table" then hookfn(syn.request, blocker("syn.request", FAKE_RESP)) end
+if realtype(http) == "table" then hookfn(http.request, blocker("http.request", FAKE_RESP)) end
+for _, name in ipairs({ "setclipboard", "toclipboard", "queue_on_teleport" }) do
+	hookfn(genv[name], blocker(name, nil))
+end
+
+local BAD = {
+	HttpGet = "", HttpGetAsync = "", HttpPost = "", HttpPostAsync = "",
+	GetAsync = "", PostAsync = "", RequestAsync = FAKE_RESP,
+	Teleport = false, TeleportAsync = false, TeleportToPlaceInstance = false,
+	OpenBrowserWindow = false, OpenVideo = false, SetClipboard = false,
+}
+if hookmetamethod and getnamecallmethod then
+	local oldnc
+	oldnc = hookmetamethod(game, "__namecall", cclosure(function(self, ...)
+		local m = getnamecallmethod()
+		if BAD[m] ~= nil then
+			emit("[BLOCKED] :" .. realtostring(m), "(" .. summarizeArgs(...) .. ")")
+			return BAD[m] or nil
+		end
+		return oldnc(self, ...)
+	end))
+	emit("[HOOK] namecall block installed")
+else
+	emit("[HOOK] hookmetamethod が使えないため、HttpService 経由の通信をブロックできません。安全のため実行を中止します。")
+	return
+end
+
+---------------------------------------------------------------------
+-- 4. 実行
+---------------------------------------------------------------------
+emit("[RUN] start  ※ここから固まったら罠。30秒待って閉じる → o3_log.txt を送る")
+task.spawn(function()
+	local t0 = os.clock()
+	local res = table.pack(realpcall(fn))
+	emit(("[RUN] finished in %.2fs ok=%s nret=%d"):format(os.clock() - t0, realtostring(res[1]), res.n - 1))
+	for i = 2, res.n do
+		emit(("[RET %d] type=%s value=%s"):format(i - 1, typeof(res[i]), realtostring(res[i]):sub(1, 200)))
+	end
+	task.wait(5)
+	emit("[DONE] loadstring calls =", nload)
+end)
