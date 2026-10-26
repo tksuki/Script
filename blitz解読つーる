@@ -4,7 +4,7 @@
 -- 途中でクライアントが固まったら「罠に入った」合図。30秒ほど待って閉じて、t4_log.txt を送ってください。
 
 local URL = "https://raw.githubusercontent.com/tksuki/Script/refs/heads/main/Test%20obf%204"
-local RUN_PAYLOAD = true        -- false にすると診断だけ行い、難読化コードは実行しない
+local RUN_PAYLOAD = false        -- false にすると診断だけ行い、難読化コードは実行しない
 local BLOCK_NAMECALL = true     -- gameへの通信/テレポート系メソッド呼び出しを止める (検査が通らない場合は false)
 
 local LOG = "t4_log.txt"
