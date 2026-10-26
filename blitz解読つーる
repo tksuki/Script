@@ -5,10 +5,11 @@
 
 local URL = "https://raw.githubusercontent.com/tksuki/Script/refs/heads/main/Test%20obf%204"
 local RUN_PAYLOAD = true        -- false にすると診断だけ行い、難読化コードは実行しない
-local BLOCK_NAMECALL = true     -- gameへの通信/テレポート系メソッド呼び出しを止める (検査が通らない場合は false)
+local BLOCK_NAMECALL = false     -- gameへの通信/テレポート系メソッド呼び出しを止める (検査が通らない場合は false)
 
-local SKIP_TASKS = true       -- task.spawn/defer/delay の中身を記録だけして実行しない (固まる原因の切り分け)
-local HIDE_EXEC = true        -- identifyexecutor など、エグゼキューター固有の関数を難読化コードから隠す
+local TRACE_CALLS = false      -- typeof/getmetatable/type を包んで記録する (フック扱いで検知される可能性があるので既定はオフ)
+local SKIP_TASKS = false      -- task.spawn/defer/delay の中身を記録だけして実行しない (固まる原因の切り分け)
+local HIDE_EXEC = false       -- identifyexecutor など、エグゼキューター固有の関数を難読化コードから隠す
 local HIDDEN = {}
 for _, n in ipairs({"identifyexecutor", "getexecutorname", "iscclosure", "islclosure", "getgenv", "getrenv",
 	"getgc", "hookfunction", "hookmetamethod", "newcclosure", "checkcaller", "getthreadidentity",
@@ -184,8 +185,10 @@ local function traced(name, orig)
 	if newcclosure then return newcclosure(w) end
 	return w
 end
-for _, n in ipairs({"typeof", "getmetatable", "type"}) do
-	env[n] = traced(n, base[n])
+if TRACE_CALLS then
+	for _, n in ipairs({"typeof", "getmetatable", "type"}) do
+		env[n] = traced(n, base[n])
+	end
 end
 
 env.print = function(...) emit("[PRINT]", ...) return print(...) end
@@ -220,23 +223,32 @@ local function describe(tag, fn)
 	end
 	emit(tag, "traceback:", (debug.traceback("", 2):gsub("\n", " | ")))
 end
+local function watched(tag, fn)
+	if type(fn) ~= "function" then return fn end
+	return function(...)
+		emit(tag, "thread START", ("t=%.3f"):format(os.clock()))
+		local r = table.pack(pcall(fn, ...))
+		emit(tag, "thread END ok=" .. tostring(r[1]), ("t=%.3f"):format(os.clock()), r[1] and "" or tostring(r[2]):sub(1, 300))
+		return table.unpack(r, 2, r.n)
+	end
+end
 local function dummyThread() return coroutine.create(function() end) end
 env.task = setmetatable({
 	spawn = function(fn, ...)
 		describe("[task.spawn]", fn)
 		if SKIP_TASKS then emit("[task.spawn] SKIPPED") return dummyThread() end
-		return realTask.spawn(fn, ...)
+		return realTask.spawn(watched("[task.spawn]", fn), ...)
 	end,
 	defer = function(fn, ...)
 		describe("[task.defer]", fn)
 		if SKIP_TASKS then emit("[task.defer] SKIPPED") return dummyThread() end
-		return realTask.defer(fn, ...)
+		return realTask.defer(watched("[task.defer]", fn), ...)
 	end,
 	delay = function(t, fn, ...)
 		emit("[task.delay] seconds =", t)
 		describe("[task.delay]", fn)
 		if SKIP_TASKS then emit("[task.delay] SKIPPED") return dummyThread() end
-		return realTask.delay(t, fn, ...)
+		return realTask.delay(t, watched("[task.delay]", fn), ...)
 	end,
 }, {__index = realTask})
 
