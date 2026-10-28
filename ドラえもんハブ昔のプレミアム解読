@@ -1,0 +1,7299 @@
+local t1 = {}
+local unpack_ = unpack or table.unpack
+local task_ = task
+
+if not task_ then
+	local wait_ = wait
+
+	t1.value1 = spawn
+	task_ = {
+		wait = wait_,
+		spawn = t1.value1,
+		defer = function(p1)
+			spawn(p1)
+		end
+	}
+end
+
+local t2 = {
+	value1 = task_,
+	value2 = game:GetService("Players"),
+	value3 = game:GetService("ReplicatedStorage")
+}
+local game_ = game
+
+t2.value4 = game_.GetService(game_, "RunService")
+t2.value5 = game:GetService("Workspace")
+t1.value1 = game:GetService("UserInputService")
+t2.value6 = t1.value1
+t1.value1 = game
+t2.value7 = t1.value1:GetService("Debris")
+t2.value8 = t2.value2.LocalPlayer
+_G.SuperSpeed = false
+getgenv().Multiplier = 0.15
+t2.value9 = false
+_G.AutoAttacker = false
+_G.ShurikenAntiKickSelf = false
+_G.TP_Priority = 0
+_G.TeleportingToNetworkOwnership = false
+_G.TargetPlayerName = ""
+_G.LoopKickOwnership = false
+_G.ShurikenAntiKick = false
+_G.SuperStrength = false
+_G.Strength = 400
+_G.Death_Grab = false
+_G.NoclipGrab = false
+_G.BringAll = false
+_G.WhitelistFriends3 = false
+_G.NoclipToggle = false
+_G.KickAllNetwork = false
+t2.value10 = ""
+t2.value11 = {}
+t2.value12 = {}
+t2.value13 = nil
+t2.value14 = false
+t2.value15 = {}
+t2.value16 = "Spawn"
+t2.value17 = nil
+t2.value18 = false
+t2.value19 = false
+t2.value20 = nil
+t2.value21 = false
+t2.value22 = 0
+t2.value23 = nil
+t2.value24 = nil
+t2.value25 = nil
+t2.value26 = 0
+t2.value27 = false
+t2.value28 = false
+t2.value29 = nil
+t2.value30 = false
+t2.value31 = nil
+t2.value32 = false
+t2.value33 = nil
+t2.value34 = nil
+t2.value35 = false
+t2.value36 = t2.value5.FallenPartsDestroyHeight
+t2.value37 = nil
+t2.value38 = nil
+t2.value39 = nil
+
+local v7 = nil
+
+t2.value40 = false
+t2.value41 = false
+t2.value42 = 0
+t2.value43 = nil
+t2.value44 = false
+t2.value45 = nil
+t2.value46 = nil
+t2.value47 = nil
+t2.value48 = nil
+t2.value49 = 0
+t2.value50 = nil
+t2.value51 = nil
+t2.value52 = false
+t2.value53 = nil
+t2.value54 = nil
+t2.value55 = false
+t2.value56 = nil
+t2.value57 = nil
+t2.value58 = t2.value8:WaitForChild("PlayerScripts")
+t2.value59 = t2.value58:FindFirstChild("CharacterAndBeamMove")
+t2.value60 = Instance.new("Part")
+t2.value60.Parent = t2.value5
+t2.value60.Anchored = true
+t2.value60.CanCollide = false
+t2.value60.Transparency = 1
+t2.value60.CanQuery = false
+t2.value60.Size = Vector3.new()
+t2.value61 = t2.value8:WaitForChild("InPlot", 10)
+t2.value62 = t2.value8:WaitForChild("InOwnedPlot", 10)
+t2.value63 = t2.value8:WaitForChild("CanSpawnToy", 10)
+t2.value64 = false
+t2.value65 = nil
+t2.value66 = false
+t2.value67 = 100000
+t2.value68 = Vector3.new(6, -18.5, 0)
+t2.value69 = nil
+t2.value70 = false
+_G.ESP_Hightlight = false
+t2.value71 = t2.value5:FindFirstChild("Characters")
+
+if not t2.value71 then
+	t2.value71 = Instance.new("Model", t2.value5)
+	t2.value71.Name = "Characters"
+end
+
+t2.value72 = t2.value71:FindFirstChild("ESP_Highlight_Instance")
+
+if not t2.value72 then
+	t2.value72 = Instance.new("Highlight")
+	t2.value72.Name = "ESP_Highlight_Instance"
+	t2.value72.Enabled = true
+
+	local value72 = t2.value72
+
+	t1.value1 = Enum.HighlightDepthMode.AlwaysOnTop
+	value72.DepthMode = t1.value1
+end
+
+t2.value73 = false
+t2.value74 = nil
+t2.value75 = nil
+t2.value76 = nil
+t2.value77 = nil
+t2.value78 = nil
+t2.value79 = false
+t2.value80 = 0
+t2.value81 = 0
+t2.value82 = nil
+t2.value83 = false
+t2.value84 = nil
+t2.value85 = false
+t2.value86 = false
+t2.value87 = nil
+t2.value88 = false
+t2.value89 = false
+
+local value5 = t2.value5
+
+t1.value1 = t2.value8.Name
+t2.value90 = value5:WaitForChild(t1.value1 .. "SpawnedInToys", 5)
+t2.value91 = t2.value3:WaitForChild("GrabEvents"):WaitForChild("SetNetworkOwner")
+t2.value92 = t2.value3:WaitForChild("GrabEvents"):WaitForChild("DestroyGrabLine")
+t2.value93 = t2.value3:WaitForChild("PlayerEvents"):WaitForChild("StickyPartEvent")
+t2.value94 = t2.value3:WaitForChild("MenuToys"):WaitForChild("SpawnToyRemoteFunction")
+t2.value95 = t2.value3:FindFirstChild("GrabEvents")
+
+local CharacterEvents = not t2.value3:FindFirstChild("Struggle") and t2.value3:FindFirstChild("CharacterEvents")
+
+if CharacterEvents then
+	CharacterEvents = t2.value3.CharacterEvents:FindFirstChild("Struggle")
+end
+
+function t1.value1(p2)
+	local isPlayer
+
+	if p2 then
+		isPlayer = p2:IsA("Player")
+	else
+		isPlayer = p2
+	end
+
+	if not isPlayer then
+		return false
+	end
+
+	local InPlot = p2:FindFirstChild("InPlot")
+
+	if InPlot then
+	elseif InPlot then
+		return true
+	else
+		return false
+	end
+
+	InPlot = InPlot.Value
+
+	if InPlot then
+		return true
+	else
+		return false
+	end
+end
+
+t2.value96 = CharacterEvents
+t2.value97 = nil
+
+function t2.value97(p3)
+	local value8 = p3 or t2.value8
+	local HumanoidRootPart = value8.Character and value8.Character:FindFirstChild("HumanoidRootPart")
+
+	if HumanoidRootPart then
+	elseif HumanoidRootPart then
+		return value8.Character
+	else
+		return nil
+	end
+
+	HumanoidRootPart = value8.Character:FindFirstChildOfClass("Humanoid")
+
+	if HumanoidRootPart then
+		return value8.Character
+	else
+		return nil
+	end
+end
+function t2.value98(p4)
+	local CFrame_ = t2.value97(p4)
+
+	if not CFrame_ then
+		return CFrame_
+	end
+
+	CFrame_ = CFrame_.HumanoidRootPart.CFrame
+
+	return CFrame_
+end
+function t2.value99()
+	local ipairs_ = ipairs
+	local value2 = t2.value2
+	local t3 = {}
+
+	for _, player in ipairs_(value2.GetPlayers(value2)) do
+		if player ~= t2.value8 then
+			local v21 = string.format("%s (@%s) [%d]", player.DisplayName, player.Name, player.UserId)
+
+			table.insert(t3, v21)
+		end
+	end
+
+	return t3
+end
+
+t2.value100 = nil
+
+function t2.value100(p5)
+	local Plots = t2.value5:FindFirstChild("Plots")
+
+	if not Plots then
+		return nil
+	end
+
+	local GetChildren = Plots.GetChildren
+
+	for _, v in pairs(GetChildren(Plots)) do
+		if v.FindFirstChild(v, p5.Name) then
+			return v
+		end
+	end
+
+	return nil
+end
+function t2.value101()
+	local vector3 = Vector3.new(252, -7, 464)
+	local v27 = t2.value100(t2.value8)
+
+	if v27 then
+		if v27.Name == "Plot1" then
+			return Vector3.new(-533, -7, 90)
+		elseif v27.Name == "Plot2" then
+			return Vector3.new(-483, -7, -164)
+		elseif v27.Name == "Plot3" then
+			return Vector3.new(252, -7, 464)
+		elseif v27.Name == "Plot4" then
+			return Vector3.new(509, 83, -339)
+		else
+			return Vector3.new(553, 123, -74)
+		end
+	else
+		return vector3
+	end
+end
+function t2.value102(p6)
+	if p6 then
+		return t2.value11[p6.Name] == true
+	else
+		return false
+	end
+end
+function t2.value103()
+	local ipairs_ = ipairs
+	local value2 = t2.value2
+	local t4 = {}
+
+	for _, player in ipairs_(value2.GetPlayers(value2)) do
+		local v33
+
+		if player == t2.value8 then
+			v33 = false
+		else
+			v33 = not t2.value102(player)
+		end
+
+		if v33 then
+			table.insert(t4, player)
+		end
+	end
+
+	return t4
+end
+
+t2.value104 = t1.value1
+
+function t2.value105(p7)
+	local isPlayer = p7 and p7:IsA("Player")
+	local Humanoid, HumanoidRootPart
+
+	if isPlayer then
+	elseif isPlayer then
+		Humanoid = p7.Character:FindFirstChildOfClass("Humanoid")
+		HumanoidRootPart = p7.Character:FindFirstChild("HumanoidRootPart")
+
+		if HumanoidRootPart then
+			if Humanoid then
+			elseif Humanoid then
+				return true
+			else
+				return false
+			end
+
+			Humanoid = Humanoid.Health > 0
+
+			if Humanoid then
+			elseif Humanoid then
+				return true
+			else
+				return false
+			end
+
+			Humanoid = p7.Character:IsDescendantOf(t2.value5)
+		else
+			Humanoid = HumanoidRootPart
+		end
+
+		if Humanoid then
+			return true
+		else
+			return false
+		end
+	else
+		return false
+	end
+
+	if p7 == t2.value8 then
+		isPlayer = false
+	else
+		isPlayer = p7.Character
+	end
+
+	if isPlayer then
+		Humanoid = p7.Character:FindFirstChildOfClass("Humanoid")
+		HumanoidRootPart = p7.Character:FindFirstChild("HumanoidRootPart")
+
+		if HumanoidRootPart then
+			if Humanoid then
+			elseif Humanoid then
+				return true
+			else
+				return false
+			end
+
+			Humanoid = Humanoid.Health > 0
+
+			if Humanoid then
+			elseif Humanoid then
+				return true
+			else
+				return false
+			end
+
+			Humanoid = p7.Character:IsDescendantOf(t2.value5)
+		else
+			Humanoid = HumanoidRootPart
+		end
+
+		if Humanoid then
+			return true
+		else
+			return false
+		end
+	else
+		return false
+	end
+end
+function t2.value106(p8, p9)
+	local isPlayer = p8 and p8:IsA("Player")
+
+	if isPlayer then
+		isPlayer = p8.Character
+	end
+
+	if not isPlayer then
+		return false
+	end
+
+	local Head = p8.Character:FindFirstChild("Head")
+	local v39
+
+	if not Head then
+		if Head then
+			v39 = Head.Value == t2.value8.Name
+		else
+			v39 = Head
+		end
+
+		if v39 then
+			return not p9 and true or Head
+		else
+			return false
+		end
+	end
+
+	Head = Head:FindFirstChild("PartOwner")
+
+	if Head then
+		v39 = Head.Value == t2.value8.Name
+	else
+		v39 = Head
+	end
+
+	if v39 then
+		return not p9 and true or Head
+	else
+		return false
+	end
+end
+function t2.value107(p10)
+	if p10:FindFirstChild("SkyVelocity") then
+		return
+	end
+
+	local BodyVelocity = Instance.new("BodyVelocity", p10)
+
+	BodyVelocity.Name = "SkyVelocity"
+	BodyVelocity.Velocity = Vector3.new(0, 100000000000000, 0)
+	BodyVelocity.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+end
+function t2.value108(p11, p12)
+	local Unit = (p12 - p11).Unit
+	local v42 = Unit:Cross(unpack_({ Vector3.new(0, 1, 0) }))
+	local v43 = v42:Cross(Unit)
+
+	return CFrame.fromMatrix(p11, v42, v43)
+end
+function t1.value1(p13)
+	if not p13 or typeof(p13) ~= "Instance" then
+		return
+	end
+
+	local v44 = t2.value8:DistanceFromCharacter(p13.Position)
+	local v45 = t2.value97()
+	local v46
+
+	if v45 then
+		v46 = v44 <= 30
+	else
+		v46 = v45
+	end
+
+	if not v46 then
+		return
+	end
+
+	t2.value91:FireServer(p13, unpack_({ t2.value108(v45.HumanoidRootPart.Position, p13.Position) }))
+end
+
+t2.value109 = t1.value1
+
+function t1.value1(p14, p15)
+	local v47 = t2.value97()
+
+	if not (v47 and (p14 and p14.Character)) then
+		return false
+	end
+
+	local HumanoidRootPart = p14.Character:FindFirstChild("HumanoidRootPart")
+
+	if not HumanoidRootPart then
+		return false
+	end
+
+	local v49 = t2.value8:DistanceFromCharacter(HumanoidRootPart.Position)
+
+	if t2.value106(p14) then
+		if type(p15) ~= "function" then
+			return true
+		end
+
+		p15()
+
+		return true
+	else
+		if not (v49 <= 30) then
+			return
+		end
+
+		t2.value91:FireServer(HumanoidRootPart, t2.value108(v47.HumanoidRootPart.Position, HumanoidRootPart.Position))
+	end
+end
+
+t2.value110 = t1.value1
+
+function t1.value1()
+	local v50 = findBlob()
+
+	if v50 then
+		return v50
+	else
+		spawnBlob()
+
+		for _ = 1, 11 do
+			t2.value1.wait(1)
+
+			local v52 = findBlob()
+
+			if v52 then
+				return v52
+			end
+		end
+
+		return nil
+	end
+end
+function t2.value111(p16)
+	if p16 then
+		local PlotItems = t2.value5:FindFirstChild("PlotItems")
+
+		if PlotItems then
+			local PlayersInPlots = PlotItems:FindFirstChild("PlayersInPlots")
+
+			if PlayersInPlots and PlayersInPlots:FindFirstChild(p16.Name) then
+				local Plots = t2.value5:FindFirstChild("Plots")
+
+				if Plots then
+					for _, child in ipairs(Plots:GetChildren()) do
+						local PlotSign = child:FindFirstChild("PlotSign")
+
+						if PlotSign then
+							PlotSign = PlotSign:FindFirstChild("ThisPlotsOwners")
+						end
+
+						if PlotSign then
+							for _, child2 in ipairs(PlotSign.GetChildren(PlotSign)) do
+								if child2.Value == p16.Name then
+									local ChildName = PlotItems:FindFirstChild(child.Name)
+
+									if ChildName then
+										return true, ChildName
+									end
+								end
+							end
+						end
+					end
+
+					return false
+				else
+					return false
+				end
+			else
+				return false
+			end
+		else
+			return false
+		end
+	else
+		return false
+	end
+end
+
+t2.value112 = {
+	Enabled = false,
+	Connection = nil,
+	canGrab = true,
+	maxDistance = 20,
+	preGrabDelay = 0.00001,
+	postGrabDelay = 0.05,
+	lastTarget = nil,
+	lastHitTime = 0,
+	targetMemoryDuration = 0.1,
+	checkThrottle = 0.008,
+	lastCheck = 0
+}
+t2.value113 = RaycastParams.new()
+t2.value113.FilterType = Enum.RaycastFilterType.Exclude
+t2.value1.spawn(function()
+	local function v62()
+		return t2.value3.GamepassEvents.CheckForGamepass:InvokeServer(20837132)
+	end
+
+	local ok, result = pcall(v62)
+
+	if not (ok and result) then
+		return
+	end
+
+	t2.value112.maxDistance = 29.3
+end)
+
+local GamepassEvents = t2.value3:FindFirstChild("GamepassEvents")
+
+if GamepassEvents then
+	GamepassEvents = t2.value3.GamepassEvents:FindFirstChild("FurtherReachBoughtNotifier")
+end
+
+if GamepassEvents then
+	t2.value3.GamepassEvents.FurtherReachBoughtNotifier.OnClientEvent:Connect(function()
+		t2.value112.maxDistance = 29.3
+	end)
+end
+
+function t2.value112.GetTarget(p17)
+	local v66 = t2.value97()
+
+	if not v66 then
+		return
+	end
+
+	if t2.value5:FindFirstChild("GrabParts") then
+		return
+	end
+
+	local CurrentCamera = t2.value5.CurrentCamera
+	local Position = CurrentCamera.CFrame.Position
+	local LookVector = CurrentCamera.CFrame.LookVector
+
+	t2.value113.FilterDescendantsInstances = { v66, t2.value5.Terrain }
+
+	local value52 = t2.value5
+	local Raycast = value52.Raycast
+	local value113 = t2.value113
+	local hit = Raycast(value52, Position, LookVector * 1000, value113)
+	local Model, HumanoidRootPart
+
+	if hit then
+		if hit then
+			Model = hit.Instance:FindFirstAncestorOfClass("Model")
+
+			if not Model or (not Model:FindFirstChildOfClass("Humanoid") or Model == v66) then
+				return
+			elseif Model:FindFirstChildOfClass("Humanoid").Health <= 0 then
+				return
+			else
+				HumanoidRootPart = Model:FindFirstChild("HumanoidRootPart")
+
+				if HumanoidRootPart then
+					if (v66.HumanoidRootPart.Position - HumanoidRootPart.Position).Magnitude > p17.maxDistance then
+						return
+					else
+						return Model
+					end
+				else
+					return
+				end
+			end
+		end
+
+		return
+	end
+
+	local t5 = { LookVector, (LookVector + Vector3.new(0, 0.075, 0)).Unit, (LookVector - Vector3.new(0, 0.075, 0)).Unit }
+
+	for _, v in ipairs(t5) do
+		hit = t2.value5:Raycast(Position, v * 1000, t2.value113)
+
+		if hit then
+			if hit then
+				Model = hit.Instance:FindFirstAncestorOfClass("Model")
+
+				if not Model or (not Model:FindFirstChildOfClass("Humanoid") or Model == v66) then
+					return
+				elseif Model:FindFirstChildOfClass("Humanoid").Health <= 0 then
+					return
+				else
+					HumanoidRootPart = Model:FindFirstChild("HumanoidRootPart")
+
+					if HumanoidRootPart then
+						if (v66.HumanoidRootPart.Position - HumanoidRootPart.Position).Magnitude > p17.maxDistance then
+							return
+						else
+							return Model
+						end
+					else
+						return
+					end
+				end
+			end
+
+			return
+		end
+	end
+
+	if hit then
+		Model = hit.Instance:FindFirstAncestorOfClass("Model")
+
+		if not Model or (not Model:FindFirstChildOfClass("Humanoid") or Model == v66) then
+			return
+		elseif Model:FindFirstChildOfClass("Humanoid").Health <= 0 then
+			return
+		else
+			HumanoidRootPart = Model:FindFirstChild("HumanoidRootPart")
+
+			if HumanoidRootPart then
+				if (v66.HumanoidRootPart.Position - HumanoidRootPart.Position).Magnitude > p17.maxDistance then
+					return
+				else
+					return Model
+				end
+			else
+				return
+			end
+		end
+	end
+end
+function t2.value112.OnHeartbeat(p18)
+	if not (p18.Enabled and p18.canGrab) then
+		return
+	end
+
+	if t2.value6:GetFocusedTextBox() then
+		return
+	end
+
+	if tick() - p18.lastCheck < p18.checkThrottle then
+		return
+	end
+
+	p18.lastCheck = tick()
+
+	local target = p18:GetTarget()
+
+	if target then
+		p18.lastTarget = target
+		p18.lastHitTime = tick()
+	else
+		local lastTarget = p18.lastTarget
+
+		if lastTarget then
+			lastTarget = tick() - p18.lastHitTime > p18.targetMemoryDuration
+		end
+
+		if lastTarget then
+			p18.lastTarget = nil
+		end
+	end
+
+	local v81 = t2.value97()
+	local lastTarget = p18.lastTarget
+
+	if lastTarget then
+		lastTarget = p18.lastTarget:FindFirstChild("HumanoidRootPart")
+	end
+
+	local lastTarget2 = p18.lastTarget
+
+	if lastTarget2 then
+		lastTarget2 = v81 and lastTarget
+	end
+
+	if not lastTarget2 then
+		return
+	end
+
+	if (v81.HumanoidRootPart.Position - lastTarget.Position).Magnitude > p18.maxDistance then
+		p18.lastTarget = nil
+
+		return
+	end
+
+	if not p18.lastTarget then
+		return
+	end
+
+	p18.canGrab = false
+	t2.value1.spawn(function()
+		t2.value1.wait(p18.preGrabDelay)
+		pcall(mouse1press)
+
+		local now = tick()
+
+		if not t2.value5:FindFirstChild("GrabParts") then
+			repeat
+				t2.value1.wait(0.02)
+			until not t2.value5:FindFirstChild("GrabParts") or tick() - now > 1.6
+
+			t2.value1.wait(p18.postGrabDelay)
+			p18.canGrab = true
+			p18.lastTarget = nil
+
+			return
+		end
+
+		local _ = tick() - now > 1.6
+
+		repeat
+			t2.value1.wait(0.02)
+		until not t2.value5:FindFirstChild("GrabParts") or tick() - now > 1.6
+
+		t2.value1.wait(p18.postGrabDelay)
+		p18.canGrab = true
+		p18.lastTarget = nil
+	end)
+end
+
+local ChildAdded = t2.value5.ChildAdded
+
+function t1.value1(p19)
+	if not p19 then
+		return
+	end
+
+	local v87, v88, v89 = ipairs(p19:GetDescendants())
+
+	while true do
+		local v90
+
+		v89, v90 = v87(v88, v89)
+
+		if not v89 then
+			break
+		end
+
+		if v90:IsA("BasePart") then
+			v90.AssemblyLinearVelocity = Vector3.zero
+			v90.AssemblyAngularVelocity = Vector3.zero
+		end
+	end
+
+	local v91 = t2.value97()
+
+	if not v91 then
+		return
+	end
+
+	local HumanoidRootPart = v91.HumanoidRootPart
+
+	HumanoidRootPart.AssemblyLinearVelocity = Vector3.zero
+	HumanoidRootPart.AssemblyAngularVelocity = Vector3.zero
+end
+
+ChildAdded.Connect(ChildAdded, function(p20)
+	if p20.Name ~= "GrabParts" then
+		return
+	end
+
+	t2.value1.spawn(function()
+		t2.value1.wait(0.1)
+
+		local GrabPart = p20:FindFirstChild("GrabPart")
+
+		if GrabPart then
+			GrabPart = GrabPart:FindFirstChild("WeldConstraint")
+		end
+
+		if GrabPart then
+			GrabPart = GrabPart.Part1
+		end
+
+		if not GrabPart then
+			return
+		end
+
+		local BodyVelocity
+
+		if _G.SuperStrength then
+			BodyVelocity = Instance.new("BodyVelocity")
+			BodyVelocity.MaxForce = Vector3.new(0, 0, 0)
+			BodyVelocity.Velocity = Vector3.new()
+			BodyVelocity.Name = "SuperStrength"
+			BodyVelocity.Parent = GrabPart
+		else
+			BodyVelocity = nil
+		end
+
+		if not BodyVelocity then
+			return
+		end
+
+		t2.value1.spawn(function()
+			if not t2.value8.PlayerGui:FindFirstChild("ContextActionGui") then
+				return
+			end
+
+			local Parent = nil
+			local connection = nil
+
+			while true do
+				if true then
+					local Parent2
+
+					if Parent == nil then
+						Parent2 = p20.Parent
+					else
+						Parent2 = false
+					end
+				end
+
+				if not v109 then
+					if Parent then
+						Parent.Active = true
+						connection = Parent.MouseButton1Down:Connect(function()
+							local SuperStrength = _G.SuperStrength
+
+							if SuperStrength then
+								SuperStrength = BodyVelocity.Parent
+							end
+
+							if not SuperStrength then
+								return
+							end
+
+							BodyVelocity.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+							BodyVelocity.Velocity = t2.value5.CurrentCamera.CFrame.LookVector * _G.Strength
+						end)
+					end
+
+					local connection2 = nil
+
+					connection2 = p20:GetPropertyChangedSignal("Parent"):Connect(function()
+						if p20.Parent then
+							return
+						end
+
+						t2.value7:AddItem(BodyVelocity, 1)
+
+						if connection then
+							connection:Disconnect()
+						end
+
+						connection2:Disconnect()
+					end)
+
+					return
+				end
+
+				for _, descendant in ipairs(t2.value8.PlayerGui.ContextActionGui:GetDescendants()) do
+					local isImageLabel = descendant:IsA("ImageLabel")
+
+					if isImageLabel then
+						isImageLabel = descendant.Image == "http://www.roblox.com/asset/?id=9603678090"
+					end
+
+					if isImageLabel then
+						Parent = descendant.Parent
+
+						break
+					end
+				end
+
+				t2.value1.wait(0.1)
+			end
+		end)
+		t2.value1.spawn(function()
+			local connection = nil
+
+			connection = p20:GetPropertyChangedSignal("Parent"):Connect(function()
+				if p20.Parent then
+					return
+				end
+
+				local SuperStrength
+
+				if t2.value6:GetLastInputType() == Enum.UserInputType.MouseButton2 then
+					SuperStrength = _G.SuperStrength
+				else
+					SuperStrength = false
+				end
+
+				if SuperStrength then
+					BodyVelocity.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+					BodyVelocity.Velocity = t2.value5.CurrentCamera.CFrame.LookVector * _G.Strength
+					t2.value7:AddItem(BodyVelocity, 1)
+				else
+					local Parent
+
+					if t2.value6:GetLastInputType() == Enum.UserInputType.MouseButton1 then
+						Parent = BodyVelocity.Parent
+					else
+						Parent = false
+					end
+
+					if Parent then
+						BodyVelocity:Destroy()
+					end
+				end
+
+				connection:Disconnect()
+			end)
+		end)
+	end)
+	t2.value1.spawn(function()
+		if not _G.Death_Grab then
+			return
+		end
+
+		local GrabPart = p20:WaitForChild("GrabPart", 5)
+
+		if GrabPart then
+			GrabPart = GrabPart:WaitForChild("WeldConstraint", 5)
+		end
+
+		if GrabPart then
+			GrabPart = GrabPart.Part1
+		end
+
+		local Parent
+
+		if GrabPart then
+			Parent = GrabPart.Parent
+		else
+			Parent = GrabPart
+		end
+
+		if not Parent then
+			return
+		end
+
+		local Parent2 = GrabPart.Parent
+		local Humanoid = Parent2:FindFirstChildOfClass("Humanoid")
+
+		if not Humanoid then
+			return
+		end
+
+		while true do
+			local Parent3 = p20.Parent
+
+			if Parent3 then
+				Parent3 = _G.Death_Grab
+			end
+
+			if not Parent3 then
+				return
+			end
+
+			local playerFromCharacter = t2.value2:GetPlayerFromCharacter(Parent2)
+
+			if playerFromCharacter then
+				playerFromCharacter = t2.value106(playerFromCharacter)
+			end
+
+			if playerFromCharacter then
+				Humanoid.BreakJointsOnDeath = false
+				Humanoid:ChangeState(Enum.HumanoidStateType.Dead)
+				Humanoid.Jump = true
+				Humanoid.Sit = false
+
+				if Humanoid:GetStateEnabled(Enum.HumanoidStateType.Dead) then
+					t2.value92:FireServer(GrabPart)
+				end
+			end
+
+			t2.value1.wait()
+		end
+	end)
+	t2.value1.spawn(function()
+		if not _G.NoclipGrab then
+			return
+		end
+
+		local GrabPart = p20:WaitForChild("GrabPart", 5)
+
+		if GrabPart then
+			GrabPart = GrabPart:WaitForChild("WeldConstraint", 5)
+		end
+
+		local Part1
+
+		if GrabPart then
+			Part1 = GrabPart.Part1
+		else
+			Part1 = GrabPart
+		end
+
+		while true do
+			local v114 = not Part1
+
+			if v114 then
+				v114 = p20.Parent
+			end
+
+			if not v114 then
+				break
+			end
+
+			t2.value1.wait()
+
+			if GrabPart then
+				Part1 = GrabPart.Part1
+			else
+				Part1 = GrabPart
+			end
+		end
+
+		local v115
+
+		if Part1 then
+			v115 = not Part1.Anchored
+		else
+			v115 = Part1
+		end
+
+		if not v115 then
+			return
+		end
+
+		local Parent = Part1.Parent
+		local isModel
+
+		if Parent then
+			isModel = Parent:IsA("Model")
+		else
+			isModel = Parent
+		end
+
+		if not isModel then
+			return
+		end
+
+		local descendants = Parent:GetDescendants()
+		local Humanoid = Parent:FindFirstChildOfClass("Humanoid")
+		local v120, v121, v122 = ipairs(descendants)
+		local t6 = {}
+
+		while true do
+			local v124
+
+			v122, v124 = v120(v121, v122)
+
+			if not v122 then
+				break
+			end
+
+			if v124:IsA("BasePart") then
+				t6[v124] = v124.CanCollide
+			end
+		end
+
+		while p20.Parent do
+			for _, descendant in ipairs(Parent.GetDescendants(Parent)) do
+				if descendant:IsA("BasePart") then
+					descendant.CanCollide = false
+				end
+			end
+
+			t2.value1.wait(0.2)
+		end
+
+		if Humanoid then
+			t2.value1.wait(0.5)
+		end
+
+		for k, v in pairs(t6) do
+			local Parent2
+
+			if k then
+				Parent2 = k.Parent
+			else
+				Parent2 = k
+			end
+
+			if Parent2 then
+				k.CanCollide = v
+			end
+		end
+	end)
+end)
+
+function t2.value114(p21)
+	if _G.TP_Priority <= p21 then
+		_G.TP_Priority = p21
+
+		return true
+	elseif p21 == 0 then
+		_G.TP_Priority = p21
+
+		return true
+	else
+		return false
+	end
+end
+
+t2.value115 = nil
+
+function t2.value116(p22, p23)
+	if (p23 or 0) ~= _G.TP_Priority then
+		return
+	end
+
+	local v130 = t2.value97()
+	local v131 = v130 and not _G.TeleportingToNetworkOwnership
+
+	if v131 then
+		v131 = typeof(p22) == "CFrame"
+	end
+
+	if not v131 then
+		return
+	end
+
+	local HumanoidRootPart = v130.HumanoidRootPart
+	local Humanoid = v130:FindFirstChildOfClass("Humanoid")
+
+	HumanoidRootPart.CFrame = HumanoidRootPart.CFrame.Rotation + p22.Position
+
+	local v134
+
+	if Humanoid.SeatPart == nil then
+		v134 = true
+	else
+		local Parent = Humanoid.SeatPart.Parent
+
+		v134 = tostring(Parent) ~= "CreatureBlobman"
+	end
+
+	if not v134 then
+		return
+	end
+
+	Humanoid.Sit = false
+end
+function t2.value117(p24)
+	local v136 = t2.value97()
+	local v137
+
+	if v136 then
+		v137 = typeof(p24) == "CFrame"
+	else
+		v137 = v136
+	end
+
+	if not v137 then
+		return
+	end
+
+	local HumanoidRootPart = v136.HumanoidRootPart
+	local Humanoid = v136:FindFirstChildOfClass("Humanoid")
+
+	HumanoidRootPart.CFrame = HumanoidRootPart.CFrame.Rotation + p24.Position
+	Humanoid.Sit = false
+end
+
+t2.value118 = nil
+t2.value115 = nil
+
+function t2.value119()
+	if not t2.value118 then
+		t2.value115 = true
+
+		return
+	end
+
+	t2.value118:Disconnect()
+	t2.value118 = nil
+	t2.value115 = true
+end
+function t2.value120(p25, p26, p27)
+	local Rayfield_ = _G.Rayfield or Rayfield
+	local Notify
+
+	if Rayfield_ then
+		Notify = Rayfield_.Notify
+	else
+		Notify = Rayfield_
+	end
+
+	if not Notify then
+		return
+	end
+
+	pcall(function()
+		Rayfield_:Notify({
+			Title = p25,
+			Content = p26,
+			Duration = p27,
+			Image = 4483345998
+		})
+	end)
+end
+function t2.value121()
+	local value96 = t2.value96 or t2.value3:WaitForChild("CharacterEvents"):WaitForChild("Struggle")
+
+	while true do
+		if not t2.value19 then
+			return
+		end
+
+		local v143 = t2.value97()
+		local Head
+
+		if v143 then
+			Head = v143:FindFirstChild("Head")
+		else
+			Head = v143
+		end
+
+		if Head and v143.Head:FindFirstChild("PartOwner") then
+			value96:FireServer(t2.value8)
+
+			local GetChildren = v143.GetChildren
+			local v146, v147, v148 = ipairs(GetChildren(v143))
+
+			while true do
+				local v149
+
+				v148, v149 = v146(v147, v148)
+
+				if not v148 then
+					break
+				end
+
+				if v149:IsA("BasePart") then
+					v149.Anchored = true
+				end
+			end
+
+			local IsHeld = t2.value8:FindFirstChild("IsHeld")
+
+			while true do
+				local Value = IsHeld and IsHeld.Value
+
+				if Value then
+					Value = t2.value19
+				end
+
+				if not Value then
+					break
+				end
+
+				t2.value1.wait()
+
+				continue
+			end
+
+			for _, child in ipairs(v143.GetChildren(v143)) do
+				if child:IsA("BasePart") then
+					child.Anchored = false
+				end
+			end
+		end
+
+		t2.value1.wait(0.1)
+
+		continue
+	end
+end
+function t2.value122()
+	t2.value36 = t2.value5.FallenPartsDestroyHeight
+	t2.value5.FallenPartsDestroyHeight = (0 / 0)
+end
+function t2.value123()
+	t2.value5.FallenPartsDestroyHeight = -100
+end
+function t2.value124()
+	local CurrentCamera = t2.value5.CurrentCamera
+
+	if not CurrentCamera then
+		return
+	end
+
+	if t2.value38 then
+		t2.value38:Destroy()
+		t2.value38 = nil
+	end
+
+	t2.value38 = Instance.new("Part")
+	t2.value38.Name = "BypassCameraTarget"
+	t2.value38.Size = Vector3.new(1, 1, 1)
+	t2.value38.Transparency = 1
+	t2.value38.Anchored = true
+	t2.value38.CanCollide = false
+
+	local HumanoidRootPart = t2.value97()
+
+	if HumanoidRootPart then
+		HumanoidRootPart = HumanoidRootPart:FindFirstChild("HumanoidRootPart")
+	end
+
+	if HumanoidRootPart then
+		t2.value38.CFrame = HumanoidRootPart.CFrame
+	elseif t2.value37 then
+		t2.value38.CFrame = t2.value37
+	else
+		t2.value38.CFrame = CFrame.new()
+	end
+
+	t2.value38.Parent = t2.value5
+	CurrentCamera.CameraSubject = t2.value38
+	CurrentCamera.CameraType = Enum.CameraType.Custom
+end
+function t2.value125()
+	local CurrentCamera = t2.value5.CurrentCamera
+
+	if CurrentCamera then
+		local Humanoid = t2.value97()
+
+		if Humanoid then
+			Humanoid = Humanoid:FindFirstChildOfClass("Humanoid")
+		end
+
+		if Humanoid then
+			CurrentCamera.CameraSubject = Humanoid
+		end
+
+		CurrentCamera.CameraType = Enum.CameraType.Custom
+	end
+
+	if not t2.value38 then
+		return
+	end
+
+	t2.value38:Destroy()
+	t2.value38 = nil
+end
+function t2.value126()
+	local v158 = t2.value97()
+
+	if not v158 then
+		return
+	end
+
+	local HumanoidRootPart = v158:FindFirstChild("HumanoidRootPart")
+
+	if not HumanoidRootPart then
+		return
+	end
+
+	if not t2.value37 then
+		t2.value37 = HumanoidRootPart.CFrame
+	end
+
+	local CFrame_ = HumanoidRootPart.CFrame
+	local now = tick()
+	local n1 = 10000
+
+	while true do
+		if true then
+			local value35
+
+			if tick() - now < 1 then
+				value35 = t2.value35
+			else
+				value35 = false
+			end
+		end
+
+		if not v179 then
+			local value35 = t2.value35
+
+			if value35 then
+				if HumanoidRootPart then
+					value35 = HumanoidRootPart.Parent
+				else
+					value35 = HumanoidRootPart
+				end
+			end
+
+			if not value35 then
+				return
+			end
+
+			HumanoidRootPart.CFrame = CFrame_
+
+			return
+		end
+
+		local Character = t2.value8.Character
+
+		if Character then
+			Character = HumanoidRootPart.Parent
+		end
+
+		if not Character then
+			return
+		end
+
+		local v166 = tick() * 12
+		local v167 = math.cos(v166) * n1
+		local v168 = math.sin(v166) * n1
+
+		HumanoidRootPart.CFrame = CFrame_ + Vector3.new(v167, -10000, v168)
+		t2.value4.RenderStepped:Wait()
+	end
+end
+function t2.value127()
+	if t2.value35 then
+		return
+	end
+
+	t2.value35 = true
+
+	local HumanoidRootPart = t2.value97()
+
+	if HumanoidRootPart then
+		HumanoidRootPart = HumanoidRootPart:FindFirstChild("HumanoidRootPart")
+	end
+
+	if HumanoidRootPart then
+		local _ = HumanoidRootPart.CFrame
+	end
+
+	t2.value124()
+	t2.value122()
+	t2.value39 = coroutine.wrap(function()
+		while t2.value35 do
+			if t2.value8.Character then
+				t2.value126()
+			else
+				t2.value1.wait(0.5)
+			end
+
+			t2.value1.wait(0.0001)
+		end
+	end)
+	t2.value39()
+end
+function t2.value128()
+	t2.value35 = false
+	t2.value39 = nil
+
+	local value37 = t2.value97()
+	local HumanoidRootPart
+
+	if value37 then
+		HumanoidRootPart = value37:FindFirstChild("HumanoidRootPart")
+	else
+		HumanoidRootPart = value37
+	end
+
+	if value37 then
+		value37 = t2.value37 and HumanoidRootPart
+	end
+
+	if not value37 then
+		t2.value123()
+		t2.value125()
+
+		return
+	end
+
+	HumanoidRootPart.CFrame = t2.value37
+	t2.value123()
+	t2.value125()
+end
+function t2.value129(p28)
+	local HumanoidRootPart = p28:WaitForChild("HumanoidRootPart", 5)
+	local Humanoid = p28:WaitForChild("Humanoid", 5)
+
+	if not (HumanoidRootPart and Humanoid) then
+		return
+	end
+
+	t2.value1.spawn(function()
+		local v175 = t2.value101()
+
+		HumanoidRootPart.CFrame = CFrame.new(v175)
+		HumanoidRootPart.Anchored = false
+	end)
+	t2.value1.spawn(function()
+		while true do
+			local value40 = t2.value40
+
+			if value40 then
+				value40 = p28.Parent
+			end
+
+			if not value40 then
+				return
+			end
+
+			t2.value1.wait()
+
+			local InPlot = t2.value8:FindFirstChild("InPlot")
+			local Value = not InPlot and InPlot.Value
+
+			if Value then
+				Value = Humanoid.Health > 0
+			end
+
+			if Value then
+				local v180 = t2.value101()
+
+				HumanoidRootPart.CFrame = CFrame.new(v180)
+				HumanoidRootPart.Anchored = false
+			end
+		end
+	end)
+
+	local connection = nil
+
+	connection = Humanoid.Died:Connect(function()
+		t2.value1.wait(2.8)
+
+		while true do
+			local value40 = t2.value40
+
+			if value40 then
+				value40 = p28.Parent
+			end
+
+			if not value40 then
+				break
+			end
+
+			local InPlot = t2.value8:FindFirstChild("InPlot")
+
+			if InPlot then
+				InPlot = InPlot.Value
+			end
+
+			if not InPlot then
+				for _ = 1, 3 do
+					t2.value1.spawn(function()
+						if not t2.value96 then
+							return
+						end
+
+						t2.value96:FireServer(t2.value8)
+					end)
+				end
+			end
+
+			t2.value1.wait()
+		end
+
+		if not connection then
+			return
+		end
+
+		connection:Disconnect()
+	end)
+end
+function t2.value130()
+	local result = t2.value97() or t2.value8.CharacterAdded:Wait()
+	local HumanoidRootPart = result:WaitForChild("HumanoidRootPart", 5)
+
+	if not HumanoidRootPart then
+		return
+	end
+
+	if t2.value56 then
+		t2.value56:Disconnect()
+	end
+
+	t2.value56 = t2.value5.ChildAdded:Connect(function(child)
+		local value55
+
+		if child.Name == "Part" then
+			value55 = t2.value55
+		else
+			value55 = false
+		end
+
+		if not value55 then
+			return
+		end
+
+		if not (HumanoidRootPart and (HumanoidRootPart.Parent and result.Parent)) then
+			return
+		end
+
+		if not ((child.Position - HumanoidRootPart.Position).Magnitude <= 20) then
+			return
+		end
+
+		HumanoidRootPart.Anchored = true
+		t2.value1.wait(0.01)
+
+		local RightArm = result:FindFirstChild("Right Arm")
+
+		if RightArm then
+			RightArm = RightArm:FindFirstChild("RagdollLimbPart")
+		end
+
+		if not RightArm then
+			v205 = t2.value55 and HumanoidRootPart
+
+			if v205 then
+				v205 = HumanoidRootPart.Parent
+			end
+
+			if not v205 then
+				return
+			end
+
+			HumanoidRootPart.Anchored = false
+
+			return
+		end
+
+		while true do
+			local CanCollide = RightArm.CanCollide
+
+			if CanCollide then
+				CanCollide = t2.value55
+			end
+
+			if not CanCollide then
+				break
+			end
+
+			t2.value1.wait(0.001)
+		end
+
+		local value552 = t2.value55 and HumanoidRootPart
+
+		if value552 then
+			value552 = HumanoidRootPart.Parent
+		end
+
+		if not value552 then
+			return
+		end
+
+		HumanoidRootPart.Anchored = false
+	end)
+end
+function t2.value131()
+	local v190 = t2.value97()
+
+	if not v190 then
+		return
+	end
+
+	local Humanoid = v190:WaitForChild("Humanoid", 5)
+	local HumanoidRootPart = v190:WaitForChild("HumanoidRootPart", 5)
+
+	if not (Humanoid and HumanoidRootPart) then
+		return
+	end
+
+	v190.PrimaryPart = HumanoidRootPart
+
+	if t2.value53 then
+		t2.value53:Disconnect()
+	end
+
+	local FireDebounce = Humanoid:WaitForChild("FireDebounce", 5)
+
+	if not FireDebounce then
+		return
+	end
+
+	local function v194(p29)
+		if p29 then
+			p29 = t2.value52
+		end
+
+		if not p29 then
+			return
+		end
+
+		local CFrame_ = HumanoidRootPart.CFrame
+		local Plots = t2.value5:FindFirstChild("Plots")
+
+		if Plots then
+			Plots = Plots:FindFirstChild("Plot2")
+		end
+
+		if Plots then
+			Plots = Plots:FindFirstChild("Barrier")
+		end
+
+		if Plots then
+			Plots = Plots:FindFirstChild("PlotBarrier")
+		end
+
+		local isBasePart
+
+		if Plots then
+			isBasePart = Plots:IsA("BasePart")
+		else
+			isBasePart = Plots
+		end
+
+		if not isBasePart then
+			return
+		end
+
+		v190:SetPrimaryPartCFrame(Plots.CFrame * CFrame.new(0, 6, 0))
+		t2.value1.wait(0.3)
+
+		local FirePlayerPart = v190:FindFirstChild("FirePlayerPart", true)
+
+		if FirePlayerPart then
+			for _, child in ipairs(FirePlayerPart:GetChildren()) do
+				if child:IsA("Sound") then
+					child:Stop()
+				end
+
+				if child:IsA("Light") or child:IsA("ParticleEmitter") then
+					child.Enabled = false
+				end
+			end
+
+			if FirePlayerPart:FindFirstChild("CanBurn") then
+				FirePlayerPart.CanBurn.Value = false
+			end
+
+			if Humanoid:FindFirstChild("FireDebounce") then
+				Humanoid.FireDebounce.Value = false
+			end
+		end
+
+		t2.value1.wait(0.6)
+
+		local PrimaryPart = v190 and v190.PrimaryPart
+
+		if PrimaryPart then
+			PrimaryPart = t2.value52
+		end
+
+		if not PrimaryPart then
+			return
+		end
+
+		v190:SetPrimaryPartCFrame(CFrame_)
+	end
+
+	t2.value53 = FireDebounce.Changed:Connect(v194)
+end
+function t2.value132()
+	while t2.value28 do
+		local v202 = t2.value97()
+
+		if v202 then
+			local Humanoid = v202:FindFirstChildOfClass("Humanoid")
+			local HumanoidRootPart = v202.HumanoidRootPart
+			local v206
+
+			if Humanoid then
+				if HumanoidRootPart then
+					v206 = Humanoid.Health > 0
+				else
+					v206 = HumanoidRootPart
+				end
+			else
+				v206 = Humanoid
+			end
+
+			if v206 then
+				Humanoid.Sit = true
+				Humanoid:ChangeState(Enum.HumanoidStateType.Running)
+
+				local CurrentCamera = t2.value5.CurrentCamera
+
+				if CurrentCamera then
+					local LookVector = CurrentCamera.CFrame.LookVector
+
+					HumanoidRootPart.CFrame = CFrame.new(HumanoidRootPart.Position, HumanoidRootPart.Position + Vector3.new(LookVector.X, 0, LookVector.Z))
+				end
+			end
+		end
+
+		t2.value1.wait()
+	end
+end
+function t2.value133()
+	local Character = t2.value8.Character
+
+	if Character then
+		if Character:FindFirstChild("TruePositionPart") then
+			return Character.TruePositionPart
+		else
+			local Part = Instance.new("Part")
+
+			Part.Name = "TruePositionPart"
+			Part.Anchored = true
+			Part.CanCollide = false
+			Part.Transparency = 1
+			Part.Size = Vector3.new(1, 1, 1)
+			Part.CFrame = CFrame.new(0, -100, 0)
+			Part.Parent = Character
+
+			return Part
+		end
+	end
+end
+
+t2.value134 = nil
+
+function t2.value134()
+	local Character = t2.value8.Character
+
+	if not Character then
+		return
+	end
+
+	local v211 = Character.FindFirstChild(Character, "HumanoidRootPart")
+
+	if not v211 then
+		return
+	end
+
+	local PlotItems = t2.value5:FindFirstChild("PlotItems")
+
+	if PlotItems then
+		for _, child in pairs(PlotItems:GetChildren()) do
+			if child.Name ~= "PlayersInPlots" then
+				for _, child2 in pairs(child.GetChildren(child)) do
+					if child2.Name == "CreatureBlobman" then
+						local function v217()
+							local BlobmanSeatAndOwnerScript = child2:FindFirstChild("BlobmanSeatAndOwnerScript")
+							local RightDetector = child2:FindFirstChild("RightDetector")
+
+							if not (BlobmanSeatAndOwnerScript and RightDetector) then
+								return
+							end
+
+							local CreatureDrop = BlobmanSeatAndOwnerScript:FindFirstChild("CreatureDrop")
+							local RightWeld = RightDetector:FindFirstChild("RightWeld")
+
+							if not (CreatureDrop and RightWeld) then
+								return
+							end
+
+							CreatureDrop:FireServer(RightWeld, v211)
+
+							if not t2.value96 then
+								return
+							end
+
+							t2.value96:FireServer(t2.value8)
+						end
+
+						pcall(v217)
+					end
+				end
+			end
+		end
+	end
+
+	local pairs_ = pairs
+	local value2 = t2.value2
+
+	for _, player in pairs_(value2.GetPlayers(value2)) do
+		local v226 = t2.value5:FindFirstChild(player.Name .. "SpawnedInToys")
+
+		if v226 then
+			for _, child in pairs(v226.GetChildren(v226)) do
+				if child.Name == "CreatureBlobman" then
+					local function v229()
+						local BlobmanSeatAndOwnerScript = child:FindFirstChild("BlobmanSeatAndOwnerScript")
+						local RightDetector = child:FindFirstChild("RightDetector")
+
+						if not (BlobmanSeatAndOwnerScript and RightDetector) then
+							return
+						end
+
+						local CreatureDrop = BlobmanSeatAndOwnerScript:FindFirstChild("CreatureDrop")
+						local RightWeld = RightDetector:FindFirstChild("RightWeld")
+
+						if not (CreatureDrop and RightWeld) then
+							return
+						end
+
+						CreatureDrop:FireServer(RightWeld, v211)
+
+						if not t2.value96 then
+							return
+						end
+
+						t2.value96:FireServer(t2.value8)
+					end
+
+					pcall(v229)
+				end
+			end
+		end
+	end
+end
+function t2.value135()
+	local Character = t2.value8.Character
+
+	if Character then
+		for _, child in pairs(Character:GetChildren()) do
+			local isBasePart = child:IsA("BasePart")
+
+			if isBasePart then
+				isBasePart = child.Massless
+			end
+
+			if isBasePart then
+				child.Massless = false
+				t2.value134()
+			end
+		end
+	end
+end
+function t2.value136()
+	local Character = t2.value8.Character
+
+	if not Character then
+		return
+	end
+
+	local HumanoidRootPart = Character:FindFirstChild("HumanoidRootPart")
+	local TruePositionPart = Character:FindFirstChild("TruePositionPart")
+	local RootAttachment = HumanoidRootPart and TruePositionPart and HumanoidRootPart:FindFirstChild("RootAttachment")
+
+	if not RootAttachment then
+		return
+	end
+
+	t2.value1.wait(0.2)
+	RootAttachment.Parent = TruePositionPart
+	t2.value120("Antiblob", "Antiblob has been enabled", 3)
+end
+function t2.value137()
+	local Character = t2.value8.Character
+
+	if not Character then
+		return
+	end
+
+	local HumanoidRootPart = Character:FindFirstChild("HumanoidRootPart")
+	local TruePositionPart = Character:FindFirstChild("TruePositionPart")
+
+	if not (HumanoidRootPart and TruePositionPart) then
+		return
+	end
+
+	local RootAttachment = TruePositionPart:FindFirstChild("RootAttachment")
+
+	if RootAttachment then
+		RootAttachment.Parent = HumanoidRootPart
+		t2.value120("Antiblob", "Antiblob has been disabled", 3)
+	end
+
+	TruePositionPart:Destroy()
+end
+function t2.value138()
+	while t2.value30 do
+		pcall(function()
+			if not t2.value8.Character then
+				return
+			end
+
+			t2.value133()
+			t2.value135()
+
+			local HumanoidRootPart = t2.value8.Character:FindFirstChild("HumanoidRootPart")
+
+			if HumanoidRootPart then
+				HumanoidRootPart = HumanoidRootPart:FindFirstChild("RootAttachment")
+			end
+
+			if not HumanoidRootPart then
+				return
+			end
+
+			local TruePositionPart = t2.value8.Character:FindFirstChild("TruePositionPart")
+
+			if TruePositionPart then
+				TruePositionPart = not TruePositionPart:FindFirstChild("RootAttachment")
+			end
+
+			if not TruePositionPart then
+				return
+			end
+
+			t2.value136()
+		end)
+		t2.value1.wait(0.1)
+	end
+end
+function t2.value139(p30, p31, p32)
+	while true do
+		local value61 = t2.value61
+
+		if value61 then
+			value61 = t2.value61.Value
+
+			if value61 then
+				value61 = t2.value62
+
+				if value61 then
+					value61 = not t2.value62.Value and t2.value63
+
+					if value61 then
+						value61 = not t2.value63.Value
+					end
+				end
+			end
+		end
+
+		if not value61 then
+			break
+		end
+
+		t2.value1.wait()
+	end
+
+	t2.value1.spawn(function()
+		t2.value94:InvokeServer(p30, p31, p32 or Vector3.new())
+	end)
+
+	local v249 = t2.value5:FindFirstChild(t2.value8.Name .. "SpawnedInToys")
+
+	if not v249 then
+		return nil
+	end
+
+	local u250 = nil
+	local connection = nil
+
+	local function v252(child)
+		local isModel
+
+		if child.Name == p30 then
+			isModel = child:IsA("Model")
+		else
+			isModel = false
+		end
+
+		if not isModel then
+			return
+		end
+
+		u250 = child
+		connection:Disconnect()
+	end
+
+	connection = v249.ChildAdded:Connect(v252)
+
+	local now = tick()
+	local v255 = connection
+
+	while true do
+		if u250 then
+			return u250
+		end
+
+		if tick() - now > 2 then
+			break
+		end
+
+		t2.value1.wait()
+	end
+
+	if not v255 then
+		return nil
+	end
+
+	v255:Disconnect()
+
+	return nil
+end
+
+t2.value140 = nil
+
+function t2.value140()
+	t2.value42 = t2.value42 + 1
+
+	if not t2.value43 then
+		return
+	end
+
+	pcall(function()
+		if not t2.value43.Parent then
+			return
+		end
+
+		t2.value43:Destroy()
+	end)
+	t2.value43 = nil
+end
+function t2.value141(p33)
+	t2.value140()
+	t2.value42 = t2.value42 + 1
+
+	local value42 = t2.value42
+	local result = p33 or (t2.value97() or t2.value8.CharacterAdded:Wait())
+	local Humanoid = result:WaitForChild("Humanoid", 2)
+	local HumanoidRootPart = result:WaitForChild("HumanoidRootPart", 2)
+
+	if not (Humanoid and HumanoidRootPart) then
+		return
+	end
+
+	Humanoid.Sit = true
+	t2.value1.wait()
+	Humanoid.Sit = false
+	t2.value1.spawn(function()
+		local now = tick()
+
+		while true do
+			local v261
+
+			if value42 == t2.value42 then
+				v261 = tick() - now < 0.8
+			else
+				v261 = false
+			end
+
+			if not v261 then
+				return
+			end
+
+			local v262 = result
+
+			for _, child in ipairs(v262.GetChildren(v262)) do
+				if child:IsA("BasePart") then
+					child.Velocity = Vector3.new()
+				end
+			end
+
+			t2.value1.wait()
+		end
+	end)
+
+	local CreatureBlobman = t2.value139("CreatureBlobman", HumanoidRootPart.CFrame * CFrame.new(0, 0, -5), Vector3.new(0, -15.716, 0))
+
+	if not CreatureBlobman then
+		return
+	end
+
+	local Head = CreatureBlobman:WaitForChild("Head", 3)
+	local GrabbableHitbox = CreatureBlobman:WaitForChild("GrabbableHitbox", 3)
+	local VehicleSeat = CreatureBlobman:WaitForChild("VehicleSeat", 3)
+
+	t2.value1.spawn(function()
+		while true do
+			local v269 = value42 == t2.value42
+
+			if v269 then
+				v269 = Head and not Head:FindFirstChild("PartOwner") or Head.PartOwner.Value ~= t2.value8.Name
+			end
+
+			if not v269 then
+				return
+			end
+
+			if GrabbableHitbox then
+				t2.value109(GrabbableHitbox)
+			end
+
+			t2.value1.wait()
+		end
+	end)
+
+	local u270 = true
+
+	t2.value1.spawn(function()
+		local now = tick()
+
+		while true do
+			local v272 = u270
+
+			if v272 then
+				if value42 == t2.value42 then
+					v272 = tick() - now < 0.4
+				else
+					v272 = false
+				end
+			end
+
+			if not v272 then
+				u270 = false
+
+				return
+			end
+
+			local Parent = CreatureBlobman
+
+			if Parent then
+				Parent = CreatureBlobman.Parent and VehicleSeat
+
+				if Parent then
+					Parent = VehicleSeat.Occupant ~= Humanoid
+				end
+			end
+
+			if Parent then
+				VehicleSeat:Sit(Humanoid)
+			end
+
+			t2.value1.wait()
+
+			local v274 = result
+
+			if v274 then
+				v274 = Humanoid
+			end
+
+			if v274 then
+				Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+			end
+		end
+	end)
+	t2.value1.spawn(function()
+		while true do
+			local v275 = u270
+
+			if v275 then
+				v275 = value42 == t2.value42
+			end
+
+			if not v275 then
+				return
+			end
+
+			t2.value3.CharacterEvents.RagdollRemote:FireServer(HumanoidRootPart, 0.095)
+			t2.value1.wait()
+		end
+	end)
+	t2.value1.wait(0.5)
+
+	if value42 ~= t2.value42 then
+		return
+	end
+
+	Humanoid.Sit = false
+	CreatureBlobman.Name = "Gucci"
+
+	for _, child in ipairs(CreatureBlobman:GetChildren()) do
+		if child:IsA("BasePart") then
+			child.CanCollide = false
+			child.CanTouch = false
+			child.CanQuery = false
+		end
+	end
+
+	t2.value1.spawn(function()
+		while true do
+			local v278 = value42 == t2.value42 and CreatureBlobman
+
+			if v278 then
+				v278 = Head
+			end
+
+			if not v278 then
+				return
+			end
+
+			Head.CFrame = CFrame.new(Head.Position.X, 100000, Head.Position.Z)
+			t2.value1.wait()
+		end
+	end)
+end
+function t2.value142()
+	local v279 = t2.value8.Name .. "SpawnedInToys"
+	local t7 = { "TractorGreen", CFrame.new(0, 5000000, 0), Vector3.new(0, 60, 0) }
+
+	t2.value94:InvokeServer(unpack(t7))
+
+	local v281 = t2.value5:FindFirstChild(v279) or t2.value5:WaitForChild(v279, 1.5)
+
+	if not v281 then
+		return false
+	end
+
+	t2.value46 = v281:FindFirstChild("TractorGreen") or v281:WaitForChild("TractorGreen", 1.5)
+
+	if not t2.value46 then
+		return false
+	end
+
+	if t2.value46:FindFirstChild("VehicleSeat") then
+		v296 = t2.value46:FindFirstChild("Main") or t2.value46:WaitForChild("Main", 1.5)
+
+		if v296 then
+			v296.CFrame = CFrame.new(0, 50000, 0)
+			v296.Anchored = true
+
+			return true
+		else
+			return false
+		end
+	end
+
+	t2.value46:WaitForChild("VehicleSeat", 1.5)
+
+	local Main = t2.value46:FindFirstChild("Main") or t2.value46:WaitForChild("Main", 1.5)
+
+	if Main then
+		Main.CFrame = CFrame.new(0, 50000, 0)
+		Main.Anchored = true
+
+		return true
+	else
+		return false
+	end
+end
+function t2.value143()
+	if t2.value45 then
+		t2.value45:Disconnect()
+		t2.value45 = nil
+	end
+
+	if not t2.value46 then
+		return
+	end
+
+	local function v283()
+		t2.value3.MenuToys.DestroyToy:FireServer(t2.value46)
+		t2.value46:Destroy()
+	end
+
+	pcall(v283)
+	t2.value46 = nil
+	t2.value47 = nil
+end
+function t2.value144()
+	local Character = t2.value8.Character
+
+	if not Character then
+		return
+	end
+
+	t2.value50 = Character:FindFirstChildOfClass("Humanoid") or Character:WaitForChild("Humanoid", 3)
+	t2.value51 = Character:FindFirstChild("HumanoidRootPart") or Character:WaitForChild("HumanoidRootPart", 3)
+
+	if not (t2.value50 and t2.value51) then
+		return
+	end
+
+	t2.value48 = t2.value51.Position
+
+	local value47 = t2.value47
+
+	if value47 then
+		value47 = t2.value47:IsA("VehicleSeat")
+	end
+
+	if value47 then
+		t2.value51.CFrame = t2.value47.CFrame
+		t2.value47:Sit(t2.value50)
+	end
+
+	t2.value50:GetPropertyChangedSignal("Jump"):Connect(function()
+		local Jump = t2.value50.Jump
+
+		if Jump then
+			Jump = t2.value50.Sit
+		end
+
+		if not Jump then
+			return
+		end
+
+		t2.value49 = 15
+		t2.value48 = t2.value51.Position
+	end)
+
+	if t2.value45 then
+		t2.value45:Disconnect()
+	end
+
+	t2.value4.Heartbeat:Connect(function()
+		if not (t2.value51 and (t2.value51.Parent and (t2.value50 and t2.value50.Parent))) then
+			return
+		end
+
+		t2.value3.CharacterEvents.RagdollRemote:FireServer(t2.value51, 0)
+
+		if not (t2.value49 > 0) then
+			return
+		end
+
+		t2.value51.CFrame = CFrame.new(t2.value48)
+	end)
+	t2.value1.spawn(function()
+		while true do
+			local Parent = t2.value50 and t2.value50.Parent
+
+			if Parent then
+				Parent = t2.value50.Sit
+			end
+
+			if not Parent then
+				break
+			end
+
+			t2.value1.wait(0.1)
+		end
+
+		t2.value1.wait(0.2)
+
+		local value51 = t2.value51
+
+		if value51 then
+			value51 = t2.value51.Parent
+		end
+
+		if not value51 then
+			return
+		end
+
+		t2.value51.CFrame = CFrame.new(t2.value48)
+	end)
+end
+function t2.value145()
+	local v289 = t2.value97()
+
+	if not v289 then
+		return
+	end
+
+	local Humanoid = v289:FindFirstChildOfClass("Humanoid")
+	local HumanoidRootPart = v289.HumanoidRootPart
+
+	t2.value25 = HumanoidRootPart.Position
+
+	local Map = t2.value5:FindFirstChild("Map")
+
+	if Map then
+		Map = Map:FindFirstChild("AlwaysHereTweenedObjects")
+	end
+
+	if Map then
+		Map = Map:FindFirstChild("Train")
+	end
+
+	local v293 = nil
+
+	if Map then
+		local GetDescendants = Map.GetDescendants
+
+		for _, v in ipairs(GetDescendants(Map)) do
+			if v:IsA("Seat") then
+				v293 = v
+
+				break
+			end
+		end
+	end
+
+	if v293 then
+		local isSeat = v293:IsA("Seat")
+	end
+
+	if v310 then
+		pcall(function()
+			HumanoidRootPart.CFrame = v293.CFrame + Vector3.new(0, 2, 0)
+			v293:Sit(Humanoid)
+		end)
+	end
+
+	if t2.value24 then
+		local function v298()
+			t2.value24:Disconnect()
+		end
+
+		pcall(v298)
+		t2.value24 = nil
+	end
+
+	local function v299()
+		t2.value24 = Humanoid:GetPropertyChangedSignal("Jump"):Connect(function()
+			local Jump = Humanoid and Humanoid.Jump
+
+			if Jump then
+				Jump = Humanoid.Sit
+			end
+
+			if not Jump then
+				return
+			end
+
+			t2.value26 = 15
+
+			local Parent = HumanoidRootPart
+
+			if Parent then
+				Parent = HumanoidRootPart.Parent
+			end
+
+			if not Parent then
+				return
+			end
+
+			t2.value25 = HumanoidRootPart.Position
+		end)
+	end
+
+	pcall(v299)
+
+	if t2.value23 then
+		pcall(function()
+			t2.value23:Disconnect()
+		end)
+		t2.value23 = nil
+	end
+
+	local function v302()
+		t2.value23 = t2.value4.Heartbeat:Connect(function()
+			if not HumanoidRootPart or (not (HumanoidRootPart.Parent and Humanoid) or Humanoid.Health <= 0) then
+				return
+			end
+
+			local CharacterEvents2 = t2.value3:FindFirstChild("CharacterEvents")
+
+			if CharacterEvents2 then
+				CharacterEvents2 = CharacterEvents2:FindFirstChild("RagdollRemote")
+			end
+
+			if CharacterEvents2 then
+				local function v304()
+					CharacterEvents2:FireServer(HumanoidRootPart, 0)
+				end
+
+				pcall(v304)
+			end
+
+			if not (t2.value26 > 0) then
+				return
+			end
+
+			HumanoidRootPart.CFrame = CFrame.new(t2.value25)
+
+			local _ = t2.value26 - 1
+		end)
+	end
+
+	pcall(v302)
+	t2.value1.spawn(function()
+		while true do
+			local Sit = Humanoid
+
+			if Sit then
+				Sit = Humanoid.Parent and Humanoid.Sit
+
+				if Sit then
+					Sit = Humanoid.Health > 0
+				end
+			end
+
+			if not Sit then
+				break
+			end
+
+			t2.value1.wait(1)
+		end
+
+		t2.value1.wait(0.5)
+
+		local value27 = t2.value27
+
+		if value27 then
+			value27 = HumanoidRootPart
+
+			if value27 then
+				value27 = HumanoidRootPart.Parent and Humanoid
+
+				if value27 then
+					value27 = Humanoid.Health > 0
+				end
+			end
+		end
+
+		if not value27 then
+			return
+		end
+
+		local function v308()
+			HumanoidRootPart.CFrame = CFrame.new(t2.value25)
+		end
+
+		pcall(v308)
+	end)
+end
+function t2.value146(p34)
+	local Humanoid = p34:WaitForChild("Humanoid", 5)
+
+	if not Humanoid then
+		return
+	end
+
+	local function v311()
+		if t2.value23 then
+			local function v312()
+				t2.value23:Disconnect()
+			end
+
+			pcall(v312)
+			t2.value23 = nil
+		end
+
+		if not t2.value24 then
+			return
+		end
+
+		local function v313()
+			t2.value24:Disconnect()
+		end
+
+		pcall(v313)
+		t2.value24 = nil
+	end
+
+	Humanoid.Died:Connect(v311)
+end
+
+t2.value147 = nil
+
+function t2.value148(p35)
+	local AutoAttacker
+
+	if p35.Name == "PartOwner" then
+		AutoAttacker = _G.AutoAttacker
+	else
+		AutoAttacker = false
+	end
+
+	if not AutoAttacker then
+		return
+	end
+
+	local Value = p35.Value
+	local v315 = tostring(Value)
+	local v316 = t2.value2:FindFirstChild(v315)
+
+	if not v316 or v316 == t2.value8 then
+		return
+	end
+
+	local function v317()
+		local Character = v316.Character
+		local Humanoid
+
+		if Character then
+			Humanoid = Character:FindFirstChildOfClass("Humanoid")
+		else
+			Humanoid = Character
+		end
+
+		if Character then
+			Character = Character:FindFirstChild("HumanoidRootPart")
+		end
+
+		if not (Humanoid and Character) then
+			return
+		end
+
+		t2.value107(Character)
+
+		for _ = 1, 20 do
+			Humanoid.BreakJointsOnDeath = false
+			Humanoid:ChangeState(Enum.HumanoidStateType.Dead)
+			Humanoid.Jump = true
+			Humanoid.Sit = true
+		end
+
+		t2.value1.wait()
+		t2.value92:FireServer(Character)
+	end
+
+	for _ = 1, 50 do
+		if t2.value110(v316, v317) then
+			return
+		end
+
+		t2.value1.wait()
+	end
+end
+function t2.value149(p36)
+	local v322 = t2.value2:FindFirstChild(p36)
+
+	if not v322 then
+		return
+	end
+
+	while t2.value64 do
+		local Parent
+
+		if v322 then
+			Parent = v322.Parent
+		else
+			Parent = v322
+		end
+
+		if not Parent then
+			return
+		end
+
+		local Character = v322.Character
+		local UpperTorso = Character and Character:FindFirstChild("UpperTorso") or Character:FindFirstChild("Torso")
+
+		if UpperTorso then
+			t2.value1.spawn(function()
+				local function v326()
+					local vector3 = Vector3.new(math.random(-30, 30) / 100, math.random(-30, 30) / 100, math.random(-30, 30) / 100)
+
+					t2.value94:InvokeServer("BallSnowball", UpperTorso.CFrame * CFrame.new(vector3), Vector3.zero)
+				end
+
+				pcall(v326)
+			end)
+
+			local v328 = t2.value5:FindFirstChild(t2.value8.Name .. "SpawnedInToys")
+
+			if v328 then
+				for _, child in ipairs(v328:GetChildren()) do
+					local Parent2
+
+					if child.Name == "BallSnowball" then
+						Parent2 = child.Parent
+					else
+						Parent2 = false
+					end
+
+					if Parent2 then
+						local PrimaryPart = child.PrimaryPart or child:FindFirstChildWhichIsA("BasePart")
+
+						if PrimaryPart then
+							local vector3 = Vector3.new(math.random(-30, 30) / 100, math.random(-30, 30) / 100, math.random(-30, 30) / 100)
+
+							PrimaryPart.CFrame = UpperTorso.CFrame * CFrame.new(vector3)
+							PrimaryPart.AssemblyLinearVelocity = Vector3.zero
+							PrimaryPart.AssemblyAngularVelocity = Vector3.zero
+						end
+					end
+				end
+			end
+
+			t2.value4.Heartbeat:Wait()
+		else
+			t2.value1.wait(0.1)
+		end
+	end
+end
+function t2.value150(p37)
+	local v334 = t2.value2:FindFirstChild(p37)
+
+	if not (v334 and v334.Character) then
+		return
+	end
+
+	local cFrame = CFrame.new(0, 800000, 0)
+
+	t2.value94:InvokeServer("PalletLightBrown", cFrame, Vector3.zero)
+
+	if true then
+		local _ = not t2.value83
+	end
+
+	while true do
+		local PalletLightBrown = t2.value5:FindFirstChild(t2.value8.Name .. "SpawnedInToys")
+
+		if PalletLightBrown then
+			PalletLightBrown = PalletLightBrown:FindFirstChild("PalletLightBrown")
+		end
+
+		t2.value4.Heartbeat:Wait()
+
+		if PalletLightBrown or not t2.value83 then
+			if not PalletLightBrown then
+				return
+			end
+
+			local SoundPart = PalletLightBrown:FindFirstChild("SoundPart") or PalletLightBrown:FindFirstChildWhichIsA("BasePart")
+
+			if not SoundPart then
+				return
+			end
+
+			SoundPart.CanCollide = false
+			SoundPart.Anchored = false
+
+			local function v339(p38)
+				local value91 = t2.value91
+
+				value91.FireServer(value91, p38, p38.CFrame)
+
+				local CreateGrabLine = t2.value3.GrabEvents.CreateGrabLine
+				local vector3 = Vector3.zero
+
+				CreateGrabLine.FireServer(CreateGrabLine, p38, vector3, p38.Position, false)
+				t2.value92:FireServer(p38)
+			end
+
+			v339(SoundPart)
+
+			while t2.value83 and (v334 and (v334.Parent and v334.Character)) do
+				local Character = v334.Character
+				local HumanoidRootPart = Character:FindFirstChild("HumanoidRootPart") or (Character:FindFirstChild("Torso") or Character:FindFirstChild("UpperTorso"))
+
+				if HumanoidRootPart then
+					local Position = HumanoidRootPart.Position
+
+					SoundPart.CFrame = CFrame.new(Position + Vector3.new(0, 150, 0))
+					SoundPart.AssemblyLinearVelocity = Vector3.zero
+					SoundPart.AssemblyAngularVelocity = Vector3.zero
+					v339(SoundPart)
+					SoundPart.CanCollide = false
+					t2.value1.wait(0.05)
+
+					local Character2
+
+					if HumanoidRootPart then
+						Character2 = v334.Character
+					else
+						Character2 = HumanoidRootPart
+					end
+
+					if Character2 then
+						SoundPart.CFrame = CFrame.new(HumanoidRootPart.Position)
+						SoundPart.AssemblyLinearVelocity = Vector3.new(0, -400, 0)
+						SoundPart.AssemblyAngularVelocity = Vector3.zero
+						v339(SoundPart)
+						SoundPart.CanCollide = true
+					end
+
+					t2.value1.wait(0.12)
+
+					local Character3
+
+					if HumanoidRootPart then
+						Character3 = v334.Character
+					else
+						Character3 = HumanoidRootPart
+					end
+
+					if Character3 then
+						SoundPart.CFrame = CFrame.new(HumanoidRootPart.Position + Vector3.new(0, 30, 0))
+						SoundPart.AssemblyLinearVelocity = Vector3.new(0, 100, 0)
+						SoundPart.AssemblyAngularVelocity = Vector3.zero
+						v339(SoundPart)
+						SoundPart.CanCollide = false
+					end
+
+					t2.value1.wait(0.08)
+				else
+					t2.value4.Heartbeat:Wait()
+				end
+			end
+
+			if PalletLightBrown then
+				local Parent = PalletLightBrown.Parent
+			end
+
+			if not v361 then
+				return
+			end
+
+			pcall(function()
+				t2.value3.MenuToys.DestroyToy:FireServer(PalletLightBrown)
+			end)
+			PalletLightBrown:Destroy()
+
+			return
+		end
+	end
+end
+function t2.value151(p39)
+	if t2.value82 then
+		t2.value82:Disconnect()
+	end
+
+	if not p39 then
+		return
+	end
+
+	t2.value4.Stepped:Connect(function()
+		local v349 = t2.value97()
+
+		if not v349 then
+			return
+		end
+
+		for _, descendant in ipairs(v349:GetDescendants()) do
+			if descendant:IsA("BasePart") then
+				descendant.CanCollide = false
+			end
+		end
+	end)
+end
+function t2.value152()
+	if t2.value76 then
+		t2.value76:Destroy()
+		t2.value76 = nil
+	end
+
+	if not t2.value77 then
+		return
+	end
+
+	t2.value77:Destroy()
+	t2.value77 = nil
+end
+function t2.value153()
+	t2.value73 = false
+
+	if t2.value74 then
+		t2.value1.cancel(t2.value74)
+	end
+
+	if not t2.value75 then
+		t2.value152()
+		t2.value151(false)
+		t2.value79 = false
+		t2.value80 = 0
+		t2.value81 = 0
+
+		return
+	end
+
+	t2.value1.cancel(t2.value75)
+	t2.value152()
+	t2.value151(false)
+	t2.value79 = false
+	t2.value80 = 0
+	t2.value81 = 0
+end
+
+local function v352(p40, p41)
+	t2.value152()
+	t2.value76 = Instance.new("BodyPosition")
+	t2.value76.MaxForce = Vector3.new(100000000, 100000000, 100000000)
+	t2.value76.P = 100000
+	t2.value76.D = 1000
+	t2.value76.Position = p41
+	t2.value76.Parent = p40
+	t2.value77 = Instance.new("BodyGyro")
+	t2.value77.MaxTorque = Vector3.new(100000000, 100000000, 100000000)
+	t2.value77.P = 100000
+	t2.value77.D = 1000
+	t2.value77.CFrame = CFrame.new(p41)
+	t2.value77.Parent = p40
+end
+
+function t2.value154(p42)
+	local Character = p42.Character
+
+	if not Character then
+		return not Character or Character.Position.Y > t2.value67
+	end
+
+	Character = Character:FindFirstChild("HumanoidRootPart")
+
+	return not Character or Character.Position.Y > t2.value67
+end
+function t2.value155(p43)
+	for _, descendant in ipairs(p43:GetDescendants()) do
+		if descendant:IsA("BasePart") then
+			descendant.CanCollide = false
+		end
+	end
+end
+function t2.value156()
+	local CreatureBlobman = t2.value5:FindFirstChild(t2.value8.Name .. "SpawnedInToys")
+
+	if not CreatureBlobman then
+		return CreatureBlobman or nil
+	end
+
+	CreatureBlobman = CreatureBlobman:FindFirstChild("CreatureBlobman")
+
+	return CreatureBlobman or nil
+end
+
+t2.value157 = nil
+
+function t2.value157()
+	local v357 = t2.value97()
+
+	if v357 then
+		t2.value94:InvokeServer("CreatureBlobman", v357.HumanoidRootPart.CFrame * CFrame.new(0, 0, -5), Vector3.new(0, -15, 0))
+	end
+end
+function t2.value158()
+	local v358 = t2.value156()
+
+	if v358 then
+		return v358
+	else
+		t2.value157()
+
+		for _ = 1, 11 do
+			t2.value1.wait(1)
+
+			local v360 = t2.value156()
+
+			if v360 then
+				return v360
+			end
+		end
+
+		return nil
+	end
+end
+
+t2.value159 = nil
+
+function t2.value159()
+	local attribute = t2.value97()
+
+	if not attribute then
+		return attribute or nil
+	end
+
+	attribute = attribute:GetAttribute("OriginalPosition")
+
+	return attribute or nil
+end
+function t2.value160()
+	local v362 = t2.value159()
+
+	if not v362 then
+		return
+	end
+
+	local connection = nil
+
+	connection = t2.value4.Heartbeat:Connect(function()
+		local v364 = t2.value97()
+		local HumanoidRootPart
+
+		if v364 then
+			HumanoidRootPart = v364:FindFirstChild("HumanoidRootPart")
+		else
+			HumanoidRootPart = v364
+		end
+
+		if not HumanoidRootPart then
+			connection:Disconnect()
+
+			return
+		end
+
+		HumanoidRootPart:PivotTo(v362)
+
+		if getgenv().originalFallenHeight then
+			t2.value5.FallenPartsDestroyHeight = getgenv().originalFallenHeight
+		end
+
+		v364:SetAttribute("SavingOriginalPos", false)
+		connection:Disconnect()
+	end)
+end
+function t2.value161(p44, p45)
+	if not (p44 and p45) or p45.Health <= 0 then
+		return
+	end
+
+	local v366 = t2.value158()
+	local BlobmanSeatAndOwnerScript
+
+	if v366 then
+		BlobmanSeatAndOwnerScript = v366:FindFirstChild("BlobmanSeatAndOwnerScript")
+	else
+		BlobmanSeatAndOwnerScript = v366
+	end
+
+	if BlobmanSeatAndOwnerScript then
+		local CreatureDrop = v366.BlobmanSeatAndOwnerScript:FindFirstChild("CreatureDrop")
+
+		if CreatureDrop then
+			local ipairs_ = ipairs
+			local Parent = p45.Parent
+
+			for _, descendant in ipairs_(Parent.GetDescendants(Parent)) do
+				if descendant:IsA("Weld") or descendant:IsA("BallSocketConstraint") then
+					CreatureDrop:FireServer(descendant, descendant)
+				end
+			end
+		end
+	end
+
+	p45.Sit = false
+	p45:ChangeState(Enum.HumanoidStateType.Running)
+	p45:SetStateEnabled(Enum.HumanoidStateType.Seated, false)
+	p45:ChangeState(Enum.HumanoidStateType.GettingUp)
+
+	local playerFromCharacter = t2.value2:GetPlayerFromCharacter(p45.Parent)
+	local IsHeld
+
+	if playerFromCharacter then
+		IsHeld = playerFromCharacter:FindFirstChild("IsHeld")
+	else
+		IsHeld = playerFromCharacter
+	end
+
+	if IsHeld then
+		playerFromCharacter.IsHeld.Value = false
+	end
+
+	local Ragdolled = p45:FindFirstChild("Ragdolled")
+
+	if Ragdolled then
+		Ragdolled.Value = false
+	end
+
+	local BodyVelocity = Instance.new("BodyVelocity")
+	local BodyAngularVelocity = Instance.new("BodyAngularVelocity")
+
+	BodyVelocity.MaxForce = Vector3.new(10000000, -10000000, 10000000)
+	BodyVelocity.P = 100
+	BodyVelocity.Velocity = Vector3.new(math.random(-500, 50), -50, math.random(-50, 50))
+	BodyAngularVelocity.MaxTorque = Vector3.new(-10000000, -10000000, -10000000)
+	BodyAngularVelocity.P = 1000000
+	BodyAngularVelocity.AngularVelocity = Vector3.new(math.random(-500, 300), math.random(-300, 300), math.random(-500, 500))
+	BodyVelocity.Parent = p44
+	BodyAngularVelocity.Parent = p44
+	p45.BreakJointsOnDeath = false
+	p45:ChangeState(Enum.HumanoidStateType.Dead)
+	p45.RigType = Enum.HumanoidRigType.R15
+	t2.value1.delay(0.08, function()
+		if BodyVelocity.Parent then
+			BodyVelocity:Destroy()
+		end
+
+		if not BodyAngularVelocity.Parent then
+			return
+		end
+
+		BodyAngularVelocity:Destroy()
+	end)
+end
+
+t2.value162 = nil
+
+function t2.value162()
+	local value10 = t2.value10 ~= "" and t2.value10 or _G.TargetPlayerName
+
+	if value10 == "" then
+		return
+	end
+
+	local v379 = t2.value2:FindFirstChild(value10)
+	local Character
+
+	if v379 then
+		Character = v379.Character
+	else
+		Character = v379
+	end
+
+	local HumanoidRootPart
+
+	if Character then
+		HumanoidRootPart = Character:FindFirstChild("HumanoidRootPart")
+	else
+		HumanoidRootPart = Character
+	end
+
+	local Humanoid
+
+	if Character then
+		Humanoid = Character:FindFirstChild("Humanoid")
+	else
+		Humanoid = Character
+	end
+
+	local Head
+
+	if Character then
+		Head = Character:FindFirstChild("Head")
+	else
+		Head = Character
+	end
+
+	local v384
+
+	if v379 then
+		if HumanoidRootPart then
+			v384 = Humanoid and Head
+		else
+			v384 = HumanoidRootPart
+		end
+	else
+		v384 = v379
+	end
+
+	if not v384 then
+		return
+	end
+
+	if t2.value154(v379) then
+		return
+	end
+
+	local InPlot = v379:FindFirstChild("InPlot")
+
+	if InPlot then
+		InPlot = v379.InPlot.Value
+	end
+
+	if InPlot then
+		return
+	end
+
+	if Humanoid:GetState() == Enum.HumanoidStateType.Dead then
+		return
+	end
+
+	local v386 = t2.value97()
+	local HumanoidRootPart2
+
+	if v386 then
+		HumanoidRootPart2 = v386:FindFirstChild("HumanoidRootPart")
+	else
+		HumanoidRootPart2 = v386
+	end
+
+	if not (v386 and HumanoidRootPart2) then
+		return
+	end
+
+	if not v386:GetAttribute("SavingOriginalPos") then
+		local v388 = t2.value97()
+		local HumanoidRootPart3
+
+		if v388 then
+			HumanoidRootPart3 = v388:FindFirstChild("HumanoidRootPart")
+		else
+			HumanoidRootPart3 = v388
+		end
+
+		if HumanoidRootPart3 then
+			v388:SetAttribute("OriginalPosition", HumanoidRootPart3:GetPivot())
+		end
+	end
+
+	v386:SetAttribute("SavingOriginalPos", true)
+	getgenv().originalFallenHeight = t2.value5.FallenPartsDestroyHeight
+	t2.value5.FallenPartsDestroyHeight = (0 / 0)
+	HumanoidRootPart2:PivotTo((CFrame.new(HumanoidRootPart.Position + t2.value68)))
+	t2.value155(Character)
+	t2.value91:FireServer(HumanoidRootPart, HumanoidRootPart.CFrame)
+	t2.value1.wait()
+	t2.value92:FireServer(HumanoidRootPart)
+	t2.value1.wait()
+
+	local PartOwner = Head:FindFirstChild("PartOwner")
+
+	if PartOwner then
+		PartOwner = Head.PartOwner.Value == t2.value8.Name
+	end
+
+	if not PartOwner then
+		t2.value160()
+
+		return
+	end
+
+	t2.value1.wait()
+	t2.value161(HumanoidRootPart, Humanoid)
+	t2.value160()
+end
+function t2.value163()
+	if not t2.value69 then
+		t2.value4.Heartbeat:Connect(t2.value162)
+
+		return
+	end
+
+	t2.value69:Disconnect()
+	t2.value4.Heartbeat:Connect(t2.value162)
+end
+function t2.value164()
+	if not t2.value69 then
+		return
+	end
+
+	t2.value69:Disconnect()
+	t2.value69 = nil
+end
+function t2.value165(p46)
+	local v391 = nil
+
+	local function v392()
+		if not t2.value2:FindFirstChild(v391) then
+			return
+		end
+
+		local Humanoid = t2.value97()
+
+		if Humanoid then
+			Humanoid = Humanoid:FindFirstChild("Humanoid")
+		end
+
+		if Humanoid then
+			Humanoid = Humanoid.SeatPart
+		end
+
+		if not Humanoid or Humanoid.Parent.Name ~= "CreatureBlobman" then
+			t2.value120("Loop Kick Blob", "CreatureBlobmanに乗ってからONにしてください", 5)
+
+			return
+		end
+
+		local Parent = Humanoid.Parent
+		local HumanoidRootPart = Parent:FindFirstChild("HumanoidRootPart") or Parent.PrimaryPart
+		local BlobmanSeatAndOwnerScript = Parent:WaitForChild("BlobmanSeatAndOwnerScript")
+		local CreatureGrab = BlobmanSeatAndOwnerScript:WaitForChild("CreatureGrab")
+		local v398 = BlobmanSeatAndOwnerScript.WaitForChild(BlobmanSeatAndOwnerScript, "CreatureDrop")
+		local RightDetector = Parent:WaitForChild("RightDetector")
+		local CFrame_ = HumanoidRootPart.CFrame
+
+		t2.value120("Loop Kick Blob", v391 .. " を攻撃開始", 4)
+
+		local n2 = 0
+		local n3 = 0.002
+		local n4 = 0
+		local v404 = false
+
+		while true do
+			local value85 = t2.value85 and t2.value2:FindFirstChild(v391)
+
+			if not value85 then
+				break
+			end
+
+			local Humanoid2 = t2.value97()
+
+			if Humanoid2 then
+				Humanoid2 = Humanoid2:FindFirstChild("Humanoid")
+			end
+
+			if Humanoid2 then
+				Humanoid2 = Humanoid2.SeatPart
+			end
+
+			if not Humanoid2 or Humanoid2.Parent.Name ~= "CreatureBlobman" then
+				t2.value120("Loop Kick Blob", "Blobから降りました。停止します。", 4)
+				t2.value85 = false
+
+				break
+			end
+
+			local Parent2 = Humanoid2.Parent
+
+			HumanoidRootPart = Parent2:FindFirstChild("HumanoidRootPart") or Parent2.PrimaryPart
+
+			local Character = value85.Character
+			local HumanoidRootPart2
+
+			if Character then
+				HumanoidRootPart2 = Character:FindFirstChild("HumanoidRootPart")
+			else
+				HumanoidRootPart2 = Character
+			end
+
+			if Character then
+				Character = Character:FindFirstChildOfClass("Humanoid")
+			end
+
+			local v410
+
+			if HumanoidRootPart2 then
+				if Character then
+					if Character.Health > 0 then
+						v410 = HumanoidRootPart
+					else
+						v410 = false
+					end
+				else
+					v410 = Character
+				end
+			else
+				v410 = HumanoidRootPart2
+			end
+
+			if v410 then
+				HumanoidRootPart2.Velocity = Vector3.zero
+
+				if v404 then
+					HumanoidRootPart.CFrame = CFrame_
+					HumanoidRootPart.Velocity = Vector3.zero
+
+					local cFrame = CFrame_ * CFrame.new(0, 23, 0)
+
+					HumanoidRootPart2.CFrame = cFrame
+					Character.PlatformStand = true
+					Character.Sit = true
+
+					if n3 <= tick() - n2 then
+						n2 = tick()
+						pcall(function()
+							t2.value91:FireServer(HumanoidRootPart2, cFrame)
+							t2.value92:FireServer(HumanoidRootPart2)
+
+							local RightWeld = RightDetector:FindFirstChild("RightWeld") or RightDetector:FindFirstChildWhichIsA("Weld")
+
+							if not RightWeld then
+								return
+							end
+
+							v398:FireServer(RightWeld)
+							CreatureGrab:FireServer(RightDetector, HumanoidRootPart2, RightWeld)
+						end)
+					end
+				else
+					HumanoidRootPart.CFrame = HumanoidRootPart2.CFrame
+					HumanoidRootPart.Velocity = Vector3.zero
+
+					if n3 <= tick() - n2 then
+						local function v413()
+							Character.PlatformStand = true
+							Character.Sit = true
+							t2.value91:FireServer(HumanoidRootPart2, HumanoidRootPart.CFrame)
+							t2.value92:FireServer(HumanoidRootPart2)
+						end
+
+						n2 = tick()
+						pcall(v413)
+					end
+
+					if n4 == 0 then
+						n4 = tick()
+					end
+
+					if tick() - n4 > 0.35 then
+						HumanoidRootPart.CFrame = CFrame_
+						HumanoidRootPart.Velocity = Vector3.zero
+						n4 = 0
+						v404 = true
+					end
+				end
+			else
+				n4 = 0
+				v404 = false
+			end
+
+			t2.value4.Heartbeat:Wait()
+		end
+
+		if not HumanoidRootPart then
+			return
+		end
+
+		HumanoidRootPart.CFrame = CFrame_
+		HumanoidRootPart.Velocity = Vector3.zero
+	end
+
+	v391 = p46
+	t2.value1.spawn(v392)
+end
+function t2.value166()
+	local v414 = t2.value156()
+
+	if v414 then
+		return v414
+	else
+		t2.value157()
+
+		for _ = 1, 11 do
+			t2.value1.wait(1)
+
+			local v416 = t2.value156()
+
+			if v416 then
+				return v416
+			end
+		end
+
+		return nil
+	end
+end
+function t2.value167()
+	local Humanoid = t2.value97()
+
+	if Humanoid then
+		Humanoid = Humanoid:FindFirstChild("Humanoid")
+	end
+
+	local SeatPart = Humanoid and Humanoid.SeatPart
+
+	if SeatPart then
+	elseif SeatPart then
+		return Humanoid.SeatPart.Parent
+	else
+		return nil
+	end
+
+	SeatPart = Humanoid.SeatPart.Parent.Name == "CreatureBlobman"
+
+	if SeatPart then
+		return Humanoid.SeatPart.Parent
+	else
+		return nil
+	end
+end
+function t2.value168(p47, p48)
+	local v419 = t2.value2:FindFirstChild(p47)
+	local Character = v419 and v419.Character
+
+	if Character then
+		Character = v419.Character:FindFirstChild("HumanoidRootPart")
+	end
+
+	local BlobmanSeatAndOwnerScript
+
+	if Character then
+		if p48 then
+			BlobmanSeatAndOwnerScript = p48:FindFirstChild("BlobmanSeatAndOwnerScript")
+		else
+			BlobmanSeatAndOwnerScript = p48
+		end
+	else
+		BlobmanSeatAndOwnerScript = Character
+	end
+
+	if not BlobmanSeatAndOwnerScript then
+		return
+	end
+
+	local CreatureGrab = p48.BlobmanSeatAndOwnerScript:FindFirstChild("CreatureGrab")
+	local RightDetector = p48:FindFirstChild("RightDetector")
+
+	if RightDetector then
+		RightDetector = RightDetector:FindFirstChild("RightWeld")
+	end
+
+	if not (CreatureGrab and RightDetector) then
+		return
+	end
+
+	CreatureGrab:FireServer(t2.value8, Character, RightDetector)
+end
+function t2.value169(p49)
+	local v424 = t2.value97()
+
+	if not v424 then
+		return
+	end
+
+	local Humanoid = v424.Humanoid
+	local HumanoidRootPart = v424.HumanoidRootPart
+	local v427 = t2.value167() or t2.value166()
+
+	if not v427 then
+		return
+	end
+
+	t2.value1.wait(0.12)
+
+	local VehicleSeat = v427:FindFirstChild("VehicleSeat")
+
+	if VehicleSeat then
+		VehicleSeat:Sit(Humanoid)
+		t2.value1.wait(0.12)
+	end
+
+	local v429 = t2.value2:FindFirstChild(p49)
+	local Character = v429 and v429.Character
+
+	if Character then
+		Character = v429.Character:FindFirstChild("HumanoidRootPart")
+	end
+
+	if not Character then
+		return
+	end
+
+	local CFrame_ = HumanoidRootPart.CFrame
+	local PrimaryPart = v427.PrimaryPart
+
+	if PrimaryPart then
+		PrimaryPart = v427.PrimaryPart.CFrame
+	end
+
+	local CFrame_2 = Character.CFrame
+
+	HumanoidRootPart.CFrame = CFrame_2
+	t2.value1.wait(0.12)
+
+	for _ = 1, 15 do
+		t2.value1.wait()
+		t2.value91:FireServer(Character, Character.CFrame)
+		Character.CFrame = CFrame_2 * CFrame.new(0, 40, 0)
+	end
+
+	t2.value1.wait(0.13)
+	t2.value92:FireServer(Character)
+	t2.value1.wait(0.13)
+	t2.value168(p49, v427)
+	t2.value168(p49, v427)
+	t2.value168(p49, v427)
+	t2.value1.delay(0.55, function()
+		local Parent = HumanoidRootPart
+
+		if Parent then
+			Parent = HumanoidRootPart.Parent
+		end
+
+		if Parent then
+			HumanoidRootPart.CFrame = CFrame_
+		end
+
+		local PrimaryPart2 = v427 and (v427.Parent and v427.PrimaryPart)
+
+		if PrimaryPart2 then
+			PrimaryPart2 = PrimaryPart
+		end
+
+		if not PrimaryPart2 then
+			return
+		end
+
+		v427:SetPrimaryPartCFrame(PrimaryPart)
+	end)
+end
+
+local function v437(p50)
+	local v438 = t2.value2:FindFirstChild(p50)
+
+	if not v438 then
+		return
+	end
+
+	if t2.value87 then
+		local function v439()
+			t2.value87:Disconnect()
+		end
+
+		pcall(v439)
+		t2.value87 = nil
+	end
+
+	t2.value87 = v438.CharacterAdded:Connect(function()
+		if not t2.value86 then
+			return
+		end
+
+		t2.value1.wait(0.75)
+		t2.value169(p50)
+	end)
+end
+
+function t2.value170()
+	local Humanoid = t2.value97()
+	local Parent
+
+	if not Humanoid then
+		if Humanoid then
+			Parent = Humanoid.SeatPart and Humanoid.SeatPart.Parent
+
+			if Parent then
+			elseif Parent then
+				return Humanoid.SeatPart.Parent
+			else
+				return t2.value90 and t2.value90:FindFirstChild("CreatureBlobman") or nil
+			end
+
+			Parent = Humanoid.SeatPart.Parent.Name == "CreatureBlobman"
+		else
+			Parent = Humanoid
+		end
+
+		if Parent then
+			return Humanoid.SeatPart.Parent
+		else
+			return t2.value90 and t2.value90:FindFirstChild("CreatureBlobman") or nil
+		end
+	end
+
+	Humanoid = Humanoid:FindFirstChildOfClass("Humanoid")
+
+	if Humanoid then
+		Parent = Humanoid.SeatPart and Humanoid.SeatPart.Parent
+
+		if Parent then
+		elseif Parent then
+			return Humanoid.SeatPart.Parent
+		else
+			return t2.value90 and t2.value90:FindFirstChild("CreatureBlobman") or nil
+		end
+
+		Parent = Humanoid.SeatPart.Parent.Name == "CreatureBlobman"
+	else
+		Parent = Humanoid
+	end
+
+	if Parent then
+		return Humanoid.SeatPart.Parent
+	else
+		return t2.value90 and t2.value90:FindFirstChild("CreatureBlobman") or nil
+	end
+end
+function t2.value171(p51, p52)
+	if p51 then
+		for _, descendant in ipairs(p51:GetDescendants()) do
+			if descendant:IsA("BasePart") then
+				descendant.CanCollide = p52
+			end
+		end
+	end
+end
+
+t2.value172 = t1.value1
+
+function t2.value173(p53, p54, p55)
+	local BlobmanSeatAndOwnerScript = p53:FindFirstChild("BlobmanSeatAndOwnerScript") or p53:FindFirstChild("BlobmanSeatAndOwnerScript[old]")
+
+	if not BlobmanSeatAndOwnerScript then
+		return
+	end
+
+	local CreatureGrab = BlobmanSeatAndOwnerScript:FindFirstChild("CreatureGrab")
+	local CreatureDrop = BlobmanSeatAndOwnerScript:FindFirstChild("CreatureDrop")
+	local v447 = BlobmanSeatAndOwnerScript.FindFirstChild(BlobmanSeatAndOwnerScript, "CreatureRelease")
+	local RightDetector = p53:FindFirstChild("RightDetector")
+	local v449 = p53.FindFirstChild(p53, "LeftDetector")
+	local v450 = tick() + p55
+
+	while tick() < v450 and (p54 and p54.Parent) do
+		p53:PivotTo(p54.CFrame * CFrame.new(0, 0.5, -2.2))
+		pcall(function()
+			local v451 = RightDetector
+
+			if v451 then
+				v451 = CreatureGrab
+			end
+
+			if v451 then
+				CreatureGrab:FireServer(RightDetector, p54, RightDetector:FindFirstChild("RightWeld") or RightDetector:FindFirstChildWhichIsA("Weld"))
+
+				local RightWeld = RightDetector:FindFirstChild("RightWeld") or RightDetector:FindFirstChildWhichIsA("Weld")
+
+				if v447 and RightWeld then
+					v447:FireServer(RightWeld)
+				end
+
+				if CreatureDrop and RightWeld then
+					CreatureDrop:FireServer(RightWeld)
+				end
+			end
+
+			local v453 = v449
+
+			if v453 then
+				v453 = CreatureGrab
+			end
+
+			if not v453 then
+				return
+			end
+
+			CreatureGrab:FireServer(v449, p54, v449:FindFirstChild("LeftWeld") or v449:FindFirstChildWhichIsA("Weld"))
+
+			local LeftWeld = v449:FindFirstChild("LeftWeld") or v449:FindFirstChildWhichIsA("Weld")
+
+			if v447 and LeftWeld then
+				v447:FireServer(LeftWeld)
+			end
+
+			if not (CreatureDrop and LeftWeld) then
+				return
+			end
+
+			CreatureDrop:FireServer(LeftWeld)
+		end)
+		t2.value1.wait()
+	end
+end
+function t1.value1(p56, p57)
+	if not p56 then
+		if p57 then
+			return
+		end
+
+		t2.value120("エラー", "ターゲットを選択してください", 2)
+
+		return
+	end
+
+	local v455 = t2.value170()
+
+	if v455 then
+		local Character = p56.Character
+
+		if not Character then
+			return
+		end
+
+		local HumanoidRootPart = Character:FindFirstChild("HumanoidRootPart")
+		local Humanoid = Character:FindFirstChildOfClass("Humanoid")
+
+		if not HumanoidRootPart or (not Humanoid or Humanoid.Health <= 0) then
+			return
+		end
+
+		if t2.value88 then
+			return
+		end
+
+		t2.value1.spawn(function()
+			local pivot = v455:GetPivot()
+
+			local function v460()
+				Humanoid.BreakJointsOnDeath = false
+				Humanoid:ChangeState(Enum.HumanoidStateType.Dead)
+			end
+
+			local connection = t2.value4.Stepped:Connect(function()
+				local Parent = v455
+
+				if Parent then
+					Parent = v455.Parent
+				end
+
+				if Parent then
+					local v463 = v455
+
+					for _, descendant in ipairs(v463.GetDescendants(v463)) do
+						if descendant:IsA("BasePart") then
+							descendant.CanCollide = false
+							descendant.AssemblyLinearVelocity = Vector3.zero
+							descendant.AssemblyAngularVelocity = Vector3.zero
+						end
+					end
+				end
+
+				local v466 = t2.value97()
+
+				if v466 then
+					for _, descendant in ipairs(v466.GetDescendants(v466)) do
+						if descendant:IsA("BasePart") then
+							descendant.CanCollide = false
+							descendant.AssemblyLinearVelocity = Vector3.zero
+							descendant.AssemblyAngularVelocity = Vector3.zero
+						end
+					end
+				end
+
+				local Parent2 = Character
+
+				if Parent2 then
+					Parent2 = Character.Parent
+				end
+
+				if not Parent2 then
+					return
+				end
+
+				local v470 = Character
+
+				for _, descendant in ipairs(v470.GetDescendants(v470)) do
+					if descendant:IsA("BasePart") then
+						descendant.CanCollide = false
+						descendant.AssemblyLinearVelocity = Vector3.zero
+						descendant.AssemblyAngularVelocity = Vector3.zero
+					end
+				end
+			end)
+
+			pcall(v460)
+			t2.value173(v455, HumanoidRootPart, 0.35)
+
+			local Parent = v455
+
+			if Parent then
+				Parent = v455.Parent
+			end
+
+			if Parent then
+				v455:PivotTo(pivot)
+			end
+
+			if connection then
+				connection:Disconnect()
+			end
+
+			t2.value1.wait(0.05)
+			t2.value172(v455)
+			t2.value171(v455, true)
+
+			local v474 = t2.value97()
+
+			if v474 then
+				local GetDescendants = v474.GetDescendants
+
+				for _, v in ipairs(GetDescendants(v474)) do
+					if v:IsA("BasePart") and (v.Name == "HumanoidRootPart" or (v.Name == "UpperTorso" or v.Name == "LowerTorso" or v.Name == "Head")) then
+						v.CanCollide = true
+					end
+				end
+			end
+
+			local Parent2 = Character
+
+			if Parent2 then
+				Parent2 = Character.Parent
+			end
+
+			if not Parent2 then
+				return
+			end
+
+			local v479 = Character
+
+			for _, descendant in ipairs(v479.GetDescendants(v479)) do
+				if descendant:IsA("BasePart") and (descendant.Name == "HumanoidRootPart" or (descendant.Name == "UpperTorso" or descendant.Name == "LowerTorso" or descendant.Name == "Head")) then
+					descendant.CanCollide = true
+				end
+			end
+		end)
+
+		return
+	end
+
+	if p57 then
+		return
+	end
+
+	t2.value120("エラー", "ブロブマンが見つかりません", 2)
+end
+
+t2.value174 = t1.value1
+
+function t2.value175(p58)
+	if not p58 then
+		return nil
+	end
+
+	local t8 = {}
+	local v483 = t2.value5:FindFirstChild(p58.Name .. "SpawnedInToys")
+
+	if v483 then
+		table.insert(t8, v483)
+	end
+
+	local v484, v485 = t2.value111(p58)
+	local GetChildren, Humanoid, GrabbableHitbox, Parent
+
+	if not (v484 and v485) then
+		for _, v in ipairs(t8) do
+			GetChildren = v.GetChildren
+
+			for _, v2 in ipairs(GetChildren(v)) do
+				if v2.Name == "CreatureBlobman" and true or v2.Name == "Gucci" then
+					Humanoid = v2:FindFirstChildOfClass("Humanoid")
+
+					if not Humanoid or Humanoid.Health > 0 then
+						GrabbableHitbox = v2:FindFirstChild("GrabbableHitbox") or (v2:FindFirstChild("Head") or v2:FindFirstChildWhichIsA("BasePart"))
+
+						if GrabbableHitbox then
+							Parent = GrabbableHitbox.Parent
+						else
+							Parent = GrabbableHitbox
+						end
+
+						if Parent then
+							return GrabbableHitbox
+						end
+					end
+				end
+			end
+		end
+
+		return nil
+	end
+
+	table.insert(t8, v485)
+
+	for _, v in ipairs(t8) do
+		GetChildren = v.GetChildren
+
+		for _, v2 in ipairs(GetChildren(v)) do
+			if v2.Name == "CreatureBlobman" and true or v2.Name == "Gucci" then
+				Humanoid = v2:FindFirstChildOfClass("Humanoid")
+
+				if not Humanoid or Humanoid.Health > 0 then
+					GrabbableHitbox = v2:FindFirstChild("GrabbableHitbox") or (v2:FindFirstChild("Head") or v2:FindFirstChildWhichIsA("BasePart"))
+
+					if GrabbableHitbox then
+						Parent = GrabbableHitbox.Parent
+					else
+						Parent = GrabbableHitbox
+					end
+
+					if Parent then
+						return GrabbableHitbox
+					end
+				end
+			end
+		end
+	end
+
+	return nil
+end
+function t2.value176(p59)
+	local v498 = t2.value2:FindFirstChild(p59)
+
+	if not v498 then
+		return
+	end
+
+	while true do
+		local value66 = t2.value66
+
+		if value66 then
+			if v498 then
+				value66 = v498.Parent
+			else
+				value66 = v498
+			end
+		end
+
+		if not value66 then
+			break
+		end
+
+		local Character = v498.Character
+		local HumanoidRootPart
+
+		if Character then
+			HumanoidRootPart = Character:FindFirstChild("HumanoidRootPart")
+		else
+			HumanoidRootPart = Character
+		end
+
+		if Character then
+			Character = Character:FindFirstChildOfClass("Humanoid")
+		end
+
+		local v502 = t2.value105(v498)
+
+		if v502 then
+			v502 = not t2.value104(v498)
+		end
+
+		if v502 then
+			local v503 = t2.value98()
+			local v504 = t2.value114(2)
+
+			if v504 then
+				v504 = HumanoidRootPart and Character
+			end
+
+			if v504 then
+				for _ = 1, 50 do
+					if not t2.value66 then
+						break
+					end
+
+					if not t2.value118 then
+						t2.value115 = false
+						t2.value4.Stepped:Connect(function()
+							local v506 = t2.value97()
+							local v507
+
+							if t2.value115 == false then
+								v507 = v506
+							else
+								v507 = false
+							end
+
+							if not v507 then
+								return
+							end
+
+							for _, child in ipairs(v506:GetChildren()) do
+								local isBasePart = child:IsA("BasePart")
+
+								if isBasePart then
+									isBasePart = child.CanCollide
+								end
+
+								if isBasePart then
+									child.CanCollide = false
+								end
+							end
+						end)
+					end
+
+					t2.value109(HumanoidRootPart)
+
+					if not t2.value105(v498) or (t2.value104(v498) or (t2.value106(v498) or HumanoidRootPart.AssemblyLinearVelocity.Magnitude > 500)) then
+						t2.value92:FireServer(HumanoidRootPart)
+						t2.value107(HumanoidRootPart)
+
+						break
+					end
+
+					t2.value1.wait()
+
+					if HumanoidRootPart.Position.Y <= -12 then
+						t2.value116(CFrame.new(HumanoidRootPart.Position + Vector3.new(0, 5, -15)), 2)
+					else
+						t2.value116(CFrame.new(HumanoidRootPart.Position + Vector3.new(0, -10, -10)), 2)
+					end
+
+					Character.BreakJointsOnDeath = false
+					Character:ChangeState(Enum.HumanoidStateType.Dead)
+					Character.Jump = true
+					Character.Sit = false
+				end
+
+				t2.value114(0)
+			end
+
+			if v503 then
+				t2.value117(v503)
+			end
+		end
+
+		t2.value1.wait(0.2)
+	end
+
+	t2.value119()
+
+	local v511 = t2.value98()
+
+	if not v511 then
+		return
+	end
+
+	t2.value117(v511)
+end
+
+local function v512()
+	if t2.value14 then
+		return
+	end
+
+	local v513, v514, v515 = ipairs(t2.value2:GetPlayers())
+	local t9 = {}
+
+	while true do
+		local v517
+
+		v515, v517 = v513(v514, v515)
+
+		if not v515 then
+			break
+		end
+
+		if v517 ~= t2.value8 then
+			table.insert(t9, v517)
+		end
+	end
+
+	if #t9 == 0 then
+		t2.value120("対象がいません", "キックできるプレイヤーがいません。", 3)
+
+		return
+	end
+
+	local v518, v519, v520 = ipairs(t9)
+
+	while true do
+		local v521
+
+		v520, v521 = v518(v519, v520)
+
+		if not v520 then
+			break
+		end
+
+		t2.value15[v521.UserId] = "Targeting"
+	end
+
+	local HumanoidRootPart = t2.value97()
+
+	if HumanoidRootPart then
+		HumanoidRootPart = t2.value97().HumanoidRootPart
+	end
+
+	if HumanoidRootPart then
+		local v523 = HumanoidRootPart.CFrame * CFrame.new(0, 0, -5)
+
+		t2.value94:InvokeServer("CreatureBlobman", v523, unpack_({ Vector3.new(0, 127, 0) }))
+	end
+
+	t2.value1.wait(0.5)
+
+	local CreatureBlobman = t2.value5:FindFirstChild(t2.value8.Name .. "SpawnedInToys")
+	local v525 = t2
+
+	if CreatureBlobman then
+		CreatureBlobman = CreatureBlobman:FindFirstChild("CreatureBlobman")
+	end
+
+	v525.value13 = CreatureBlobman
+
+	if not t2.value13 then
+		for k, v in pairs(t2.value15) do
+			if v == "Targeting" then
+				t2.value15[k] = nil
+			end
+		end
+
+		return
+	end
+
+	local VehicleSeat = t2.value13:FindFirstChild("VehicleSeat")
+	local Character
+
+	if VehicleSeat then
+		Character = t2.value8.Character
+	else
+		Character = VehicleSeat
+	end
+
+	if Character then
+		VehicleSeat:Sit(t2.value8.Character:FindFirstChildOfClass("Humanoid"))
+	end
+
+	t2.value1.wait(0.3)
+
+	local HumanoidRootPart2 = t2.value97()
+
+	if HumanoidRootPart2 then
+		HumanoidRootPart2 = t2.value97().HumanoidRootPart
+	end
+
+	if not HumanoidRootPart2 then
+		for k, v in pairs(t2.value15) do
+			if v == "Targeting" then
+				t2.value15[k] = nil
+			end
+		end
+
+		return
+	end
+
+	for _, v in ipairs(t9) do
+		local Character2 = v.Character
+
+		if Character2 then
+			Character2 = v.Character:FindFirstChild("HumanoidRootPart")
+		end
+
+		if Character2 then
+			HumanoidRootPart2.CFrame = Character2.CFrame
+			t2.value1.wait(0.02)
+
+			for i = 1, 3 do
+				local function v537()
+					t2.value13.BlobmanSeatAndOwnerScript.CreatureGrab:FireServer(t2.value13.LeftDetector, Character2, t2.value13.LeftDetector.LeftWeld)
+					t2.value13.BlobmanSeatAndOwnerScript.CreatureRelease:FireServer(t2.value13.LeftDetector.LeftWeld)
+				end
+
+				pcall(v537)
+
+				if i < 3 then
+					t2.value1.wait(0.08)
+				end
+			end
+		end
+	end
+
+	HumanoidRootPart2.CFrame = CFrame.new(0, 100, 0)
+	t2.value1.wait(0.1)
+
+	local ipairs_ = ipairs
+	local value13 = t2.value13
+
+	for _, descendant in ipairs_(value13.GetDescendants(value13)) do
+		if descendant.IsA(descendant, "BasePart") then
+			pcall(function()
+				descendant.Anchored = true
+			end)
+		end
+	end
+
+	t2.value1.wait(0.1)
+
+	local v542, v543, v544 = ipairs(t9)
+	local n5 = 15
+
+	while true do
+		local v546
+
+		v544, v546 = v542(v543, v544)
+
+		if not v544 then
+			break
+		end
+
+		local Character2 = v546.Character
+
+		if Character2 then
+			Character2 = v546.Character:FindFirstChild("HumanoidRootPart")
+		end
+
+		if Character2 then
+			local v548 = (v544 - 1) * (360 / #t9)
+			local v549 = math.rad(v548)
+			local v550 = n5 * math.cos(v549)
+			local v551 = n5 * math.sin(v549)
+
+			Character2.CFrame = CFrame.new(v550, 110, v551)
+		end
+	end
+
+	t2.value1.wait(0.1)
+
+	for _ = 1, 2 do
+		for _, v in ipairs(t9) do
+			local Character2 = v.Character
+
+			if Character2 then
+				Character2 = v.Character:FindFirstChild("HumanoidRootPart")
+			end
+
+			if Character2 then
+				t2.value1.spawn(function()
+					pcall(function()
+						t2.value91:FireServer(Character2, CFrame.new(Character2.Position))
+						t2.value92:FireServer(Character2)
+					end)
+				end)
+			end
+		end
+
+		t2.value1.wait(0.1)
+	end
+
+	t2.value1.wait(0.3)
+
+	local v556, v557, v558 = ipairs(t9)
+
+	while true do
+		local v559
+
+		v558, v559 = v556(v557, v558)
+
+		if not v558 then
+			break
+		end
+
+		local Character2 = v559.Character
+
+		if Character2 then
+			Character2 = v559.Character:FindFirstChild("HumanoidRootPart")
+		end
+
+		if Character2 then
+			t2.value1.spawn(function()
+				pcall(function()
+					t2.value13.BlobmanSeatAndOwnerScript.CreatureGrab:FireServer(t2.value13.LeftDetector, Character2, t2.value13.LeftDetector.LeftWeld)
+					t2.value13.BlobmanSeatAndOwnerScript.CreatureGrab:FireServer(t2.value13.RightDetector, Character2, t2.value13.RightDetector.RightWeld)
+				end)
+			end)
+		end
+	end
+
+	t2.value1.wait(0.1)
+
+	for _, v in ipairs(t9) do
+		local v563
+
+		if v then
+			v563 = v.Parent == t2.value2
+		else
+			v563 = v
+		end
+
+		if v563 then
+			t2.value15[v.UserId] = "Kicked"
+		end
+	end
+
+	HumanoidRootPart2.CFrame = CFrame.new(0, -50000, 0)
+
+	local ipairs_2 = ipairs
+	local value132 = t2.value13
+
+	for _, descendant in ipairs_2(value132.GetDescendants(value132)) do
+		if descendant:IsA("BasePart") then
+			pcall(function()
+				descendant.Anchored = false
+			end)
+		end
+	end
+
+	t2.value1.wait(1)
+end
+
+function t2.value177()
+	if t2.value18 then
+		return
+	end
+
+	t2.value18 = true
+	t2.value17 = coroutine.create(function()
+		if t2.value95 then
+			local CreateGrabLine = t2.value95:FindFirstChild("CreateGrabLine")
+
+			if CreateGrabLine then
+				while t2.value18 do
+					local SpawnLocation = t2.value5:FindFirstChild("SpawnLocation")
+
+					if not SpawnLocation then
+						SpawnLocation = not t2.value5:FindFirstChild("Spawn") and t2.value97()
+
+						if SpawnLocation then
+							SpawnLocation = t2.value97().HumanoidRootPart
+						end
+					end
+
+					if SpawnLocation then
+						local v570 = math.random(-9000000000, 9000000000)
+						local v571 = math.random(-9000000000, 9000000000)
+						local cFrame = CFrame.new(v570, 0, v571)
+						local cFrame2 = CFrame.new(-v570, 0, -v571)
+						local cFrame3 = CFrame.new(v570, 0, -v571)
+						local v575 = -v570
+						local t10 = {
+							cFrame,
+							cFrame2,
+							cFrame3,
+							unpack_({ CFrame.new(v575, 0, v571) })
+						}
+
+						for _, v in ipairs(t10) do
+							CreateGrabLine:FireServer(SpawnLocation, v)
+						end
+					end
+
+					t2.value1.wait()
+				end
+
+				return
+			else
+				return
+			end
+		end
+	end)
+	coroutine.resume(t2.value17)
+end
+function t2.value178()
+	if not t2.value18 then
+		return
+	end
+
+	if not t2.value17 then
+		return
+	end
+
+	coroutine.close(t2.value17)
+end
+
+local function v579(character)
+	t2.value146(character)
+
+	if t2.value147 then
+		t2.value147:Disconnect()
+	end
+
+	character.DescendantAdded:Connect(t2.value148)
+
+	if t2.value27 then
+		t2.value1.spawn(function()
+			local Humanoid = character:WaitForChild("Humanoid", 5)
+
+			if Humanoid then
+				Humanoid = character:WaitForChild("HumanoidRootPart", 5)
+			end
+
+			if not Humanoid then
+				return
+			end
+
+			t2.value1.wait(1)
+
+			if not t2.value27 then
+				return
+			end
+
+			pcall(t2.value145)
+			t2.value120("System", "Respawned, Auto Gucci active", 3)
+		end)
+	end
+
+	if not t2.value44 then
+		return
+	end
+
+	t2.value143()
+	t2.value1.spawn(function()
+		local Humanoid = character:WaitForChild("Humanoid", 3)
+		local HumanoidRootPart = character:WaitForChild("HumanoidRootPart", 3)
+		local value44 = t2.value44
+
+		if value44 then
+			value44 = Humanoid and HumanoidRootPart
+		end
+
+		if not value44 then
+			return
+		end
+
+		local value46 = t2.value142()
+
+		if value46 then
+			value46 = t2.value46
+		end
+
+		if not value46 then
+			return
+		end
+
+		t2.value144()
+	end)
+end
+
+t1.value1 = t2.value8
+
+if t1.value1.Character then
+	v579(t2.value8.Character)
+end
+
+t2.value8.CharacterAdded:Connect(v579)
+t1.value1 = t2.value8.CharacterAdded
+t1.value1:Connect(function(p60)
+	if not t2.value41 then
+		return
+	end
+
+	local HumanoidRootPart = p60:WaitForChild("HumanoidRootPart", 5)
+
+	if HumanoidRootPart then
+		HumanoidRootPart = t2.value41
+	end
+
+	if not HumanoidRootPart then
+		return
+	end
+
+	t2.value141(p60)
+end)
+
+if v7 then
+	v7:Disconnect()
+end
+
+t1.value1 = t2.value8.CharacterAdded
+t1.value1:Connect(function(p61)
+	if not t2.value35 then
+		return
+	end
+
+	t2.value1.wait(0.1)
+
+	local HumanoidRootPart = p61:FindFirstChild("HumanoidRootPart")
+
+	if HumanoidRootPart then
+		HumanoidRootPart.CFrame = CFrame.new(0, -15000, 0)
+	end
+
+	t2.value1.spawn(t2.value124)
+end)
+t2.value1.spawn(function()
+	while true do
+		repeat
+			t2.value1.wait(0.5)
+		until t2.value27
+
+		local v587 = t2.value97()
+		local Humanoid
+
+		if v587 then
+			Humanoid = v587:FindFirstChildOfClass("Humanoid")
+		else
+			Humanoid = v587
+		end
+
+		if v587 then
+			if Humanoid then
+				Humanoid = Humanoid.Health > 0
+			end
+		else
+			Humanoid = v587
+		end
+
+		if Humanoid then
+			local Map = t2.value5:FindFirstChild("Map")
+
+			if Map then
+				Map = Map:FindFirstChild("AlwaysHereTweenedObjects")
+			end
+
+			if Map then
+				Map = Map:FindFirstChild("Train")
+			end
+
+			if Map then
+				if not t2.value23 then
+					pcall(t2.value145)
+					t2.value120("System", "Train detected, restarted.", 3)
+				end
+			elseif t2.value23 then
+				pcall(function()
+					t2.value23:Disconnect()
+				end)
+				t2.value23 = nil
+				t2.value120("System", "Train lost, waiting...", 3)
+			end
+		end
+	end
+end)
+t1.value1 = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
+t2.value179 = t1.value1
+_G.Rayfield = t2.value179
+t1.value1 = t2.value179
+
+local color3 = Color3.fromRGB(240, 240, 240)
+local color32 = Color3.fromRGB(5, 5, 5)
+local color33 = Color3.fromRGB(10, 10, 10)
+local color34 = Color3.fromRGB(0, 210, 255)
+local color35 = Color3.fromRGB(10, 10, 10)
+local color36 = Color3.fromRGB(0, 25, 45)
+local color37 = Color3.fromRGB(10, 10, 10)
+local color38 = Color3.fromRGB(0, 210, 255)
+local color39 = Color3.fromRGB(0, 210, 255)
+local color310 = Color3.fromRGB(0, 210, 255)
+local color311 = Color3.fromRGB(5, 5, 5)
+local color312 = Color3.fromRGB(10, 10, 10)
+local color313 = Color3.fromRGB(0, 25, 45)
+local color314 = Color3.fromRGB(5, 5, 5)
+local color315 = Color3.fromRGB(0, 210, 255)
+local color316 = Color3.fromRGB(0, 25, 45)
+local color317 = Color3.fromRGB(10, 10, 10)
+local color318 = Color3.fromRGB
+local CreateWindow = t1.value1.CreateWindow
+local t11 = {
+	Name = "ドラえもんハブ",
+	LoadingTitle = "ドラえもんハブ 起動中...",
+	LoadingSubtitle = "by GIMINI",
+	Theme = {
+		TextColor = color3,
+		Background = color32,
+		Topbar = color33,
+		Shadow = color34,
+		NotificationBackground = color35,
+		NotificationActionsBackground = color36,
+		TabBackground = color37,
+		TabStroke = color38,
+		TabBackgroundSelected = color39,
+		TabTextColor = color310,
+		SelectedTabTextColor = color311,
+		ElementBackground = color312,
+		ElementBackgroundHover = color313,
+		SecondaryElementBackground = color314,
+		ElementStroke = color315,
+		SecondaryElementStroke = color316,
+		SliderBackground = color317,
+		SliderProgress = color318(0, 210, 255),
+		SliderStroke = Color3.fromRGB(0, 210, 255),
+		ToggleBackground = Color3.fromRGB(0, 70, 140),
+		ToggleEnabled = Color3.fromRGB(0, 210, 255),
+		ToggleDisabled = Color3.fromRGB(0, 210, 255),
+		ToggleEnabledStroke = Color3.fromRGB(0, 210, 255),
+		ToggleDisabledStroke = Color3.fromRGB(0, 210, 255),
+		ToggleEnabledOuterStroke = Color3.fromRGB(0, 210, 255),
+		ToggleDisabledOuterStroke = Color3.fromRGB(0, 210, 255),
+		DropdownSelected = Color3.fromRGB(0, 25, 45),
+		DropdownUnselected = Color3.fromRGB(10, 10, 10),
+		InputBackground = Color3.fromRGB(0, 15, 30),
+		InputStroke = Color3.fromRGB(0, 210, 255),
+		PlaceholderColor = Color3.fromRGB(0, 120, 200)
+	},
+	ConfigurationSaving = {
+		Enabled = true,
+		FolderName = "DoraemonHubIntegratedEdition",
+		FileName = "HubConfig"
+	},
+	Discord = {
+		Enabled = false
+	},
+	KeySystem = false
+}
+local v610 = CreateWindow(t1.value1, t11)
+
+t1.value1 = v610:CreateTab("プレイヤー", 4483362458)
+
+local v611 = v610:CreateTab("グラブ", 4483362458)
+local v612 = v610:CreateTab("ディフェンス", 4483345998)
+local v613 = v610:CreateTab("ループ", 4483362458)
+local v614 = v610:CreateTab("オール", 4483345998)
+local esp = v610:CreateTab("ESP", 4483362458)
+
+t1.value1:CreateSection("速度設定")
+t1.value1:CreateToggle({
+	Name = "走る速度",
+	CurrentValue = false,
+	Flag = "super_speed_toggle",
+	Callback = function(p62)
+		_G.SuperSpeed = p62
+	end
+})
+t1.value1.CreateSlider(t1.value1, {
+	Name = "走る速度",
+	Range = { 0.1, 5 },
+	Increment = 0.05,
+	CurrentValue = 0.15,
+	Flag = "speed_multiplier_slider",
+	Callback = function(p63)
+		getgenv().Multiplier = p63
+	end
+})
+t1.value1:CreateSection("ジャンプ設定")
+t1.value1.CreateToggle(t1.value1, {
+	Name = "インフィニティジャンプ",
+	CurrentValue = false,
+	Flag = "InfJumpToggle",
+	Callback = function(p64)
+		t2.value9 = p64
+		t2.value179:Notify({
+			Title = "Infinity Jump",
+			Content = "Status: " .. (p64 and "Enabled" or p64) or "Disabled",
+			Duration = 2,
+			Image = "info"
+		})
+	end
+})
+v611:CreateSection("グラブ設定")
+v611.CreateToggle(v611, {
+	Name = "スーパーグラブ",
+	CurrentValue = false,
+	Flag = "SuperStrengthToggle",
+	Callback = function(p65)
+		_G.SuperStrength = p65
+	end
+})
+
+local CreateSlider = v611.CreateSlider
+
+function t1.value1(p66)
+	_G.Strength = p66
+end
+
+CreateSlider(v611, {
+	Name = "パワー",
+	Range = { 400, 10000 },
+	Increment = 100,
+	Suffix = "Power",
+	CurrentValue = 400,
+	Flag = "StrengthSlider",
+	Callback = t1.value1
+})
+v611.CreateToggle(v611, {
+	Name = "キルグラブ",
+	CurrentValue = false,
+	Flag = "DeathGrabToggle",
+	Callback = function(p67)
+		_G.Death_Grab = p67
+	end
+})
+v611:CreateToggle({
+	Name = "ノークリップグラブ",
+	CurrentValue = false,
+	Flag = "NoclipGrabToggle",
+	Callback = function(p68)
+		_G.NoclipGrab = p68
+	end
+})
+
+local t12 = {
+	Name = "トリガーボット",
+	CurrentValue = t2.value112.Enabled,
+	Flag = "TriggerbotToggle",
+	Callback = function(p69)
+		t2.value112.Enabled = p69
+
+		local Enabled = t2.value112.Enabled
+
+		if Enabled then
+			Enabled = not t2.value112.Connection
+		end
+
+		if Enabled then
+			t2.value112.Connection = t2.value4.Heartbeat:Connect(function()
+				t2.value112:OnHeartbeat()
+			end)
+
+			return
+		end
+
+		local v619 = not t2.value112.Enabled
+
+		if v619 then
+			v619 = t2.value112.Connection
+		end
+
+		if not v619 then
+			return
+		end
+
+		t2.value112.Connection:Disconnect()
+		t2.value112.Connection = nil
+	end
+}
+
+v611.CreateToggle(v611, t12)
+v612:CreateSection("アンチグラブ")
+v612.CreateToggle(v612, {
+	Name = "アンチグラブ",
+	CurrentValue = false,
+	Flag = "super_speed_toggle",
+	Callback = function(p70)
+		t2.value19 = p70
+
+		if not p70 then
+			return
+		end
+
+		t2.value1.spawn(t2.value121)
+	end
+})
+v612:CreateSection("キル回避 (Void Fling)")
+v612.CreateToggle(v612, {
+	Name = "キル回避",
+	CurrentValue = false,
+	Flag = "kill_bypass_toggle",
+	Callback = function(p71)
+		if p71 then
+			t2.value1.spawn(t2.value127)
+		else
+			t2.value128()
+		end
+	end
+})
+v612:CreateSection("アンチループ (Anti LoopKill)")
+t2.value8.CharacterAdded:Connect(function(character)
+	if not t2.value40 then
+		return
+	end
+
+	t2.value129(character)
+end)
+t1.value1 = v612.CreateToggle
+t1.value1(v612, {
+	Name = "アンチループ",
+	CurrentValue = false,
+	Flag = "kill_dodge_toggle",
+	Callback = function(p72)
+		t2.value40 = p72
+
+		if p72 then
+			local v620 = t2.value97()
+
+			if not v620 then
+				t2.value120("Anti LoopKill", "Activated!", 3)
+
+				return
+			end
+
+			t2.value129(v620)
+			t2.value120("Anti LoopKill", "Activated!", 3)
+		else
+			local HumanoidRootPart = t2.value97()
+
+			if HumanoidRootPart then
+				HumanoidRootPart = HumanoidRootPart:FindFirstChild("HumanoidRootPart")
+			end
+
+			if not HumanoidRootPart then
+				t2.value120("Anti LoopKill", "Deactivated", 3)
+
+				return
+			end
+
+			HumanoidRootPart.Anchored = false
+			t2.value120("Anti LoopKill", "Deactivated", 3)
+		end
+	end
+})
+v612:CreateSection("アンチエクスプロージョン")
+v612:CreateToggle({
+	Name = "アンチエクスプロージョン",
+	CurrentValue = false,
+	Flag = "AntiExplosionToggle",
+	Callback = function(p73)
+		t2.value55 = p73
+
+		if p73 then
+			t2.value130()
+
+			if t2.value57 then
+				return
+			end
+
+			t2.value57 = t2.value8.CharacterAdded:Connect(function()
+				if not t2.value55 then
+					return
+				end
+
+				t2.value1.wait(1)
+				t2.value130()
+			end)
+
+			return
+		end
+
+		if t2.value56 then
+			t2.value56:Disconnect()
+		end
+
+		if t2.value57 then
+			t2.value57:Disconnect()
+		end
+
+		local v622 = t2.value97()
+		local HumanoidRootPart
+
+		if v622 then
+			HumanoidRootPart = v622:FindFirstChild("HumanoidRootPart")
+		else
+			HumanoidRootPart = v622
+		end
+
+		if not HumanoidRootPart then
+			return
+		end
+
+		v622.HumanoidRootPart.Anchored = false
+	end
+})
+v612:CreateSection("アンチファイヤー")
+v612:CreateToggle({
+	Name = "アンチファイヤー",
+	CurrentValue = false,
+	Flag = "AntiBurnToggle_1",
+	Callback = function(p74)
+		t2.value52 = p74
+
+		if p74 then
+			t2.value131()
+
+			if t2.value54 then
+				return
+			end
+
+			t2.value54 = t2.value8.CharacterAdded:Connect(function()
+				if not t2.value52 then
+					return
+				end
+
+				t2.value1.wait(1)
+				t2.value131()
+			end)
+
+			return
+		end
+
+		if t2.value53 then
+			t2.value53:Disconnect()
+		end
+
+		if not t2.value54 then
+			return
+		end
+
+		t2.value54:Disconnect()
+	end
+})
+v612:CreateSection("バナナ")
+t1.value1 = v612.CreateButton
+t1.value1(v612, {
+	Name = "アンチバナナ",
+	Callback = function()
+		local result = t2.value97() or t2.value8.CharacterAdded:Wait()
+		local Humanoid = result:FindFirstChildOfClass("Humanoid")
+		local LeftLeg = result:FindFirstChild("Left Leg")
+		local RightLeg = result:FindFirstChild("Right Leg")
+		local Torso = result:FindFirstChild("Torso") or result:FindFirstChild("UpperTorso")
+		local v629 = result.FindFirstChild(result, "HumanoidRootPart")
+		local v630
+
+		if LeftLeg then
+			if RightLeg then
+				if Torso then
+					if v629 then
+						v630 = Humanoid
+					else
+						v630 = v629
+					end
+				else
+					v630 = Torso
+				end
+			else
+				v630 = RightLeg
+			end
+		else
+			v630 = LeftLeg
+		end
+
+		if not v630 then
+			t2.value179:Notify({
+				Title = "Error",
+				Content = "Could not find required character parts.",
+				Duration = 3,
+				Image = 4483362458
+			})
+
+			return
+		end
+
+		if t2.value34 then
+			t2.value34:Disconnect()
+			t2.value34 = nil
+		end
+
+		local FallenPartsDestroyHeight = t2.value5.FallenPartsDestroyHeight
+		local CFrame_ = Torso.CFrame
+
+		t2.value5.FallenPartsDestroyHeight = -100
+		t2.value3:WaitForChild("CharacterEvents"):WaitForChild("RagdollRemote"):FireServer(v629, 2)
+		t2.value1.wait(0.5)
+		LeftLeg.CFrame = CFrame.new(0, -10000, 0)
+		RightLeg.CFrame = CFrame.new(0, -10000, 0)
+		t2.value1.wait(0.3)
+		Torso.CFrame = CFrame.new(0, -9970, 0)
+		t2.value1.wait(0.5)
+		Torso.CFrame = CFrame_
+		t2.value1.wait(0.5)
+		t2.value5.FallenPartsDestroyHeight = FallenPartsDestroyHeight
+		Humanoid.HipHeight = 2
+		t2.value34 = Humanoid:GetPropertyChangedSignal("HipHeight"):Connect(function()
+			if Humanoid and Humanoid.Parent then
+				if Humanoid.HipHeight == 2 then
+					return
+				end
+
+				Humanoid.HipHeight = 2
+			else
+				if not t2.value34 then
+					return
+				end
+
+				t2.value34:Disconnect()
+				t2.value34 = nil
+			end
+		end)
+
+		local BalanceGyro = v629:FindFirstChild("BalanceGyro")
+
+		if BalanceGyro then
+			BalanceGyro.maxTorque = Vector3.new(math.huge, 0, math.huge)
+			BalanceGyro.P = 50000
+			BalanceGyro.D = 500
+			BalanceGyro.CFrame = CFrame.new()
+		else
+			local BodyGyro = Instance.new("BodyGyro")
+
+			BodyGyro.Name = "BalanceGyro"
+			BodyGyro.maxTorque = Vector3.new(math.huge, 0, math.huge)
+			BodyGyro.P = 50000
+			BodyGyro.D = 500
+			BodyGyro.CFrame = CFrame.new()
+			BodyGyro.Parent = v629
+		end
+
+		t2.value179:Notify({
+			Title = "Success",
+			Content = "Legs deleted and height locked at 2.0!",
+			Duration = 3,
+			Image = 4483362458
+		})
+	end
+})
+v612:CreateSection("アンチPCLD")
+t1.value1 = v612.CreateButton
+t1.value1(v612, {
+	Name = "PCLD ブレイク",
+	Callback = function()
+		local cFrame = CFrame.new(-272.2197265625, -7.3504037857056, 475.01089477539)
+
+		t2.value5.FallenPartsDestroyHeight = (0 / 0)
+
+		local t13 = {}
+		local HumanoidRootPart = nil
+		local connection = nil
+		local u639 = false
+
+		local function v640()
+			local v641 = t2.value97()
+
+			if not v641 then
+				return
+			end
+
+			HumanoidRootPart = v641:WaitForChild("HumanoidRootPart")
+
+			local GetDescendants = v641.GetDescendants
+
+			for _, v in ipairs(GetDescendants(v641)) do
+				if v:IsA("Motor6D") then
+					t13[v] = v.Part0
+					v.Part0 = nil
+				end
+			end
+
+			HumanoidRootPart.CFrame = cFrame
+			connection = t2.value4.RenderStepped:Connect(function()
+				local Parent = HumanoidRootPart
+
+				if Parent then
+					Parent = HumanoidRootPart.Parent
+				end
+
+				if not Parent then
+					return
+				end
+
+				HumanoidRootPart.AssemblyLinearVelocity = Vector3.zero
+				HumanoidRootPart.AssemblyAngularVelocity = Vector3.zero
+			end)
+		end
+		local function v646()
+			local Parent
+
+			if not connection then
+				for k, v in pairs(t13) do
+					if k then
+						Parent = k.Parent
+					else
+						Parent = k
+					end
+
+					if Parent then
+						k.Part0 = v
+					end
+				end
+
+				return
+			end
+
+			connection:Disconnect()
+
+			for k, v in pairs(t13) do
+				if k then
+					Parent = k.Parent
+				else
+					Parent = k
+				end
+
+				if Parent then
+					k.Part0 = v
+				end
+			end
+		end
+
+		u639 = not u639
+
+		if u639 then
+			v640()
+		else
+			v646()
+		end
+
+		t2.value1.wait(0.12)
+		u639 = not u639
+
+		if u639 then
+			v640()
+		else
+			v646()
+		end
+
+		t2.value8.CharacterAdded:Once(function()
+			t2.value1.wait(0.25)
+			u639 = not u639
+
+			if u639 then
+				v640()
+			else
+				v646()
+			end
+
+			t2.value1.wait(0.12)
+			u639 = not u639
+
+			if u639 then
+				v640()
+			else
+				v646()
+			end
+		end)
+		t2.value179:Notify({
+			Title = "Success",
+			Content = "Break PCLD が実行されました",
+			Duration = 3,
+			Image = 4483362458
+		})
+	end
+})
+v612:CreateSection("アンチネットワークオーナーシップ")
+v612:CreateToggle({
+	Name = "アンチアタッカー",
+	CurrentValue = false,
+	Flag = "AutoAttackerToggle",
+	Callback = function(p75)
+		_G.AutoAttacker = p75
+	end
+})
+t1.value1 = v612.CreateToggle
+t1.value1(v612, {
+	Name = "アンチブロブマングラブ",
+	CurrentValue = false,
+	Flag = "antiblobmanaura_toggle",
+	Callback = function(p76)
+		t2.value32 = p76
+
+		if p76 then
+			if t2.value33 then
+				t2.value1.cancel(t2.value33)
+			end
+
+			t2.value33 = t2.value1.spawn(function()
+				while t2.value32 do
+					local HumanoidRootPart = t2.value97(t2.value8)
+
+					if HumanoidRootPart then
+						HumanoidRootPart = HumanoidRootPart:FindFirstChild("HumanoidRootPart")
+					end
+
+					if HumanoidRootPart then
+						local ipairs_ = ipairs
+						local value2 = t2.value2
+
+						for _, player in ipairs_(value2.GetPlayers(value2)) do
+							if player ~= t2.value8 then
+								local HumanoidRootPart2 = t2.value97(player)
+								local Humanoid
+
+								if HumanoidRootPart2 then
+									Humanoid = HumanoidRootPart2:FindFirstChildOfClass("Humanoid")
+								else
+									Humanoid = HumanoidRootPart2
+								end
+
+								if HumanoidRootPart2 then
+									HumanoidRootPart2 = HumanoidRootPart2:FindFirstChild("HumanoidRootPart")
+								end
+
+								if Humanoid and HumanoidRootPart2 then
+									local SeatPart = Humanoid.SeatPart
+									local Parent = SeatPart and SeatPart.Parent
+
+									if Parent then
+										Parent = SeatPart.Parent.Name == "CreatureBlobman"
+									end
+
+									if Parent and (HumanoidRootPart2.Position - HumanoidRootPart.Position).Magnitude <= 19 then
+										t2.value91:FireServer(HumanoidRootPart2, HumanoidRootPart2.CFrame)
+										t2.value1.wait(0.01)
+									end
+								end
+							end
+						end
+					end
+
+					t2.value1.wait(0.01)
+				end
+			end)
+
+			return
+		end
+
+		if not t2.value33 then
+			return
+		end
+
+		t2.value1.cancel(t2.value33)
+	end
+})
+t1.value1 = v612.CreateToggle
+t1.value1(v612, {
+	Name = "アンチキル",
+	CurrentValue = false,
+	Flag = "AntiKillHamburgerToggle",
+	Callback = function(p77)
+		if p77 then
+			if t2.value20 then
+				t2.value20:Disconnect()
+				t2.value20 = nil
+			end
+
+			t2.value20 = t2.value4.Heartbeat:Connect(function()
+				local v661 = t2.value97()
+				local Humanoid
+
+				if v661 then
+					Humanoid = v661:FindFirstChildOfClass("Humanoid")
+				else
+					Humanoid = v661
+				end
+
+				if not Humanoid or Humanoid.Health <= 0 then
+					return
+				end
+
+				local FoodHamburger = t2.value5:FindFirstChild(t2.value8.Name .. "SpawnedInToys")
+
+				if FoodHamburger then
+					FoodHamburger = FoodHamburger:FindFirstChild("FoodHamburger")
+				end
+
+				if FoodHamburger then
+				elseif os.clock() - t2.value22 > 0.5 then
+					t2.value94:InvokeServer("FoodHamburger", CFrame.new(-45.96, -5.64, -8.54, 0.88, -0.18, 0.42, 0, 0.91, 0.4, -0.46, -0.35, 0.81), Vector3.new(0, 27.67, 0))
+					os.clock()
+
+					return
+				else
+					return
+				end
+
+				if not t2.value21 then
+					FoodHamburger.HoldPart.HoldItemRemoteFunction:InvokeServer(FoodHamburger, v661)
+
+					return
+				end
+
+				FoodHamburger.HoldPart.DropItemRemoteFunction:InvokeServer(FoodHamburger, CFrame.new(-49.36, -8.87, -15.02, 1, 0, 0, 0, 1, 0, 0, 0, 1), Vector3.new(0, 27.67, 0))
+			end)
+
+			return
+		end
+
+		if not t2.value20 then
+			return
+		end
+
+		t2.value20:Disconnect()
+	end
+})
+t1.value1 = v612.CreateToggle
+t1.value1(v612, {
+	Name = "アンチブロブマンキル",
+	CurrentValue = false,
+	Flag = "AntiBlobmanKillToggle",
+	Callback = function(p78)
+		t2.value28 = p78
+
+		if p78 then
+			t2.value29 = t2.value1.spawn(t2.value132)
+
+			return
+		end
+
+		if not t2.value29 then
+			return
+		end
+
+		t2.value1.cancel(t2.value29)
+	end
+})
+t1.value1 = v612.CreateToggle
+t1.value1(v612, {
+	Name = "アンチブロブマン",
+	CurrentValue = false,
+	Flag = "AntiblobToggle",
+	Callback = function(p79)
+		t2.value30 = p79
+
+		if p79 then
+			if t2.value31 then
+				t2.value31:Disconnect()
+			end
+
+			t2.value1.spawn(t2.value138)
+			t2.value31 = t2.value8.CharacterAdded:Connect(function(_)
+				if not t2.value30 then
+					return
+				end
+
+				t2.value1.wait(1)
+				t2.value133()
+				t2.value1.wait(0.5)
+				t2.value136()
+			end)
+
+			return
+		end
+
+		if not t2.value31 then
+			t2.value137()
+
+			return
+		end
+
+		t2.value31:Disconnect()
+		t2.value137()
+	end
+})
+v612:CreateSection("ブロブマンGUCCI / 乗り物")
+t1.value1 = v612.CreateToggle
+t1.value1(v612, {
+	Name = "アンチグラブGUCCI",
+	CurrentValue = false,
+	Flag = "GucciToggle",
+	Callback = function(p80)
+		t2.value41 = p80
+
+		if t2.value41 then
+			local v664 = t2.value97()
+
+			if v664 then
+				t2.value141(v664)
+
+				return
+			else
+				return
+			end
+		end
+
+		t2.value140()
+	end
+})
+t1.value1 = v612.CreateToggle
+t1.value1(v612, {
+	Name = "トラクターGUCCI(透明化)",
+	CurrentValue = false,
+	Flag = "TractorGucciToggle",
+	Callback = function(p81)
+		t2.value44 = p81
+
+		if p81 then
+			local value46 = t2.value142()
+
+			if value46 then
+			elseif value46 then
+				t2.value144()
+
+				return
+			else
+				return
+			end
+
+			value46 = t2.value46
+
+			if value46 then
+				t2.value144()
+
+				return
+			else
+				return
+			end
+		else
+			t2.value143()
+		end
+	end
+})
+v612:CreateToggle({
+	Name = "トレインGUCCI（透明化）",
+	CurrentValue = false,
+	Flag = "AntiGucciTrainToggle",
+	Callback = function(p82)
+		t2.value27 = p82
+
+		if p82 then
+			pcall(t2.value145)
+			t2.value120("System", "Gucci active (monitoring)", 3)
+
+			return
+		end
+
+		if t2.value23 then
+			local function v666()
+				t2.value23:Disconnect()
+			end
+
+			pcall(v666)
+			t2.value23 = nil
+		end
+
+		if not t2.value24 then
+			t2.value120("System", "Gucci deactivated", 3)
+
+			return
+		end
+
+		pcall(function()
+			t2.value24:Disconnect()
+		end)
+		t2.value24 = nil
+		t2.value120("System", "Gucci deactivated", 3)
+	end
+})
+v612:CreateSection("描画負荷軽減")
+v612:CreateToggle({
+	Name = "アンチラグ",
+	CurrentValue = false,
+	Flag = "antilag_toggle",
+	Callback = function(p83)
+		if t2.value59 then
+			t2.value59.Disabled = p83
+		else
+			t2.value59 = t2.value58:FindFirstChild("CharacterAndBeamMove")
+
+			if t2.value59 then
+				t2.value59.Disabled = p83
+
+				return
+			else
+				warn("CharacterAndBeamMove script was not found in PlayerScripts.")
+
+				return
+			end
+		end
+	end
+})
+v613:CreateSection("ターゲット")
+
+local v667 = t2.value99()
+
+t1.value1 = v613.CreateDropdown
+t1.value1 = t1.value1(v613, {
+	Name = "ターゲット選択",
+	Options = v667,
+	CurrentOption = { "" },
+	MultipleOptions = false,
+	Callback = function(p84)
+		local v668 = p84[1] or ""
+		local value10 = string.match(v668, "@([%w_]+)") or ""
+
+		t2.value10 = value10
+		_G.TargetPlayerName = value10
+	end
+})
+t2.value180 = t1.value1
+v613:CreateButton({
+	Name = "ターゲット選択読み込み",
+	Callback = function()
+		t2.value180:Refresh(unpack_({ t2.value99() }))
+		t2.value179:Notify({
+			Title = "Updated",
+			Content = "Player list refreshed",
+			Duration = 2
+		})
+	end
+})
+v613:CreateSection("スノーボール")
+
+local CreateToggle = v613.CreateToggle
+
+function t1.value1(p85)
+	t2.value64 = p85
+
+	if p85 then
+		local value10 = t2.value10 ~= "" and t2.value10 or _G.TargetPlayerName
+
+		if value10 == "" then
+			t2.value179:Notify({
+				Title = "Error",
+				Content = "Targetを選択してください",
+				Duration = 3
+			})
+
+			return
+		else
+			t2.value65 = t2.value1.spawn(t2.value149, value10)
+			t2.value179:Notify({
+				Title = "Activated",
+				Content = "Targeting " .. value10 .. " with snowballs",
+				Duration = 2
+			})
+
+			return
+		end
+	end
+
+	if not t2.value65 then
+		return
+	end
+
+	t2.value1.cancel(t2.value65)
+end
+
+CreateToggle(v613, {
+	Name = "ループスノーボール",
+	CurrentValue = false,
+	Flag = "SnowballToggle",
+	Callback = t1.value1
+})
+v613:CreateSection("ループキック")
+
+local CreateToggle2 = v613.CreateToggle
+
+function t1.value1(p86)
+	_G.LoopKickOwnership = p86
+
+	if not p86 then
+		return
+	end
+
+	t2.value1.spawn(function()
+		while _G.LoopKickOwnership do
+			local v673 = t2.value98()
+			local value10 = t2.value10 ~= "" and t2.value10 or _G.TargetPlayerName
+
+			if value10 ~= "" then
+				local v675 = t2.value2:FindFirstChild(value10)
+				local Character = v675 and v675.Character
+
+				if Character then
+					Character = v675.Character:FindFirstChild("HumanoidRootPart")
+				end
+
+				local v677
+
+				if v675 then
+					v677 = Character and (t2.value105(v675) and not t2.value104(v675))
+
+					if v677 then
+						v677 = t2.value114(2)
+					end
+				else
+					v677 = v675
+				end
+
+				if v677 then
+					for _ = 1, 50 do
+						if not t2.value118 then
+							t2.value115 = false
+							t2.value4.Stepped:Connect(function()
+								local v679 = t2.value97()
+								local v680
+
+								if t2.value115 == false then
+									v680 = v679
+								else
+									v680 = false
+								end
+
+								if not v680 then
+									return
+								end
+
+								for _, child in ipairs(v679:GetChildren()) do
+									local isBasePart = child:IsA("BasePart")
+
+									if isBasePart then
+										isBasePart = child.CanCollide
+									end
+
+									if isBasePart then
+										child.CanCollide = false
+									end
+								end
+							end)
+						end
+
+						t2.value109(Character)
+
+						if not t2.value105(v675) or (t2.value104(v675) or (not _G.LoopKickOwnership or (t2.value106(v675) or Character.AssemblyLinearVelocity.Magnitude > 500))) then
+							t2.value92:FireServer(Character)
+							t2.value1.wait()
+							t2.value107(Character)
+
+							break
+						end
+
+						t2.value1.wait()
+
+						if Character.Position.Y <= -12 then
+							t2.value116(CFrame.new(Character.Position + Vector3.new(0, 5, -15)), 2)
+						else
+							t2.value116(CFrame.new(Character.Position + Vector3.new(0, -10, -10)), 2)
+						end
+					end
+
+					t2.value114(0)
+				end
+			end
+
+			if v673 then
+				t2.value117(v673)
+			end
+
+			t2.value1.wait(0.2)
+		end
+
+		t2.value119()
+
+		local v684 = t2.value98()
+
+		if not v684 then
+			return
+		end
+
+		t2.value117(v684)
+	end)
+end
+
+CreateToggle2(v613, {
+	Name = "ループキック",
+	CurrentValue = false,
+	Flag = "lkickowner_toggle",
+	Callback = t1.value1
+})
+v613:CreateSection("ループキル")
+
+local CreateToggle3 = v613.CreateToggle
+
+function t1.value1(p87)
+	t2.value66 = p87
+
+	if not p87 then
+		return
+	end
+
+	local value10 = t2.value10 ~= "" and t2.value10 or _G.TargetPlayerName
+
+	if value10 ~= "" then
+		t2.value179:Notify({
+			Title = "FTAP Loop Kill",
+			Content = "Targeting: " .. value10,
+			Duration = 3
+		})
+		t2.value1.spawn(t2.value176, value10)
+
+		return
+	end
+
+	t2.value179:Notify({
+		Title = "Error",
+		Content = "Targetを選択してください",
+		Duration = 3
+	})
+end
+
+CreateToggle3(v613, {
+	Name = " ループキル ",
+	CurrentValue = false,
+	Flag = "FTAPLoopKillToggle",
+	Callback = t1.value1
+})
+
+function t1.value1(p88)
+	t2.value70 = p88
+
+	if p88 then
+		local value10 = t2.value10 ~= "" and t2.value10 or _G.TargetPlayerName
+
+		if value10 == "" then
+			t2.value179:Notify({
+				Title = "Error",
+				Content = "ターゲットを選択してください",
+				Duration = 3
+			})
+
+			return
+		else
+			local value179 = t2.value179
+
+			value179.Notify(value179, {
+				Title = "Void Loop Kill",
+				Content = "Targeting: " .. value10,
+				Duration = 3
+			})
+			t2.value163()
+
+			return
+		end
+	else
+		t2.value164()
+	end
+end
+
+v613:CreateToggle({
+	Name = "ループキル（ヴォイド）",
+	CurrentValue = false,
+	Flag = "LoopKillVoidToggle",
+	Callback = t1.value1
+})
+v613:CreateSection("スパム")
+
+local CreateToggle4 = v613.CreateToggle
+
+function t1.value1(p89)
+	if not p89 then
+		t2.value153()
+
+		return
+	end
+
+	t2.value153()
+
+	local value10 = t2.value10 ~= "" and t2.value10 or _G.TargetPlayerName
+	local value2 = t2.value2
+	local v692 = value2.FindFirstChild(value2, value10)
+
+	if not v692 then
+		t2.value179:Notify({
+			Title = "Error",
+			Content = "Targetを選択してください",
+			Duration = 3
+		})
+
+		return
+	end
+
+	t2.value73 = true
+	t2.value151(true)
+	t2.value179:Notify({
+		Title = "Spam Kick (wait)",
+		Content = "Started on " .. v692.Name,
+		Duration = 3
+	})
+	t2.value1.spawn(function()
+		local HumanoidRootPart = t2.value97()
+
+		if HumanoidRootPart then
+			HumanoidRootPart = HumanoidRootPart:FindFirstChild("HumanoidRootPart")
+		end
+
+		if not HumanoidRootPart then
+			t2.value153()
+
+			return
+		end
+
+		local CFrame_ = HumanoidRootPart.CFrame
+
+		t2.value78 = CFrame_
+		t2.value79 = false
+		t2.value80 = 0
+		t2.value81 = 0
+
+		local v695 = false
+
+		while t2.value73 do
+			local v696 = t2.value2:FindFirstChild(v692.Name)
+
+			if v696 then
+				local HumanoidRootPart2 = t2.value97()
+
+				if HumanoidRootPart2 then
+					HumanoidRootPart2 = HumanoidRootPart2:FindFirstChild("HumanoidRootPart")
+				end
+
+				local Character = v696.Character
+				local HumanoidRootPart3
+
+				if Character then
+					HumanoidRootPart3 = Character:FindFirstChild("HumanoidRootPart")
+				else
+					HumanoidRootPart3 = Character
+				end
+
+				if Character then
+					Character = Character:FindFirstChildOfClass("Humanoid")
+				end
+
+				if HumanoidRootPart3 then
+					if Character then
+						if Character.Health > 0 then
+							Character = HumanoidRootPart2
+						else
+							Character = false
+						end
+					end
+				else
+					Character = HumanoidRootPart3
+				end
+
+				if Character then
+					if not v695 then
+						t2.value1.spawn(function()
+							while true do
+								local value73 = t2.value73 and HumanoidRootPart3
+
+								if value73 then
+									value73 = HumanoidRootPart3.Parent
+								end
+
+								if not value73 then
+									return
+								end
+
+								local function v701()
+									t2.value92:FireServer(HumanoidRootPart3)
+								end
+
+								pcall(v701)
+								t2.value1.wait()
+								pcall(function()
+									t2.value91:FireServer(HumanoidRootPart3, HumanoidRootPart3.CFrame)
+								end)
+								t2.value1.wait()
+							end
+						end)
+						v695 = true
+					end
+
+					if t2.value79 then
+						HumanoidRootPart2.CFrame = t2.value78
+
+						local cFrame = t2.value78 * CFrame.new(0, 17, 0)
+
+						HumanoidRootPart2.AssemblyLinearVelocity = Vector3.zero
+						HumanoidRootPart2.AssemblyAngularVelocity = Vector3.zero
+
+						local value76 = t2.value76
+
+						if value76 then
+							value76 = t2.value76.Parent
+						end
+
+						if value76 then
+							t2.value76.Position = cFrame.Position
+
+							if t2.value77 then
+								t2.value77.CFrame = cFrame
+							end
+						else
+							v352(HumanoidRootPart3, cFrame.Position)
+						end
+
+						local v704
+
+						if t2.value81 > 0 then
+							v704 = tick() - t2.value81 > 0.3
+						else
+							v704 = false
+						end
+
+						if v704 then
+							if (HumanoidRootPart3.Position - cFrame.Position).Magnitude > 10 then
+								t2.value79 = false
+								t2.value80 = 0
+								t2.value81 = 0
+								t2.value152()
+								HumanoidRootPart2.CFrame = HumanoidRootPart3.CFrame * CFrame.new(0, 0, 3)
+							else
+								t2.value81 = tick()
+							end
+						end
+					else
+						local function v705()
+							t2.value91:FireServer(HumanoidRootPart3, HumanoidRootPart3.CFrame)
+							t2.value92:FireServer(HumanoidRootPart3)
+						end
+
+						HumanoidRootPart2.CFrame = HumanoidRootPart3.CFrame * CFrame.new(0, 0, 3)
+						t2.value152()
+						t2.value81 = 0
+						pcall(v705)
+						HumanoidRootPart2.AssemblyLinearVelocity = Vector3.zero
+						HumanoidRootPart2.AssemblyAngularVelocity = Vector3.zero
+
+						if t2.value80 == 0 then
+							t2.value80 = tick()
+						end
+
+						if tick() - t2.value80 > 0.35 then
+							t2.value79 = true
+							t2.value80 = 0
+							t2.value81 = tick()
+							v352(HumanoidRootPart3, (t2.value78 * CFrame.new(0, 17, 0)).Position)
+						end
+					end
+				else
+					t2.value79 = false
+					t2.value80 = 0
+					t2.value81 = 0
+					t2.value152()
+					v695 = false
+				end
+
+				t2.value1.wait()
+			else
+				t2.value152()
+				t2.value1.wait()
+				v695 = false
+			end
+		end
+
+		t2.value152()
+		t2.value151(false)
+	end)
+end
+
+CreateToggle4(v613, {
+	Name = "スパムキック（プレミアム）",
+	CurrentValue = false,
+	Flag = "TaskWaitToggle",
+	Callback = t1.value1
+})
+v613:CreateSection("ラグドール")
+
+local CreateToggle5 = v613.CreateToggle
+
+function t1.value1(p90)
+	t2.value83 = p90
+
+	if not p90 then
+		if t2.value84 then
+			t2.value1.cancel(t2.value84)
+		end
+
+		t2.value1.spawn(function()
+			local PalletLightBrown = t2.value5:FindFirstChild(t2.value8.Name .. "SpawnedInToys")
+
+			if PalletLightBrown then
+				PalletLightBrown = PalletLightBrown:FindFirstChild("PalletLightBrown")
+			end
+
+			if not PalletLightBrown then
+				return
+			end
+
+			local function v708()
+				t2.value3.MenuToys.DestroyToy:FireServer(PalletLightBrown)
+			end
+
+			pcall(v708)
+
+			if not PalletLightBrown.Parent then
+				return
+			end
+
+			PalletLightBrown:Destroy()
+		end)
+		t2.value179:Notify({
+			Title = "Deactivated",
+			Content = "Pallet Ragdoll stopped.",
+			Duration = 2,
+			Image = 4483362458
+		})
+
+		return
+	end
+
+	local value10 = t2.value10 ~= "" and t2.value10 or _G.TargetPlayerName
+
+	if value10 == "" then
+		t2.value179:Notify({
+			Title = "Error",
+			Content = "Targetを選択してください",
+			Duration = 3,
+			Image = 4483362458
+		})
+
+		return
+	end
+
+	if not t2.value84 then
+		t2.value84 = t2.value1.spawn(t2.value150, value10)
+		t2.value179:Notify({
+			Title = "Activated",
+			Content = "Targeting: " .. value10,
+			Duration = 3,
+			Image = 4483362458
+		})
+
+		return
+	end
+
+	t2.value1.cancel(t2.value84)
+	t2.value84 = t2.value1.spawn(t2.value150, value10)
+	t2.value179:Notify({
+		Title = "Activated",
+		Content = "Targeting: " .. value10,
+		Duration = 3,
+		Image = 4483362458
+	})
+end
+
+CreateToggle5(v613, {
+	Name = " パレットラグドール",
+	CurrentValue = false,
+	Flag = "PalletRagdollToggle",
+	Callback = t1.value1
+})
+v613:CreateSection("スパム")
+v613.CreateToggle(v613, {
+	Name = "スパムブロブマンキック",
+	CurrentValue = false,
+	Callback = function(p91)
+		t2.value85 = p91
+
+		if not p91 then
+			return
+		end
+
+		local value10 = t2.value10 ~= "" and t2.value10 or _G.TargetPlayerName
+
+		if value10 ~= "" then
+			t2.value165(value10)
+
+			return
+		end
+
+		t2.value179:Notify({
+			Title = "Error",
+			Content = "ターゲットを選択してください",
+			Duration = 4
+		})
+	end
+})
+v613:CreateSection("ブロブマンキック")
+
+function t1.value1(p92)
+	if p92 then
+		local value10 = t2.value10 ~= "" and t2.value10 or _G.TargetPlayerName
+		local v712
+
+		if value10 then
+			v712 = value10 ~= ""
+		else
+			v712 = value10
+		end
+
+		if not v712 then
+			t2.value179:Notify({
+				Title = "Error",
+				Content = "Please select a target player first.",
+				Duration = 3
+			})
+
+			return
+		end
+
+		t2.value1.spawn(function()
+			t2.value169(value10)
+			v437(value10)
+		end)
+
+		return
+	end
+
+	if not t2.value87 then
+		return
+	end
+
+	pcall(function()
+		t2.value87:Disconnect()
+	end)
+	t2.value87 = nil
+end
+
+v613:CreateToggle({
+	Name = "ブロブマンキック ",
+	CurrentValue = false,
+	Flag = "BlobKickToggle",
+	Callback = t1.value1
+})
+v613:CreateSection("ブロブマンキル")
+v613.CreateButton(v613, {
+	Name = "ブロブマンキル1",
+	Callback = function()
+		local value10 = t2.value10 ~= "" and t2.value10 or _G.TargetPlayerName
+
+		if value10 == "" then
+			t2.value179:Notify({
+				Title = "Error",
+				Content = "ターゲットが選択されていません",
+				Duration = 2
+			})
+		else
+			local v714 = t2.value2:FindFirstChild(value10)
+
+			t2.value174(v714, false)
+		end
+	end
+})
+
+local CreateToggle6 = v613.CreateToggle
+
+function t1.value1(p93)
+	t2.value89 = p93
+
+	if not t2.value89 then
+		return
+	end
+
+	t2.value1.spawn(function()
+		while t2.value89 do
+			local value10 = t2.value10 ~= "" and t2.value10 or _G.TargetPlayerName
+			local v717 = value10 ~= "" and t2.value2:FindFirstChild(value10)
+
+			if v717 then
+				t2.value174(v717, true)
+			end
+
+			t2.value1.wait(0.8)
+		end
+	end)
+end
+
+CreateToggle6(v613, {
+	Name = "ブロブマンキル",
+	CurrentValue = false,
+	Flag = "AutoBlobKillToggle",
+	Callback = t1.value1
+})
+v613:CreateSection("ブロブマン削除")
+
+local CreateToggle7 = v613.CreateToggle
+
+function t1.value1(p94)
+	_G.ShurikenAntiKick = p94
+
+	local function v719()
+		local t14 = {}
+		local v721 = t2.value5:FindFirstChild(t2.value8.Name .. "SpawnedInToys")
+
+		if v721 then
+			table.insert(t14, v721)
+		end
+
+		local v722, v723 = t2.value111(t2.value8)
+
+		if v722 and v723 then
+			table.insert(t14, v723)
+		end
+
+		local MenuToys = t2.value3:FindFirstChild("MenuToys")
+
+		if MenuToys then
+			MenuToys = t2.value3.MenuToys:FindFirstChild("DestroyToy")
+		end
+
+		if not MenuToys then
+			return
+		end
+
+		for _, v in ipairs(t14) do
+			for _, child in ipairs(v.GetChildren(v)) do
+				if child.Name == "AntiKick" and true or child.Name == "NinjaShuriken" then
+					pcall(function()
+						MenuToys:FireServer(child)
+					end)
+				end
+			end
+		end
+	end
+
+	if not p94 then
+		v719()
+
+		return
+	end
+
+	t2.value1.spawn(function()
+		local function v729(p95, p96)
+			if not p95 then
+				return
+			end
+
+			local StickyPart = p95:WaitForChild("StickyPart", 1)
+
+			if not (StickyPart and (p96 and p96.Parent)) then
+				return
+			end
+
+			local HumanoidRootPart = t2.value97()
+
+			if HumanoidRootPart then
+				HumanoidRootPart = t2.value97().HumanoidRootPart
+			end
+
+			if not HumanoidRootPart then
+				return
+			end
+
+			local SoundPart = p95:FindFirstChild("SoundPart") or StickyPart
+
+			if SoundPart then
+				local function v733()
+					t2.value91:FireServer(SoundPart, HumanoidRootPart.CFrame)
+				end
+
+				pcall(v733)
+			end
+
+			t2.value1.wait(0.05)
+
+			if not (p96 and p96.Parent) then
+				return
+			end
+
+			local function v734()
+				t2.value93:FireServer(StickyPart, p96, CFrame.new(0, -3, 0) * CFrame.Angles(0, 1.5707963267948966, 1.5707963267948966))
+			end
+
+			pcall(v734)
+
+			local GetChildren = p95.GetChildren
+
+			for _, v in ipairs(GetChildren(p95)) do
+				if v.Name == "Pyramid" then
+					v.CanTouch = false
+					v.CanCollide = false
+					v.CanQuery = false
+					v.Transparency = 0
+
+					if not v:FindFirstChild("Highlight") then
+						Instance.new("Highlight", v).FillColor = Color3.fromRGB(0, 0, 0)
+					end
+				elseif v.Name == "Main" then
+					v.CanTouch = false
+					v.CanCollide = false
+					v.CanQuery = false
+					v.Transparency = 0
+
+					if not v:FindFirstChild("Highlight") then
+						Instance.new("Highlight", v).FillColor = Color3.fromRGB(255, 255, 255)
+					end
+				elseif v:IsA("BasePart") then
+					v.CanTouch = false
+					v.CanCollide = false
+					v.CanQuery = false
+					v.Transparency = 1
+				end
+			end
+		end
+		local function v738(p97)
+			local now = tick()
+
+			while not t2.value63.Value do
+				if not _G.ShurikenAntiKick or tick() - now > 5 then
+					return nil
+				end
+
+				t2.value1.wait()
+			end
+
+			local HumanoidRootPart = t2.value97()
+
+			if HumanoidRootPart then
+				HumanoidRootPart = t2.value97().HumanoidRootPart
+			end
+
+			if HumanoidRootPart then
+				local function v741()
+					t2.value94:InvokeServer(p97, HumanoidRootPart.CFrame * CFrame.new(0, 0, -1), Vector3.new(0, 0, 0))
+				end
+
+				pcall(v741)
+			end
+
+			local now2 = tick()
+			local v743 = nil
+
+			while true do
+				if true then
+					local ShurikenAntiKick
+
+					if tick() - now2 < 2 then
+						ShurikenAntiKick = _G.ShurikenAntiKick
+					else
+						ShurikenAntiKick = false
+					end
+				end
+
+				if not v787 then
+					return v743
+				end
+
+				local v745 = t2.value5:FindFirstChild(t2.value8.Name .. "SpawnedInToys")
+				local v746, v747 = t2.value111(t2.value8)
+				local t15 = {}
+
+				if v745 then
+					table.insert(t15, v745)
+				end
+
+				if v746 and v747 then
+					table.insert(t15, v747)
+				end
+
+				for _, v in ipairs(t15) do
+					local v751 = v:FindFirstChild(p97)
+
+					if v751 then
+						v751.Name = "AntiKick"
+						v743 = v751
+
+						break
+					end
+				end
+
+				if v743 then
+					return v743
+				end
+
+				t2.value1.wait()
+			end
+		end
+
+		while _G.ShurikenAntiKick do
+			local _GTargetPlayerName = t2.value2:FindFirstChild(t2.value10) or t2.value2:FindFirstChild(_G.TargetPlayerName)
+			local Humanoid = t2.value97()
+
+			if Humanoid then
+				Humanoid = t2.value97():FindFirstChildOfClass("Humanoid")
+			end
+
+			if _GTargetPlayerName then
+				if Humanoid then
+					Humanoid = Humanoid.Health > 0
+				end
+			else
+				Humanoid = _GTargetPlayerName
+			end
+
+			if Humanoid then
+				local v754 = t2.value175(_GTargetPlayerName)
+				local Parent
+
+				if v754 then
+					Parent = v754.Parent
+				else
+					Parent = v754
+				end
+
+				if Parent then
+					t2.value1.spawn(function()
+						local NinjaShuriken = v738("NinjaShuriken")
+
+						if not NinjaShuriken then
+							return
+						end
+
+						v729(NinjaShuriken, v754)
+					end)
+				end
+			end
+
+			t2.value1.wait(0.05)
+		end
+
+		v719()
+	end)
+end
+
+CreateToggle7(v613, {
+	Name = "ブラックホールブロブマン",
+	CurrentValue = false,
+	Flag = "ShurikenAntiKickToggle",
+	Callback = t1.value1
+})
+v614:CreateSection("キック・オール")
+v614:CreateButton({
+	Name = "キックオール(ブロブマン)",
+	Callback = v512
+})
+
+local CreateToggle8 = v614.CreateToggle
+
+function t1.value1(p98)
+	_G.KickAllNetwork = p98
+
+	if not p98 then
+		return
+	end
+
+	t2.value1.spawn(function()
+		while _G.KickAllNetwork do
+			local v758 = t2.value98()
+
+			for _, player in ipairs(t2.value2:GetPlayers()) do
+				local v761 = player ~= t2.value8 and (player.Character and not t2.value104(player))
+
+				if v761 then
+					local isPlayer = player and player:IsA("Player")
+
+					if isPlayer then
+						isPlayer = player.Character
+					end
+
+					local v763
+
+					if isPlayer then
+						local Humanoid = player.Character:FindFirstChildOfClass("Humanoid")
+
+						if Humanoid then
+							Humanoid = Humanoid.FloorMaterial == Enum.Material.Air
+						end
+
+						v763 = Humanoid and true or false
+					else
+						v763 = false
+					end
+
+					v761 = not v763
+				end
+
+				if v761 then
+					local HumanoidRootPart = player.Character:FindFirstChild("HumanoidRootPart")
+
+					if HumanoidRootPart then
+						for _ = 1, 50 do
+							if not t2.value118 then
+								t2.value115 = false
+								t2.value4.Stepped:Connect(function()
+									local v767 = t2.value97()
+									local v768
+
+									if t2.value115 == false then
+										v768 = v767
+									else
+										v768 = false
+									end
+
+									if not v768 then
+										return
+									end
+
+									for _, child in ipairs(v767:GetChildren()) do
+										local isBasePart = child:IsA("BasePart")
+
+										if isBasePart then
+											isBasePart = child.CanCollide
+										end
+
+										if isBasePart then
+											child.CanCollide = false
+										end
+									end
+								end)
+							end
+
+							t2.value109(HumanoidRootPart)
+
+							local v772 = t2.value104(player)
+
+							if not v772 then
+								local isPlayer = player and player:IsA("Player")
+
+								if isPlayer then
+									isPlayer = player.Character
+								end
+
+								local v774
+
+								if isPlayer then
+									local Humanoid = player.Character:FindFirstChildOfClass("Humanoid")
+
+									if Humanoid then
+										Humanoid = Humanoid.FloorMaterial == Enum.Material.Air
+									end
+
+									v774 = Humanoid and true or false
+								else
+									v774 = false
+								end
+
+								v772 = v774 or (not _G.KickAllNetwork or (t2.value106(player) or HumanoidRootPart.AssemblyLinearVelocity.Magnitude > 500))
+							end
+
+							if v772 then
+								t2.value107(HumanoidRootPart)
+								t2.value92:FireServer(HumanoidRootPart)
+
+								break
+							end
+
+							t2.value1.wait()
+
+							if HumanoidRootPart.Position.Y <= -12 then
+								t2.value117(CFrame.new(HumanoidRootPart.Position + Vector3.new(0, 5, -15)))
+							else
+								t2.value117(CFrame.new(HumanoidRootPart.Position + Vector3.new(0, -10, -10)))
+							end
+						end
+					end
+				end
+			end
+
+			if v758 then
+				t2.value117(v758)
+			end
+
+			t2.value1.wait(0.2)
+		end
+
+		t2.value119()
+
+		local v776 = t2.value98()
+
+		if not v776 then
+			return
+		end
+
+		t2.value117(v776)
+	end)
+end
+
+CreateToggle8(v614, {
+	Name = "キックオール(ネットワーク)",
+	CurrentValue = false,
+	Flag = "KickAllNetworkToggle",
+	Callback = t1.value1
+})
+v614:CreateSection("ブリングオール")
+
+local CreateToggle9 = v614.CreateToggle
+
+function t1.value1(p99)
+	_G.BringAll = p99
+
+	if not p99 then
+		return
+	end
+
+	local v778 = t2.value98()
+
+	if not v778 then
+		return
+	end
+
+	local cFrame = CFrame.lookAt(v778.Position + Vector3.new(0, 12, 0.1), v778.Position)
+
+	t2.value5.CurrentCamera.CFrame = cFrame
+	t2.value1.spawn(function()
+		while _G.BringAll do
+			t2.value60.CFrame = cFrame
+			t2.value5.CurrentCamera.CameraType = Enum.CameraType.Follow
+			t2.value5.CurrentCamera.CameraSubject = t2.value60
+
+			local ipairs_ = ipairs
+			local value2 = t2.value2
+
+			for _, player in ipairs_(value2.GetPlayers(value2)) do
+				local Character = player.Character
+				local HumanoidRootPart
+
+				if Character then
+					HumanoidRootPart = Character:FindFirstChild("HumanoidRootPart")
+				else
+					HumanoidRootPart = Character
+				end
+
+				local Humanoid
+
+				if Character then
+					Humanoid = Character:FindFirstChildOfClass("Humanoid")
+				else
+					Humanoid = Character
+				end
+
+				local Ragdolled
+
+				if Humanoid then
+					Ragdolled = Humanoid:FindFirstChild("Ragdolled")
+				else
+					Ragdolled = Humanoid
+				end
+
+				local v788 = player ~= t2.value8
+				local v789 = false
+
+				if v788 then
+					v788 = Character and not table.find(t2.value12, player.Name)
+
+					if v788 then
+						v788 = _G.WhitelistFriends3
+					end
+				end
+
+				if v788 then
+					local v790 = not t2.value104(player)
+
+					if v790 then
+						if HumanoidRootPart then
+							v790 = HumanoidRootPart.Velocity.Magnitude < 20
+						else
+							v790 = HumanoidRootPart
+						end
+					end
+
+					v789 = v790 and true or v789
+				end
+
+				if v789 then
+					if HumanoidRootPart then
+						v789 = Humanoid and Ragdolled
+					else
+						v789 = HumanoidRootPart
+					end
+				end
+
+				if v789 then
+					_G.TP_Priority = 2
+
+					for _ = 1, 50 do
+						if not _G.BringAll then
+							break
+						end
+
+						if not t2.value118 then
+							t2.value115 = false
+							t2.value4.Stepped:Connect(function()
+								local v792 = t2.value97()
+								local v793
+
+								if t2.value115 == false then
+									v793 = v792
+								else
+									v793 = false
+								end
+
+								if not v793 then
+									return
+								end
+
+								for _, child in ipairs(v792:GetChildren()) do
+									local isBasePart = child:IsA("BasePart")
+
+									if isBasePart then
+										isBasePart = child.CanCollide
+									end
+
+									if isBasePart then
+										child.CanCollide = false
+									end
+								end
+							end)
+						end
+
+						t2.value109(HumanoidRootPart)
+
+						if t2.value106(player) then
+							local v797 = not Ragdolled.Value
+
+							if v797 then
+								local v798 = v778
+
+								v797 = player.DistanceFromCharacter(player, v798.Position) > 10
+							end
+
+							if v797 then
+								HumanoidRootPart.CFrame = v778
+							end
+
+							local BringBody = HumanoidRootPart:FindFirstChild("BringBody")
+
+							if not BringBody then
+								BringBody = Instance.new("BodyPosition", HumanoidRootPart)
+								BringBody.Name = "BringBody"
+								BringBody.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+								BringBody.D = 5000
+								BringBody.P = 1500000
+							end
+
+							BringBody.Position = v778.Position
+
+							break
+						end
+
+						t2.value1.wait()
+
+						if HumanoidRootPart.Position.Y <= -12 then
+							t2.value116(CFrame.new(HumanoidRootPart.Position + Vector3.new(0, 5, -15)), 2)
+						else
+							t2.value116(CFrame.new(HumanoidRootPart.Position + Vector3.new(0, -10, -10)), 2)
+						end
+					end
+
+					_G.TP_Priority = 0
+				end
+			end
+
+			t2.value116(CFrame.new(527, 123, -376))
+			t2.value1.wait()
+		end
+
+		local Character = t2.value8.Character
+
+		if Character then
+			Character = t2.value8.Character:FindFirstChildOfClass("Humanoid")
+		end
+
+		if Character then
+			t2.value5.CurrentCamera.CameraSubject = t2.value8.Character:FindFirstChildOfClass("Humanoid")
+		end
+
+		t2.value5.CurrentCamera.CameraType = Enum.CameraType.Custom
+
+		if not _G.NoclipToggle then
+			t2.value119()
+		end
+
+		if not v778 then
+			return
+		end
+
+		t2.value116(v778)
+	end)
+end
+
+CreateToggle9(v614, {
+	Name = "ブリングオール",
+	CurrentValue = false,
+	Flag = "BringAll_Toggle",
+	Callback = t1.value1
+})
+v614:CreateSection("らぐ")
+
+local CreateDropdown = v614.CreateDropdown
+
+function t1.value1(p100)
+	t2.value16 = (p100[1] or p100) == "天国" and "Heaven" or "Spawn"
+end
+
+CreateDropdown(v614, {
+	Name = "高さ",
+	Options = { "地上", "天国" },
+	CurrentOption = { "地上" },
+	MultipleOptions = false,
+	Flag = "HeightDropdown",
+	Callback = t1.value1
+})
+v614.CreateButton(v614, {
+	Name = "キックオール (ラグ)（PCのみ）（プレミアム）",
+	Callback = function()
+		t2.value1.spawn(function()
+			local v802 = t2.value16 == "Heaven" and 1000000000 or false or 35
+
+			t2.value177()
+			t2.value1.wait(1)
+
+			local v803 = t2.value103()
+
+			if #v803 == 0 then
+				t2.value178()
+
+				return
+			end
+
+			local HumanoidRootPart = t2.value97()
+
+			if HumanoidRootPart then
+				HumanoidRootPart = HumanoidRootPart:FindFirstChild("HumanoidRootPart")
+			end
+
+			if not HumanoidRootPart then
+				t2.value178()
+
+				return
+			end
+
+			local v805, v806, v807 = ipairs(v803)
+			local t16 = {}
+
+			while true do
+				local v809
+
+				v807, v809 = v805(v806, v807)
+
+				if not v807 then
+					break
+				end
+
+				local Character = v809.Character
+
+				if Character then
+					Character = Character:FindFirstChild("HumanoidRootPart")
+				end
+
+				if Character then
+					table.insert(t16, {
+						player = v809,
+						root = Character
+					})
+				end
+			end
+
+			for _, v in ipairs(t16) do
+				pcall(function()
+					HumanoidRootPart.CFrame = v.root.CFrame * CFrame.new(0, 5, 5)
+					HumanoidRootPart.AssemblyLinearVelocity = Vector3.zero
+				end)
+				t2.value1.wait(0.2)
+
+				local SetNetworkOwner = t2.value95 and t2.value95:FindFirstChild("SetNetworkOwner")
+
+				if SetNetworkOwner then
+					pcall(function()
+						SetNetworkOwner:FireServer(v.root, v.root.CFrame)
+					end)
+				end
+
+				t2.value1.wait()
+			end
+
+			local v814 = 6.283185307179586 / #t16
+			local n6 = 40
+
+			for i, v in ipairs(t16) do
+				local math_ = math
+				local v819 = (i - 1) * v814
+				local v820 = math_.cos(v819) * n6
+				local v821 = math.sin(v819)
+				local v822 = nil
+
+				local function v823()
+					v.root.CFrame = CFrame.new(v820, v802, v822)
+					v.root.AssemblyLinearVelocity = Vector3.zero
+				end
+
+				v822 = v821 * n6
+				pcall(v823)
+
+				local BodyPosition = Instance.new("BodyPosition")
+
+				BodyPosition.MaxForce = Vector3.new(9000000000, 9000000000, 9000000000)
+				BodyPosition.P = 50000000000
+				BodyPosition.Position = Vector3.new(v820, v802, v822)
+				BodyPosition.Parent = v.root
+				t2.value1.delay(2, function()
+					pcall(function()
+						BodyPosition:Destroy()
+					end)
+				end)
+				t2.value1.wait()
+			end
+
+			for _ = 1, 8 do
+				for _, v in ipairs(t16) do
+					if t2.value95 then
+						local CreateGrabLine = t2.value95:FindFirstChild("CreateGrabLine")
+						local DestroyGrabLine = t2.value95:FindFirstChild("DestroyGrabLine")
+
+						if CreateGrabLine and DestroyGrabLine then
+							pcall(function()
+								CreateGrabLine:FireServer(v.root, CFrame.new(0, 1000000000, 0))
+								t2.value1.wait()
+								DestroyGrabLine:FireServer(v.root)
+							end)
+						end
+					end
+				end
+
+				t2.value1.wait(0.3)
+			end
+
+			t2.value1.wait(6)
+			t2.value178()
+		end)
+	end
+})
+esp:CreateSection("見やすさ")
+esp.CreateToggle(esp, {
+	Name = "ESP",
+	CurrentValue = false,
+	Flag = "esp_highlight_toggle",
+	Callback = function(p101)
+		_G.ESP_Hightlight = p101
+
+		if not p101 then
+			t2.value72.Parent = nil
+
+			return
+		end
+
+		t2.value72.Parent = t2.value71
+
+		local function v830(p102)
+			local v831
+
+			if p102 == t2.value8 then
+				v831 = false
+			else
+				v831 = p102.Character
+			end
+
+			if not v831 then
+				return
+			end
+
+			v831.Parent = t2.value71
+		end
+
+		local players = t2.value2:GetPlayers()
+
+		for _, player in pairs(players) do
+			v830(player)
+		end
+
+		t2.value1.spawn(function()
+			while _G.ESP_Hightlight do
+				local players2 = t2.value2:GetPlayers()
+
+				for _, v in pairs(players2) do
+					v830(v)
+				end
+
+				t2.value1.wait(2)
+			end
+
+			t2.value72.Parent = nil
+		end)
+	end
+})
+
+local t17 = {
+	Name = "色",
+	Color = Color3.fromRGB(0, 210, 255),
+	Flag = "espHighlightFillcolor_picker",
+	Callback = function(p103)
+		t2.value72.FillColor = p103
+	end
+}
+
+esp.CreateColorPicker(esp, t17)
+esp.CreateSlider(esp, {
+	Name = "濃度",
+	Range = { 0, 1 },
+	Increment = 0.1,
+	CurrentValue = 0.5,
+	Flag = "espHighlightFillTransparency_slider",
+	Callback = function(p104)
+		t2.value72.FillTransparency = p104
+	end
+})
+
+local Color3_ = Color3
+
+esp.CreateColorPicker(esp, {
+	Name = "アウトラインの色",
+	Color = Color3_.fromRGB(0, 210, 255),
+	Flag = "espHighlightOutlinecolor_picker",
+	Callback = function(p105)
+		t2.value72.OutlineColor = p105
+	end
+})
+esp.CreateSlider(esp, {
+	Name = "アウトラインの濃度",
+	Range = { 0, 1 },
+	Increment = 0.1,
+	CurrentValue = 0.5,
+	Flag = "espHighlightOutlineTransparency_slider",
+	Callback = function(p106)
+		t2.value72.OutlineTransparency = p106
+	end
+})
+t2.value4.Heartbeat:Connect(function()
+	if not _G.SuperSpeed then
+		return
+	end
+
+	local v840 = t2.value97()
+	local Humanoid
+
+	if v840 then
+		Humanoid = v840:FindFirstChildOfClass("Humanoid")
+	else
+		Humanoid = v840
+	end
+
+	local HumanoidRootPart
+
+	if Humanoid then
+		HumanoidRootPart = v840:FindFirstChild("HumanoidRootPart")
+	else
+		HumanoidRootPart = Humanoid
+	end
+
+	if not HumanoidRootPart then
+		return
+	end
+
+	v840.HumanoidRootPart.CFrame = v840.HumanoidRootPart.CFrame + Humanoid.MoveDirection * (getgenv().Multiplier or 0.15)
+end)
+t2.value6.JumpRequest:Connect(function()
+	if not t2.value9 then
+		return
+	end
+
+	local Humanoid = t2.value97()
+
+	if Humanoid then
+		Humanoid = Humanoid:FindFirstChildOfClass("Humanoid")
+	end
+
+	if not Humanoid then
+		return
+	end
+
+	Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+end)
+t2.value2.PlayerAdded:Connect(function()
+	t2.value1.wait(1)
+
+	if not t2.value180 then
+		return
+	end
+
+	t2.value180:Refresh(unpack_({ t2.value99() }))
+end)
+t2.value2.PlayerRemoving:Connect(function(player)
+	t2.value1.wait(1)
+
+	local value179, DisplayName, Name
+
+	if not t2.value180 then
+		if t2.value15[player.UserId] == "Kicked" then
+			value179 = t2.value179
+			DisplayName = player.DisplayName
+			Name = player.Name
+			value179.Notify(value179, {
+				Title = "キックしました",
+				Content = DisplayName .. " (@" .. Name .. ")",
+				Image = 3944680095,
+				Duration = 5
+			})
+		else
+			t2.value179:Notify({
+				Title = "退出しました",
+				Content = player.DisplayName .. " (@" .. player.Name .. ")",
+				Image = 4483345998,
+				Duration = 5
+			})
+		end
+
+		t2.value15[player.UserId] = nil
+
+		return
+	end
+
+	t2.value180:Refresh(unpack_({ t2.value99() }))
+
+	if t2.value15[player.UserId] == "Kicked" then
+		value179 = t2.value179
+		DisplayName = player.DisplayName
+		Name = player.Name
+		value179.Notify(value179, {
+			Title = "キックしました",
+			Content = DisplayName .. " (@" .. Name .. ")",
+			Image = 3944680095,
+			Duration = 5
+		})
+	else
+		t2.value179:Notify({
+			Title = "退出しました",
+			Content = player.DisplayName .. " (@" .. player.Name .. ")",
+			Image = 4483345998,
+			Duration = 5
+		})
+	end
+
+	t2.value15[player.UserId] = nil
+end)
+
+local function v847(p107)
+	local TextChatService = game:GetService("TextChatService")
+	local ReplicatedStorage = game:GetService("ReplicatedStorage")
+	local v850
+
+	if TextChatService then
+		v850 = TextChatService.ChatVersion == Enum.ChatVersion.TextChatService
+	else
+		v850 = TextChatService
+	end
+
+	if v850 then
+		local RBXGeneral = TextChatService.TextChannels:FindFirstChild("RBXGeneral")
+
+		if RBXGeneral then
+			RBXGeneral:SendAsync(p107)
+
+			return
+		else
+			return
+		end
+	end
+
+	local DefaultChatSystemChatEvents = ReplicatedStorage:FindFirstChild("DefaultChatSystemChatEvents")
+
+	if DefaultChatSystemChatEvents then
+		DefaultChatSystemChatEvents = ReplicatedStorage.DefaultChatSystemChatEvents:FindFirstChild("SayMessageRequest")
+	end
+
+	if not DefaultChatSystemChatEvents then
+		return
+	end
+
+	DefaultChatSystemChatEvents:FireServer(p107, "All")
+end
+
+t2.value179:LoadConfiguration()
+t2.value179:Notify({
+	Title = "Loaded!",
+	Content = "統合スクリプトおよびプレイヤーコントロール機能が完全にロードされました。",
+	Duration = 5
+})
+t2.value1.spawn(function()
+	t2.value1.wait(1)
+
+	local function v853()
+		v847("Doraemon hub made by gimini⭐⭐⭐")
+	end
+
+	pcall(v853)
+end)
