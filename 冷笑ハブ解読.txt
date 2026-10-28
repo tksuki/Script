@@ -1,0 +1,1129 @@
+local unpack_ = unpack or table.unpack
+
+local Library     = loadstring(game:HttpGet("https://raw.githubusercontent.com/deividcomsono/Obsidian/main/Library.lua"))()
+local ThemeManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/deividcomsono/Obsidian/main/addons/ThemeManager.lua"))()
+local SaveManager  = loadstring(game:HttpGet("https://raw.githubusercontent.com/deividcomsono/Obsidian/main/addons/SaveManager.lua"))()
+
+local TextChatService    = game:GetService("TextChatService")
+local Players            = game:GetService("Players")
+local ReplicatedStorage  = game:GetService("ReplicatedStorage")
+local RunService         = game:GetService("RunService")
+local Workspace          = game:GetService("Workspace")
+
+local LocalPlayer  = Players.LocalPlayer
+local Camera       = Workspace.CurrentCamera
+
+local DISCORD_LINK = "https://discord.gg/bS7KFaaD5N"
+
+local chatMessages = {
+    "うおw😅",
+    "どわー笑😅",
+    "ったく…w😅",
+    "かっこよw😅",
+    "えぐー！笑😅",
+    "冗談ですやん！！w",
+    "きちーww😅🤚",
+    "おもろいなあ！ww😅👍",
+    "ど、どした？笑😅",
+    "ちょw1回落ち着けw",
+    "落ち着けw😅",
+    "ええてw😅🤚",
+    "ちょwお前必死やんww😅",
+    "すごいなあキミww😅👍",
+    "ちょw怒んなやw😅",
+    "んん〜まかぁぁウッッ!!!!🤏😎"
+}
+
+local chatInterval        = 3
+local nearInterval        = 3
+local targetInterval      = 3
+local nearRange           = 50
+
+local loopRunning         = false
+local nearLoopRunning     = false
+local targetLoopRunning   = false
+local targetLoopRunning2  = false
+local targetPlayer        = nil
+
+local Options  = Library.Options
+local Toggles  = Library.Toggles
+
+local GrabEvents  = ReplicatedStorage:FindFirstChild("GrabEvents")
+local DataEvents  = ReplicatedStorage:FindFirstChild("DataEvents")
+
+local SetNetworkOwnerEvent   = GrabEvents and GrabEvents:FindFirstChild("SetNetworkOwner")
+local UpdateLineColorsEvent  = DataEvents  and DataEvents:FindFirstChild("UpdateLineColorsEvent")
+
+local function sendChat(message)
+    local RBXGeneral = TextChatService.TextChannels:FindFirstChild("RBXGeneral")
+
+    if RBXGeneral then
+        pcall(function()
+            RBXGeneral:SendAsync(message)
+        end)
+    else
+        pcall(function()
+            ReplicatedStorage.DefaultChatSystemChatEvents.SayMessageRequest:FireServer(message, "All")
+        end)
+    end
+end
+
+local function startLoop()
+    if loopRunning then return end
+    loopRunning = true
+
+    task.spawn(function()
+        for _, msg in ipairs(chatMessages) do
+            if not loopRunning then return end
+            sendChat(msg)
+            task.wait(chatInterval)
+        end
+    end)
+end
+
+local function startLoopRepeat()
+    if nearLoopRunning then return end
+    nearLoopRunning = true
+
+    task.spawn(function()
+        while true do
+            if not nearLoopRunning then return end
+            for _, msg in ipairs(chatMessages) do
+                if not nearLoopRunning then break end
+                sendChat(msg)
+                task.wait(chatInterval)
+            end
+            task.wait(0.5)
+        end
+    end)
+end
+
+local function stopAllLoops()
+    loopRunning      = false
+    nearLoopRunning  = false
+end
+
+local function sendToTarget()
+    if targetLoopRunning then return end
+
+    if not targetPlayer then
+        Library:Notify("対象プレイヤーが選択されていません", 2)
+        return
+    end
+
+    targetLoopRunning = true
+    task.spawn(function()
+        for _, msg in ipairs(chatMessages) do
+            if not targetLoopRunning then return end
+            sendChat(targetPlayer.DisplayName .. " " .. msg)
+            task.wait(targetInterval)
+        end
+    end)
+end
+
+local function startTargetLoop()
+    if targetLoopRunning2 then return end
+
+    if targetPlayer then
+        targetLoopRunning2 = true
+        task.spawn(function()
+            while true do
+                if not targetLoopRunning2 then return end
+                for _, msg in ipairs(chatMessages) do
+                    if not targetLoopRunning2 then break end
+                    sendChat(targetPlayer.DisplayName .. " " .. msg)
+                    task.wait(targetInterval)
+                end
+                task.wait(0.5)
+            end
+        end)
+        return
+    end
+
+    Library:Notify("対象プレイヤーが選択されていません", 2)
+
+    if not Options.TargetLoopToggle then return end
+    Options.TargetLoopToggle:SetValue(false)
+end
+
+local function stopTargetLoops()
+    targetLoopRunning  = false
+    targetLoopRunning2 = false
+end
+
+local function getNearbyPlayerNames()
+    local result = {}
+    local selfChar = LocalPlayer.Character
+
+    if not selfChar then return result end
+
+    local selfRoot = selfChar:FindFirstChild("HumanoidRootPart")
+    if not selfRoot then return result end
+
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player == LocalPlayer then continue end
+
+        local char = player.Character
+        if not char then continue end
+
+        local root     = char:FindFirstChild("HumanoidRootPart")
+        local humanoid = char:FindFirstChildOfClass("Humanoid")
+        if not root then continue end
+
+        local alive = humanoid and humanoid.Health > 0
+        if not alive then continue end
+
+        local dist = (root.Position - selfRoot.Position).Magnitude
+        if dist <= nearRange then
+            table.insert(result, { display = player.DisplayName, dist = dist })
+        end
+    end
+
+    table.sort(result, function(a, b) return a.dist < b.dist end)
+
+    local names = {}
+    for _, v in ipairs(result) do
+        table.insert(names, v.display)
+    end
+    return names
+end
+
+local nearOnceRunning    = false
+local nearLoopRunning2   = false
+local nearMsgIndex       = 1
+
+local function sendToNearOnce()
+    if nearOnceRunning then return end
+    nearOnceRunning = true
+
+    task.spawn(function()
+        local msgIdx = 1
+        while true do
+            if not nearOnceRunning then return end
+
+            local nearby = getNearbyPlayerNames()
+            if #nearby == 0 then
+                Library:Notify("近くにプレイヤーがいません", 2)
+                nearOnceRunning = false
+                return
+            end
+
+            local sent = false
+            local currentMsg = chatMessages[msgIdx]
+            if not currentMsg then break end
+
+            for _, name in ipairs(nearby) do
+                if not nearOnceRunning then break end
+                sendChat(name .. " " .. currentMsg)
+                task.wait(nearInterval)
+                sent = true
+            end
+
+            if not sent then
+                nearOnceRunning = false
+                return
+            end
+
+            msgIdx = msgIdx + 1
+            if msgIdx > #chatMessages then
+                nearOnceRunning = false
+                return
+            end
+        end
+    end)
+end
+
+local function startNearLoop()
+    if nearLoopRunning2 then return end
+    nearLoopRunning2 = true
+
+    task.spawn(function()
+        local n = 1
+        while true do
+            while true do
+                if not nearLoopRunning2 then return end
+                local nearby = getNearbyPlayerNames()
+                if #nearby > 0 then break end
+                task.wait(0.5)
+            end
+
+            local nearby  = getNearbyPlayerNames()
+            local msg     = chatMessages[n]
+
+            for _, name in ipairs(nearby) do
+                if not nearLoopRunning2 then break end
+                sendChat(name .. " " .. msg)
+                task.wait(nearInterval)
+            end
+
+            n = n + 1
+            if n > #chatMessages then n = 1 end
+        end
+    end)
+end
+
+local function stopNearLoops()
+    nearLoopRunning2 = false
+    nearOnceRunning  = false
+end
+
+local diceState = {
+    enabled       = false,
+    animating     = false,
+    acc           = 0,
+    maxDice       = 150,
+    radius        = 3.5,
+    heightOffset  = 0,
+    rotSpeed      = 2,
+    thirdPerson   = false,
+    thirdPersonDist = 15
+}
+
+local dicePool = {
+    All        = {},
+    Right      = {},
+    Left       = {},
+    HoveringMap = {},
+    ColorMap   = {},
+    Orig       = {}
+}
+
+local animation = {
+    Type     = "NONE",
+    Timer    = 0,
+    FlyDir   = Vector3.zero,
+    BurstDirs = {}
+}
+
+local Colors = {
+    DEFAULT = Color3.fromRGB(255, 255, 255),
+    RED     = Color3.fromRGB(255, 0,   0),
+    BLUE    = Color3.fromRGB(0,   0,   255),
+    PURPLE  = Color3.fromRGB(128, 0,   128),
+    BLACK   = Color3.fromRGB(0,   0,   0)
+}
+
+local function isOtherPlayerPart(part)
+    if not (part and part:IsA("BasePart")) then
+        return true
+    end
+
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer then
+            local char    = player.Character
+            local backpack = player:FindFirstChild("Backpack")
+
+            if char and part:IsDescendantOf(char) then return true end
+            if backpack and part:IsDescendantOf(backpack) then return true end
+        end
+    end
+
+    local ok, owner = pcall(function() return part:GetNetworkOwner() end)
+    if not ok then return false end
+    if owner == nil then return false end
+    return owner ~= LocalPlayer
+end
+
+local function isDicePart(part)
+    if not part or not part.IsA(part, "BasePart") or part.Anchored then return false end
+
+    local selfChar = LocalPlayer.Character
+    if selfChar and part:IsDescendantOf(selfChar) then return false end
+    if isOtherPlayerPart(part) then return false end
+
+    local name       = part.Name
+    local parentName = part.Parent and part.Parent.Name or ""
+
+    return (name:find("Dice") or parentName:find("Dice") or name:find("Toy") or parentName:find("Toy")) and true or false
+end
+
+local function setupDicePart(part)
+    if not (part and part:IsA("BasePart")) then return end
+
+    part.CanCollide = false
+
+    if not dicePool.Orig[part] then
+        dicePool.Orig[part] = {
+            Color      = part.Color,
+            CFrame     = part.CFrame,
+            CanCollide = part.CanCollide
+        }
+    end
+
+    local df = part:FindFirstChild("DiceForce") or Instance.new("BodyVelocity")
+    df.Name      = "DiceForce"
+    df.MaxForce  = Vector3.new(1, 1, 1) * 10000000
+    df.P         = 12500
+    df.Parent    = part
+
+    local dg = part:FindFirstChild("DiceGyro") or Instance.new("BodyGyro")
+    dg.Name      = "DiceGyro"
+    dg.MaxTorque = Vector3.new(1, 1, 1) * 10000000
+    dg.P         = 12500
+    dg.Parent    = part
+end
+
+local function cleanupDicePart(part)
+    if not part then return end
+
+    local df = part:FindFirstChild("DiceForce")
+    local dg = part:FindFirstChild("DiceGyro")
+
+    if df then df:Destroy() end
+    if dg then dg:Destroy() end
+    part.CanCollide = true
+end
+
+local function pruneInvalidDice()
+    for i = #dicePool.All, 1, -1 do
+        local part = dicePool.All[i]
+        if not part or not part.Parent or not part:IsDescendantOf(Workspace) or isOtherPlayerPart(part) then
+            dicePool.HoveringMap[part] = nil
+            dicePool.ColorMap[part]    = nil
+            cleanupDicePart(part)
+            table.remove(dicePool.All, i)
+        end
+    end
+end
+
+local function collectDice()
+    pruneInvalidDice()
+
+    local selfChar = LocalPlayer.Character
+    if not selfChar then return end
+
+    local root = selfChar:FindFirstChild("HumanoidRootPart") or selfChar:FindFirstChild("Torso")
+    if not root then return end
+
+    for _, part in ipairs(Workspace:GetPartBoundsInRadius(root.Position, 120)) do
+        if #dicePool.All >= diceState.maxDice then break end
+        if isDicePart(part) and not dicePool.HoveringMap[part] then
+            dicePool.HoveringMap[part] = true
+            setupDicePart(part)
+            table.insert(dicePool.All, part)
+            if not dicePool.ColorMap[part] then
+                dicePool.ColorMap[part] = Colors.DEFAULT
+            end
+        end
+    end
+
+    dicePool.Right = {}
+    dicePool.Left  = {}
+    for i, v in ipairs(dicePool.All) do
+        if i % 2 == 1 then
+            table.insert(dicePool.Right, v)
+        else
+            table.insert(dicePool.Left, v)
+        end
+    end
+end
+
+local function sphereOffset(index, total, radius, acc, speed)
+    if total <= 0 then return Vector3.zero end
+
+    local phi    = (1 + 2.23606797749979) / 2
+    local theta  = 2 * math.pi * index / phi
+    local z      = 1 - 2 * (index - 0.5) / total
+    local sinZ   = math.sin(math.acos(z))
+    local x      = radius * sinZ * math.cos(theta)
+    local y      = radius * sinZ * math.sin(theta)
+    local zComp  = radius * z
+    local rot    = speed or diceState.rotSpeed
+    local cf     = CFrame.Angles(acc * rot * 0.75, acc * rot, acc * rot * 0.5)
+    return cf:VectorToWorldSpace(Vector3.new(x, y, zComp))
+end
+
+local function disableAllDice()
+    for _, v in ipairs(dicePool.All) do
+        cleanupDicePart(v)
+    end
+    dicePool.All        = {}
+    dicePool.Right      = {}
+    dicePool.Left       = {}
+    dicePool.HoveringMap = {}
+    dicePool.ColorMap   = {}
+    diceState.animating = false
+    animation.Type      = "NONE"
+end
+
+RunService.Heartbeat:Connect(function(dt)
+    if not diceState.enabled then return end
+
+    diceState.acc = diceState.acc + dt
+    collectDice()
+
+    local selfChar = LocalPlayer.Character
+    if not selfChar then return end
+
+    local HumanoidRootPart = selfChar:FindFirstChild("HumanoidRootPart") or selfChar:FindFirstChild("Torso")
+    if not HumanoidRootPart then return end
+
+    if diceState.thirdPerson then
+        Camera.CameraType = Enum.CameraType.Scriptable
+        local camPos = HumanoidRootPart.Position
+            - HumanoidRootPart.CFrame.LookVector * diceState.thirdPersonDist
+            + Vector3.new(0, 4, 0)
+        Camera.CFrame = CFrame.new(camPos, HumanoidRootPart.Position + Vector3.new(0, 2, 0))
+    end
+
+    local offset = Vector3.new(0, diceState.heightOffset, 0)
+    local posRight  = (HumanoidRootPart.CFrame * CFrame.new( 8, 0,  0)).Position + offset
+    local posLeft   = (HumanoidRootPart.CFrame * CFrame.new(-8, 0,  0)).Position + offset
+    local posFront  = (HumanoidRootPart.CFrame * CFrame.new( 0, 0, -6)).Position + offset
+    local posAbove  = (HumanoidRootPart.CFrame * CFrame.new( 0, 8,  0)).Position + offset
+
+    if not diceState.animating then
+        local r = diceState.radius
+
+        for idx, part in ipairs(dicePool.Right) do
+            if part and part.Parent then
+                local off = sphereOffset(idx, #dicePool.Right, r, diceState.acc)
+                local df  = part:FindFirstChild("DiceForce")
+                local dg  = part:FindFirstChild("DiceGyro")
+                if df then df.Velocity = (posRight + off - part.Position) * 20 end
+                if dg then dg.CFrame   = CFrame.new(part.Position, posRight + off) * CFrame.Angles(diceState.acc * diceState.rotSpeed, 0, 0) end
+            end
+        end
+
+        for i, v in ipairs(dicePool.Left) do
+            if v and v.Parent then
+                local off = sphereOffset(i, #dicePool.Left, r, diceState.acc)
+                local df  = v:FindFirstChild("DiceForce")
+                local dg  = v:FindFirstChild("DiceGyro")
+                if df then df.Velocity = (posLeft + off - v.Position) * 20 end
+                if dg then dg.CFrame   = CFrame.new(v.Position, posLeft + off) * CFrame.Angles(diceState.acc * diceState.rotSpeed, 0, 0) end
+            end
+        end
+        return
+    end
+
+    animation.Timer = animation.Timer + dt
+
+    if animation.Type == "MERGE_AND_SHOOT" then
+        if animation.Timer <= 1.8 then
+            local t = math.clamp(animation.Timer / 1.8, 0, 1)
+            for _, part in ipairs(dicePool.Right) do dicePool.ColorMap[part] = Colors.RED:Lerp(Colors.PURPLE, t) end
+            for _, v   in ipairs(dicePool.Left)  do dicePool.ColorMap[v]    = Colors.BLUE:Lerp(Colors.PURPLE, t) end
+
+            local cRight = posRight:Lerp(posFront, t)
+            local cLeft  = posLeft:Lerp(posFront, t)
+            for idx, part in ipairs(dicePool.Right) do
+                local off = sphereOffset(idx, #dicePool.Right, 4, diceState.acc, 6)
+                local df  = part:FindFirstChild("DiceForce")
+                if df then df.Velocity = (cRight + off - part.Position) * 22 end
+            end
+            for i, v in ipairs(dicePool.Left) do
+                local off = sphereOffset(i, #dicePool.Left, 4, diceState.acc, 6)
+                local df  = v:FindFirstChild("DiceForce")
+                if df then df.Velocity = (cLeft + off - v.Position) * 22 end
+            end
+        elseif animation.Timer <= 3.5 then
+            local t      = animation.Timer - 1.8
+            local target = posFront + animation.FlyDir * 300 * t
+            for i, v in ipairs(dicePool.All) do
+                if v and v.Parent then
+                    dicePool.ColorMap[v] = Colors.PURPLE
+                    local off = sphereOffset(i, #dicePool.All, 5.5, diceState.acc, 12)
+                    local df  = v:FindFirstChild("DiceForce")
+                    if df then df.Velocity = (target + off - v.Position) * 40 end
+                end
+            end
+        else
+            diceState.animating = false
+            animation.Type      = "NONE"
+        end
+        return
+    end
+
+    if animation.Type == "PURPLE_MERGE" then
+        local t = math.clamp(animation.Timer / 1.5, 0, 1)
+        for _, part in ipairs(dicePool.Right) do dicePool.ColorMap[part] = Colors.RED:Lerp(Colors.PURPLE,  t) end
+        for _, v   in ipairs(dicePool.Left)  do dicePool.ColorMap[v]    = Colors.BLUE:Lerp(Colors.PURPLE, t) end
+
+        local cRight = posRight:Lerp(posFront, t)
+        local cLeft  = posLeft:Lerp(posFront, t)
+        for idx, part in ipairs(dicePool.Right) do
+            local off = sphereOffset(idx, #dicePool.Right, 4.5, diceState.acc)
+            local df  = part:FindFirstChild("DiceForce")
+            if df then df.Velocity = (cRight + off - part.Position) * 20 end
+        end
+        for i, v in ipairs(dicePool.Left) do
+            local off = sphereOffset(i, #dicePool.Left, 4.5, diceState.acc)
+            local df  = v:FindFirstChild("DiceForce")
+            if df then df.Velocity = (cLeft + off - v.Position) * 20 end
+        end
+        return
+    end
+
+    if animation.Type == "BLUE_BURST" then
+        if animation.Timer <= 2.5 then
+            local angle  = animation.Timer / 2.5 * math.pi * 2
+            local orbit  = HumanoidRootPart.Position + Vector3.new(math.cos(angle) * 10, 2 + diceState.heightOffset, math.sin(angle) * 10)
+            for i, v in ipairs(dicePool.All) do
+                if v and v.Parent then
+                    local off = sphereOffset(i, #dicePool.All, 5, diceState.acc, 10)
+                    local df  = v:FindFirstChild("DiceForce")
+                    if df then df.Velocity = (orbit + off - v.Position) * 30 end
+                end
+            end
+        elseif animation.Timer <= 4.5 then
+            local t = animation.Timer - 2.5
+            for _, v in ipairs(dicePool.All) do
+                if v and v.Parent then
+                    local dir = animation.BurstDirs[v] or Vector3.new(0, 1, 0)
+                    local df  = v:FindFirstChild("DiceForce")
+                    if df then df.Velocity = dir * (200 + t * 50) end
+                end
+            end
+        else
+            diceState.animating = false
+            animation.Type      = "NONE"
+        end
+        return
+    end
+
+    if animation.Type == "RED_SHOOT" then
+        if animation.Timer <= 2 then
+            for i, v in ipairs(dicePool.All) do
+                if v and v.Parent then
+                    local off = sphereOffset(i, #dicePool.All, 4, diceState.acc, 8)
+                    local df  = v:FindFirstChild("DiceForce")
+                    if df then df.Velocity = (posFront + off - v.Position) * 25 end
+                end
+            end
+        elseif animation.Timer <= 3.5 then
+            local t      = animation.Timer - 2
+            local target = posFront + animation.FlyDir * 250 * t
+            for i, v in ipairs(dicePool.All) do
+                if v and v.Parent then
+                    local off = sphereOffset(i, #dicePool.All, 4, diceState.acc, 8)
+                    local df  = v:FindFirstChild("DiceForce")
+                    if df then df.Velocity = (target + off - v.Position) * 35 end
+                end
+            end
+        else
+            diceState.animating = false
+            animation.Type      = "NONE"
+        end
+        return
+    end
+
+    if animation.Type == "BLACK_HOLE" then
+        for i, v in ipairs(dicePool.All) do
+            if v and v.Parent then
+                local off = sphereOffset(i, #dicePool.All, 4.5, diceState.acc, 8)
+                local df  = v:FindFirstChild("DiceForce")
+                if df then df.Velocity = (posAbove + off - v.Position) * 25 end
+            end
+        end
+        return
+    end
+end)
+
+task.spawn(function()
+    while true do
+        if diceState.enabled then
+            pruneInvalidDice()
+
+            for _, v in ipairs(dicePool.All) do
+                if v and v.Parent then
+                    local col = dicePool.ColorMap[v] or Colors.DEFAULT
+                    local seq = ColorSequence.new(col)
+
+                    if UpdateLineColorsEvent then
+                        pcall(function()
+                            UpdateLineColorsEvent:FireServer(seq, col, col, col, col, col, col, col, col, col)
+                        end)
+                    end
+
+                    if SetNetworkOwnerEvent then
+                        pcall(function()
+                            SetNetworkOwnerEvent:FireServer(v, v.CFrame)
+                        end)
+                    end
+                end
+            end
+        end
+
+        task.wait(0.2)
+    end
+end)
+
+local espEnabled    = false
+local espHighlights = {}
+local espColor      = Color3.fromRGB(255, 0, 0)
+local espFillAlpha  = 0.5
+local espOutlineAlpha = 0.5
+
+local function addESP(player)
+    if player == LocalPlayer then return end
+    if not player.Character then return end
+    if espHighlights[player] then return end
+
+    local hl = Instance.new("Highlight")
+    hl.Name                = "ESP"
+    hl.Adornee             = player.Character
+    hl.FillColor           = espColor
+    hl.FillTransparency    = espFillAlpha
+    hl.OutlineColor        = espColor
+    hl.OutlineTransparency = espOutlineAlpha
+    hl.DepthMode           = Enum.HighlightDepthMode.AlwaysOnTop
+    hl.Parent              = game.CoreGui
+    espHighlights[player]  = hl
+end
+
+local function removeESP(player)
+    if not espHighlights[player] then return end
+    espHighlights[player]:Destroy()
+    espHighlights[player] = nil
+end
+
+local function updateAllESP()
+    for _, player in ipairs(Players:GetPlayers()) do
+        if espEnabled then
+            addESP(player)
+        else
+            removeESP(player)
+        end
+    end
+end
+
+Players.PlayerAdded:Connect(function(player)
+    player.CharacterAdded:Connect(function()
+        if not espEnabled then return end
+        task.wait(0.5)
+        addESP(player)
+    end)
+    if espEnabled then addESP(player) end
+end)
+
+Players.PlayerRemoving:Connect(removeESP)
+
+local window = Library:CreateWindow({
+    Title           = "冷笑hub",
+    Footer          = "beta版",
+    Icon            = 107323681729915,
+    Center          = true,
+    AutoShow        = true,
+    Resizable       = true,
+    NotifySide      = "Right",
+    ShowCustomCursor = true,
+    ToggleKeybind   = Enum.KeyCode.RightShift
+})
+
+local Tabs = {
+    Main      = window:AddTab("冷笑",    "message-circle"),
+    Near      = window:AddTab("近く冷笑", "users"),
+    Target    = window:AddTab("指定冷笑", "target"),
+    Mura      = window:AddTab("むらさき", "sparkles"),
+    VFly      = window:AddTab("VFly",    "plane"),
+    ESP       = window:AddTab("ESP",     "eye"),
+    Info      = window:AddTab("情報",    "info"),
+    UISettings = window:AddTab("UI Settings", "settings")
+}
+
+local mainGroup = Tabs.Main:AddLeftGroupbox("Chat Flood", "zap")
+
+mainGroup:AddSlider("IntervalSlider", {
+    Text     = "送信間隔 (秒)",
+    Default  = 3,
+    Min      = 1,
+    Max      = 30,
+    Rounding = 1,
+    Suffix   = "s",
+    Callback = function(v) chatInterval = v end
+})
+
+mainGroup:AddButton({
+    Text = "1回全部送信",
+    Func = function()
+        sendToTarget()
+        Library:Notify("冷笑: 1回送信開始", 2)
+    end
+})
+
+mainGroup:AddToggle("LoopToggle", {
+    Text     = "ループ開始",
+    Default  = false,
+    Callback = function(on)
+        if on then
+            startLoopRepeat()
+            Library:Notify("冷笑: ループ開始", 2)
+        else
+            stopAllLoops()
+            Library:Notify("冷笑: ループ停止", 2)
+        end
+    end
+})
+
+mainGroup:AddButton({
+    Text = "リセット / 停止",
+    Func = function()
+        stopAllLoops()
+        if Options.LoopToggle then
+            Options.LoopToggle:SetValue(false)
+        end
+        Library:Notify("冷笑: 停止しました", 2)
+    end
+})
+
+local nearGroup = Tabs.Near:AddLeftGroupbox("近くのプレイヤー冷笑", "users")
+
+nearGroup:AddSlider("NearRangeSlider", {
+    Text     = "検知範囲 (studs)",
+    Default  = 50,
+    Min      = 10,
+    Max      = 500,
+    Rounding = 0,
+    Suffix   = " studs",
+    Callback = function(v) nearRange = v end
+})
+
+nearGroup:AddSlider("NearIntervalSlider", {
+    Text     = "送信間隔 (秒)",
+    Default  = 3,
+    Min      = 1,
+    Max      = 30,
+    Rounding = 1,
+    Suffix   = "s",
+    Callback = function(v) nearInterval = v end
+})
+
+nearGroup:AddButton({
+    Text = "近くのプレイヤーに1回送信",
+    Func = function()
+        sendToNearOnce()
+        Library:Notify("近く冷笑: 1回送信開始", 2)
+    end
+})
+
+nearGroup:AddToggle("NearLoopToggle", {
+    Text     = "近くのプレイヤーにループ送信",
+    Default  = false,
+    Callback = function(on)
+        if on then
+            startNearLoop()
+            Library:Notify("近く冷笑: ループ開始", 2)
+        else
+            stopNearLoops()
+            Library:Notify("近く冷笑: ループ停止", 2)
+        end
+    end
+})
+
+nearGroup:AddButton({
+    Text = "リセット / 停止",
+    Func = function()
+        stopNearLoops()
+        if Options.NearLoopToggle then
+            Options.NearLoopToggle:SetValue(false)
+        end
+        Library:Notify("近く冷笑: 停止しました", 2)
+    end
+})
+
+local targetGroup = Tabs.Target:AddLeftGroupbox("指定プレイヤー冷笑", "target")
+
+local function buildPlayerList()
+    local list = {}
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer then
+            table.insert(list, player.DisplayName .. " (@" .. player.Name .. ")")
+        end
+    end
+    table.sort(list, function(a, b) return a:lower() < b:lower() end)
+    return list
+end
+
+targetGroup:AddDropdown("TargetPlayerDropdown", {
+    Text     = "対象プレイヤー",
+    Values   = buildPlayerList(),
+    Default  = "",
+    Callback = function(val)
+        if not val or val == "" then return end
+        local name = val:match("@(.+)%)")
+        if name then
+            targetPlayer = Players:FindFirstChild(name)
+        end
+    end
+})
+
+Players.PlayerAdded:Connect(function()
+    if Options.TargetPlayerDropdown then
+        Options.TargetPlayerDropdown:SetValues(buildPlayerList())
+    end
+end)
+
+Players.PlayerRemoving:Connect(function()
+    if Options.TargetPlayerDropdown then
+        Options.TargetPlayerDropdown:SetValues(buildPlayerList())
+    end
+end)
+
+targetGroup:AddButton({
+    Text = "リスト更新",
+    Func = function()
+        if Options.TargetPlayerDropdown then
+            Options.TargetPlayerDropdown:SetValues(buildPlayerList())
+        end
+        Library:Notify("プレイヤーリスト更新", 2)
+    end
+})
+
+targetGroup:AddSlider("TargetIntervalSlider", {
+    Text     = "送信間隔 (秒)",
+    Default  = 3,
+    Min      = 1,
+    Max      = 30,
+    Rounding = 1,
+    Suffix   = "s",
+    Callback = function(v) targetInterval = v end
+})
+
+targetGroup:AddButton({
+    Text = "指定プレイヤーに1回送信",
+    Func = function()
+        sendToTarget()
+        Library:Notify("指定冷笑: 1回送信開始", 2)
+    end
+})
+
+targetGroup:AddToggle("TargetLoopToggle", {
+    Text     = "指定プレイヤーにループ送信",
+    Default  = false,
+    Callback = function(on)
+        if on then
+            startTargetLoop()
+            Library:Notify("指定冷笑: ループ開始", 2)
+        else
+            stopTargetLoops()
+            Library:Notify("指定冷笑: ループ停止", 2)
+        end
+    end
+})
+
+targetGroup:AddButton({
+    Text = "リセット / 停止",
+    Func = function()
+        stopTargetLoops()
+        if Options.TargetLoopToggle then
+            Options.TargetLoopToggle:SetValue(false)
+        end
+        Library:Notify("指定冷笑: 停止しました", 2)
+    end
+})
+
+local muraGroup  = Tabs.Mura:AddLeftGroupbox("演出ボタン", "sparkles")
+local muraConfig = Tabs.Mura:AddRightGroupbox("設定", "settings")
+
+local function requireMuraEnabled()
+    if not diceState.enabled then
+        Library:Notify("先に「むらさき 有効化」をONにしてください", 2)
+        return false
+    end
+    return true
+end
+
+muraGroup:AddToggle("MuraEnableToggle", {
+    Text     = "むらさき 有効化",
+    Default  = false,
+    Callback = function(on)
+        diceState.enabled = on
+        if on then
+            Library:Notify("むらさき: 有効化", 2)
+        else
+            disableAllDice()
+            Library:Notify("むらさき: 無効化", 2)
+        end
+    end
+})
+
+muraGroup:AddButton({
+    Text = "[1] 右赤 & 左青 カラー適用",
+    Func = function()
+        if not requireMuraEnabled() then return end
+        animation.Type      = "NONE"
+        diceState.animating = false
+        for _, part in ipairs(dicePool.Right) do dicePool.ColorMap[part] = Colors.RED  end
+        for _, v   in ipairs(dicePool.Left)  do dicePool.ColorMap[v]    = Colors.BLUE end
+    end
+})
+
+muraGroup:AddButton({
+    Text = "[2] 紫巨大球体に合体 ➔ 撃ち出す",
+    Func = function()
+        if not requireMuraEnabled() then return end
+        local char = LocalPlayer.Character
+        if not char then return end
+        local root = char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("Torso")
+        if not root then return end
+        diceState.animating  = true
+        animation.Type       = "MERGE_AND_SHOOT"
+        animation.Timer      = 0
+        animation.FlyDir     = root.CFrame.LookVector
+    end
+})
+
+muraGroup:AddButton({
+    Text = "[3] 紫合体 & 正面巨大化 (維持)",
+    Func = function()
+        if not requireMuraEnabled() then return end
+        diceState.animating = true
+        animation.Type      = "PURPLE_MERGE"
+        animation.Timer     = 0
+    end
+})
+
+muraGroup:AddButton({
+    Text = "[4] 青周回回転 & 粉砕バースト",
+    Func = function()
+        if not requireMuraEnabled() then return end
+        diceState.animating = true
+        animation.Type      = "BLUE_BURST"
+        animation.Timer     = 0
+        animation.BurstDirs = {}
+        for _, v in ipairs(dicePool.All) do
+            dicePool.ColorMap[v]    = Colors.BLUE
+            animation.BurstDirs[v] = Vector3.new(
+                math.random(-100, 100),
+                math.random(-20,  100),
+                math.random(-100, 100)
+            ).Unit
+        end
+    end
+})
+
+muraGroup:AddButton({
+    Text = "[5] 赤色 目の前回転 & 放つ",
+    Func = function()
+        if not requireMuraEnabled() then return end
+        local char = LocalPlayer.Character
+        if not char then return end
+        local root = char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("Torso")
+        if not root then return end
+        diceState.animating = true
+        animation.Type      = "RED_SHOOT"
+        animation.Timer     = 0
+        animation.FlyDir    = root.CFrame.LookVector
+        for _, v in ipairs(dicePool.All) do dicePool.ColorMap[v] = Colors.RED end
+    end
+})
+
+muraGroup:AddButton({
+    Text = "[6] 頭上に黒ブラックホール作成 (維持)",
+    Func = function()
+        if not requireMuraEnabled() then return end
+        diceState.animating = true
+        animation.Type      = "BLACK_HOLE"
+        for _, v in ipairs(dicePool.All) do dicePool.ColorMap[v] = Colors.BLACK end
+    end
+})
+
+muraConfig:AddSlider("MuraRadius", {
+    Text     = "球体の大きさ (半径)",
+    Default  = 3.5,
+    Min      = 1,
+    Max      = 15,
+    Rounding = 0.5,
+    Suffix   = "m",
+    Callback = function(v) diceState.radius = v end
+})
+
+muraConfig:AddSlider("MuraHeight", {
+    Text     = "高さオフセット (Y軸)",
+    Default  = 0,
+    Min      = -10,
+    Max      = 20,
+    Rounding = 0.5,
+    Suffix   = "m",
+    Callback = function(v) diceState.heightOffset = v end
+})
+
+muraConfig:AddSlider("MuraRot", {
+    Text     = "回転速度",
+    Default  = 2,
+    Min      = 0,
+    Max      = 15,
+    Rounding = 0.5,
+    Suffix   = "倍",
+    Callback = function(v) diceState.rotSpeed = v end
+})
+
+muraConfig:AddToggle("MuraThirdPerson", {
+    Text     = "3人称視点（TPS）有効化",
+    Default  = false,
+    Callback = function(on)
+        diceState.thirdPerson = on
+        if not on then
+            Camera.CameraType = Enum.CameraType.Custom
+        end
+    end
+})
+
+muraConfig:AddSlider("MuraTPDist", {
+    Text     = "カメラ距離",
+    Default  = 15,
+    Min      = 5,
+    Max      = 50,
+    Rounding = 1,
+    Suffix   = "m",
+    Callback = function(v) diceState.thirdPersonDist = v end
+})
+
+local vflyGroup = Tabs.VFly:AddLeftGroupbox("VFly", "plane")
+
+vflyGroup:AddButton({
+    Text = "VFly + Noclip 起動",
+    Func = function()
+        loadstring(game:HttpGet("https://rawscripts.net/raw/Universal-Script-VFly-gui-and-noclip-78112"))()
+        Library:Notify("VFly 起動しました", 2)
+    end
+})
+
+local espGroup = Tabs.ESP:AddLeftGroupbox("ESP", "eye")
+
+espGroup:AddToggle("EspToggle", {
+    Text     = "ESP",
+    Default  = false,
+    Callback = function(on)
+        espEnabled = on
+        updateAllESP()
+    end
+})
+
+local infoGroup = Tabs.Info:AddLeftGroupbox("Info", "info")
+
+infoGroup:AddLabel("作者: tacopi")
+infoGroup:AddLabel("Discord: " .. DISCORD_LINK)
+infoGroup:AddButton({
+    Text = "Discordリンクをコピー",
+    Func = function()
+        setclipboard(DISCORD_LINK)
+    end
+})
+
+Tabs.UISettings:AddLeftGroupbox("Menu", "wrench")
+    :AddLabel("Menu bind")
+    :AddKeyPicker("MenuKeybind", {
+        Default = "C",
+        NoUI    = true,
+        Text    = "Menu keybind"
+    })
+
+Library.ToggleKeybind = Options.MenuKeybind
+
+ThemeManager:SetLibrary(Library)
+SaveManager:SetLibrary(Library)
+SaveManager:IgnoreThemeSettings()
+SaveManager:SetIgnoreIndexes({ "MenuKeybind" })
+ThemeManager:SetFolder("tacopiReisyou")
+SaveManager:SetFolder("tacopiReisyou/config")
+ThemeManager:ApplyToTab(Tabs.UISettings)
+SaveManager:BuildConfigSection(Tabs.UISettings)
+
+game:BindToClose(function()
+    stopAllLoops()
+    stopNearLoops()
+    stopTargetLoops()
+    disableAllDice()
+end)
