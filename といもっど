@@ -79,6 +79,9 @@ end
 local SNO_COUNT = 5
 local SNO_INTERVAL = 0.01
 
+-- 手の部品を他プレイヤーに掴まれた時に取り返すSNOの回数 (10回)
+local HAND_RECLAIM_COUNT = 10
+
 local function sendSNO5(part)
     if not part then return end
     task.spawn(function()
@@ -924,6 +927,99 @@ Players.PlayerAdded:Connect(function() task.defer(refreshPlayerList) end)
 Players.PlayerRemoving:Connect(function(plr) refreshPlayerList(plr) end)
 
 --------------------------------------------------------------------
+-- セーブプロット
+--------------------------------------------------------------------
+-- オンの間、自分がどのプロットに入っているかを常に監視する。
+--   ・プロットに入っている間: そのプロットと、中での最後の座標を記録
+--   ・プロットから出た瞬間: 80秒タイマーをスタート
+--   ・80秒経つ前にまたプロットに入ったら: タイマーをリセット (出たらまた80秒から)
+--   ・80秒経ったら: 記録したプロット内の座標へ15回tp連打 → 元の座標へtp
+--     (その後まだプロット外なら、また80秒タイマーをスタート)
+-- 一度もプロットに入っていない(使用中のプロットがない)間は何もしない
+local SAVE_PLOT_WAIT = 80
+local SAVE_PLOT_SPAM = 15
+local savePlotRunning = false
+
+local function startSavePlot()
+    if savePlotRunning then return end
+    savePlotRunning = true
+
+    task.spawn(function()
+        local wasPlot = nil   -- 前回の判定で入っていたプロット
+        local savedPlot = nil -- 最後に使っていたプロット名
+        local plotPos = nil   -- そのプロット内での最後の座標
+        local leaveTime = nil -- プロットから出た時刻 (タイマー開始点)
+
+        while Toggles.SavePlot and Toggles.SavePlot.Value do
+            local char = LocalPlayer.Character
+            local root = char and char:FindFirstChild("HumanoidRootPart")
+            local plot = getMyPlotName()
+
+            if plot then
+                -- プロット内: 記録を更新し、タイマーをリセット
+                if root then plotPos = root.CFrame end
+                if wasPlot ~= plot then
+                    print(("[セーブプロット] %s に入った (タイマーリセット)"):format(plot))
+                end
+                savedPlot = plot
+                leaveTime = nil
+            else
+                -- 今出たところなら、ここからタイマースタート
+                if wasPlot and savedPlot then
+                    leaveTime = os.clock()
+                    print(("[セーブプロット] %s から出た → %d秒タイマー開始"):format(savedPlot, SAVE_PLOT_WAIT))
+                end
+
+                if savedPlot and plotPos and leaveTime
+                    and os.clock() - leaveTime >= SAVE_PLOT_WAIT and root then
+
+                    print(("[セーブプロット] %s にtp連打開始"):format(savedPlot))
+                    local back = root.CFrame -- 元の座標
+
+                    for _ = 1, SAVE_PLOT_SPAM do
+                        if not Toggles.SavePlot.Value then break end
+                        local c = LocalPlayer.Character
+                        local r = c and c:FindFirstChild("HumanoidRootPart")
+                        if r then
+                            r.CFrame = plotPos
+                            r.AssemblyLinearVelocity = Vector3.zero
+                        end
+                        task.wait()
+                    end
+
+                    local c = LocalPlayer.Character
+                    local r = c and c:FindFirstChild("HumanoidRootPart")
+                    if r then
+                        r.CFrame = back
+                        r.AssemblyLinearVelocity = Vector3.zero
+                    end
+                    print("[セーブプロット] 元の座標へ戻った")
+
+                    -- まだプロット外なので、また80秒タイマーをスタート
+                    leaveTime = os.clock()
+                    plot = nil
+                end
+            end
+
+            wasPlot = plot
+            task.wait(0.1)
+        end
+
+        savePlotRunning = false
+    end)
+end
+
+PlayerGroup:AddToggle("SavePlot", {
+    Text = "セーブプロット",
+    Default = false,
+    Callback = function(value)
+        if value then
+            startSavePlot()
+        end
+    end,
+})
+
+--------------------------------------------------------------------
 -- 発光球体 (左下)
 --------------------------------------------------------------------
 local handledBalls = {}
@@ -1458,14 +1554,14 @@ end
 
 -- 他のプレイヤーが手の部品を掴んできた時の監視
 -- CreateGrabLine(他プレイヤー, 掴まれたSoundPart, CFrame) を見て、
--- 掴まれた物が自分の手のパーツなら、そのパーツにSNOを5回送って取り返す
+-- 掴まれた物が自分の手のパーツなら、そのパーツにSNOを10回送って取り返す
 local handSnoBusy = {}
 
 local function resendHandSNO(item)
     if handSnoBusy[item] then return end -- 送信中の重複は避ける
     handSnoBusy[item] = true
     task.spawn(function()
-        for _ = 1, SNO_COUNT do
+        for _ = 1, HAND_RECLAIM_COUNT do
             if not item.Parent then break end
             local sp = item:FindFirstChild("SoundPart", true)
             if sp then
