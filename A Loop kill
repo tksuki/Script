@@ -1,816 +1,96 @@
 --[[
-    Resonance Kill - Standalone
-    Target selection + Kill functionality
-    Extracted from Resonance v2.9 (crack by InLoad and wraith.dev)
-
-    Game: Fling Things and People (6961824067)
-
-    Usage:
-      1. Execute in FTAP
-      2. Click a player in the list to select
-      3. Click "Kill Selected"  (or use RightShift to toggle UI)
-      4. "Kill All" kills everyone
-
-    Public API:
-      getgenv().ResonanceKill.Kill(player)  -- kill any player
-      getgenv().ResonanceKillUnload()       -- unload everything
-      getgenv().ResonanceKillShow() / Hide() -- toggle UI
+    Resonance Kill - Obsidian UI (external fetch)
+    Only Kill + player selection functionality
 ]]
 
-local Players           = game:GetService("Players")
-local RunService        = game:GetService("RunService")
-local UserInputService  = game:GetService("UserInputService")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local TweenService      = game:GetService("TweenService")
-local CoreGui           = game:GetService("CoreGui")
+if game.PlaceId ~= 6961824067 then
+    return warn("[Resonance Kill] This game is not supported (FTAP only)")
+end
 
+if getgenv().ResonanceKillRunning then
+    return warn("[Resonance Kill] Already running")
+end
+getgenv().ResonanceKillRunning = true
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Stats = game:GetService("Stats")
+local StarterGui = game:GetService("StarterGui")
 local LocalPlayer = Players.LocalPlayer
 
-if game.PlaceId ~= 6961824067 then
-    return warn("[Resonance Kill] This script only works in Fling Things and People (6961824067)")
+local function notify(text, duration)
+    StarterGui:SetCore("SendNotification", {
+        Title = "Resonance Kill",
+        Text = text,
+        Duration = duration or 5,
+        Icon = "rbxassetid://79685990879972",
+    })
 end
 
 -- ============================================================
--- Remotes
+-- Fetch Obsidian from GitHub
 -- ============================================================
-local GrabEvents = ReplicatedStorage:WaitForChild("GrabEvents", 15)
-if not GrabEvents then
-    return warn("[Resonance Kill] GrabEvents not found - are you in FTAP?")
-end
-local SetNetworkOwner  = GrabEvents:WaitForChild("SetNetworkOwner", 5)
-local DestroyGrabLine  = GrabEvents:WaitForChild("DestroyGrabLine", 5)
-if not (SetNetworkOwner and DestroyGrabLine) then
-    return warn("[Resonance Kill] Required remotes not found")
-end
+local OBSIDIAN_BASE = "https://raw.githubusercontent.com/deividcomsono/Obsidian/fb0b7b22604664ab94bea7c67e2a14ab1a47ec27/"
 
--- ============================================================
--- State
--- ============================================================
-local State = {
-    Stopped   = false,
-    Owning    = false,
-    Killing   = setmetatable({}, { __mode = "k" }),
-    Selected  = nil,
-}
-
-local PartOwnerCache = setmetatable({}, { __mode = "k" })
-local VelocityCache  = setmetatable({}, { __mode = "k" })
-
--- ============================================================
--- Helpers
--- ============================================================
-local function GetChar(player)
-    player = player or LocalPlayer
-    local char = player.Character
-    if not char then return end
-    return char,
-        char:FindFirstChild("realHrp") or char:FindFirstChild("HumanoidRootPart"),
-        char:FindFirstChild("Humanoid")
+local function httpGet(url)
+    local ok, body = pcall(game.HttpGet, game, url)
+    if not ok then return nil, "HttpGet: " .. tostring(body) end
+    if type(body) ~= "string" or body == "" then return nil, "Empty response" end
+    return body
 end
 
-local function GetDistance(a, b)
-    if not (a and b) then return math.huge end
-    return (a.Position - b.Position).Magnitude
+local function loadLib(path, moduleName)
+    local body, err = httpGet(OBSIDIAN_BASE .. path)
+    if not body then
+        return nil, string.format("[%s] %s (path: %s)", moduleName, err, path)
+    end
+    local fn, lerr = loadstring(body, "@Obsidian/" .. moduleName)
+    if not fn then
+        return nil, string.format("[%s] loadstring: %s", moduleName, tostring(lerr))
+    end
+    return fn
 end
 
-local function IsPartOwner(part)
-    if not (part and part:IsA("BasePart")) then return false end
-
-    local cached = PartOwnerCache[part]
-    if cached and cached.Parent then
-        return cached.Value == LocalPlayer.Name
-    end
-
-    local parent = part.Parent
-    local head = part.Name == "HumanoidRootPart" and parent and parent:FindFirstChild("Head")
-    head = head and head:FindFirstChild("PartOwner")
-    if head and head.Value == LocalPlayer.Name then
-        PartOwnerCache[part] = head
-        return true
-    end
-
-    local own = part:FindFirstChild("PartOwner")
-    if own and own.Value == LocalPlayer.Name then
-        PartOwnerCache[part] = own
-        return true
-    end
-
-    return false
+-- Fetch Icons (with path fallbacks)
+local IconsFn, IconsErr
+for _, p in ipairs({ "addons/Icons.lua", "Icons.lua" }) do
+    IconsFn, IconsErr = loadLib(p, "Icons")
+    if IconsFn then break end
+end
+if not IconsFn then
+    notify("Failed to fetch Icons: " .. tostring(IconsErr), 10)
+    getgenv().ResonanceKillRunning = false
+    return
 end
 
-local function GetVelocity(part)
-    local now = os.clock()
-    local e = VelocityCache[part]
-    if not e then
-        VelocityCache[part] = { Pos = part.Position, Time = now, Vel = Vector3.zero }
-        return Vector3.zero
-    end
-    local dt = now - e.Time
-    if dt < 0.001 then return e.Vel end
-
-    local delta = (part.Position - e.Pos) / dt
-    if dt > 0.25 or delta.Magnitude > 300 then
-        e.Vel = Vector3.zero
-    else
-        e.Vel = e.Vel:Lerp(delta, 1 - math.exp(-dt * 40))
-        if e.Vel.Magnitude < 0.05 then e.Vel = Vector3.zero end
-    end
-
-    e.Pos = part.Position
-    e.Time = now
-    return e.Vel
+-- Fetch Library
+local LibraryFn, LibraryErr
+for _, p in ipairs({ "Library.lua", "Obsidian.lua", "src/Library.lua" }) do
+    LibraryFn, LibraryErr = loadLib(p, "Library")
+    if LibraryFn then break end
+end
+if not LibraryFn then
+    notify("Failed to fetch Obsidian Library: " .. tostring(LibraryErr), 10)
+    getgenv().ResonanceKillRunning = false
+    return
 end
 
-local function PredictCFrame(part, base)
-    base = base or part.CFrame
-    local ping = math.clamp(LocalPlayer:GetNetworkPing(), 0, 0.35)
-    return base + GetVelocity(part) * ping
+-- Load Obsidian
+local moduleCache = { Icons = IconsFn() }
+local function requireModule(name)
+    if moduleCache[name] then return moduleCache[name] end
+    error("Unknown module: " .. tostring(name))
 end
 
-local function ResetVel(part)
-    if not (part and part:IsA("BasePart")) then return end
-    if part.AssemblyAngularVelocity ~= Vector3.zero then part.AssemblyAngularVelocity = Vector3.zero end
-    if part.AssemblyLinearVelocity  ~= Vector3.zero then part.AssemblyLinearVelocity  = Vector3.zero end
+local ok, lib = pcall(LibraryFn, requireModule)
+if not ok or not lib then
+    notify("Failed to initialize Obsidian: " .. tostring(lib), 10)
+    getgenv().ResonanceKillRunning = false
+    return
 end
 
-local function PivotTo(model, cframe)
-    if not (model and model:IsA("Model")) or typeof(cframe) ~= "CFrame" then return false end
-    local offset = cframe * model:GetPivot():Inverse()
-    local parts  = model:QueryDescendants("BasePart")
-    local newCF  = {}
+local options = lib.Options
+local toggles = lib.Toggles
 
-    for i, p in ipairs(parts) do
-        local root = p:IsDescendantOf(model) and p.AssemblyRootPart
-        if root and not p.Anchored and not root.Anchored then
-            newCF[i] = offset * p.CFrame
-        end
-    end
-    for i, cf in pairs(newCF) do parts[i].CFrame = cf end
-    return true
-end
-
--- ============================================================
--- Grab / SNO / RNO
--- ============================================================
-local function Grab(part, at)
-    local _, root, hum = GetChar()
-    if not (root and hum and hum.Health > 0) then return end
-    if not (part and part.Parent and part:IsA("BasePart")) then return end
-
-    local myPos  = (at or root.CFrame) * CFrame.new(0, 1.593, 0)
-    local target = PredictCFrame(part)
-    local cframe = CFrame.new(myPos.Position, target.Position)
-    SetNetworkOwner:FireServer(part, cframe)
-end
-
--- SNO: repeatedly request network ownership, with far-distance tracking
-local function SNO(part, timeout)
-    local myChar, myRoot, myHum = GetChar()
-    local myHead    = myChar and myChar:FindFirstChild("Head")
-    local ragdolled = myHum and myHum:FindFirstChild("Ragdolled")
-
-    if not (myHead and ragdolled and myRoot and myHum and myHum.Health > 0) then
-        return false
-    end
-    if not (part and part:IsA("BasePart") and part.Parent) then return false end
-    if IsPartOwner(part) then return true end
-    if State.Owning then return false end
-
-    local far = GetDistance(myRoot, part) >= 31
-
-    State.Owning = true
-
-    local savedRoot, savedHead, aimPos, conn
-
-    local function freeze()
-        savedRoot = myRoot.CFrame
-        savedHead = myHead.CFrame
-        aimPos    = myRoot.CFrame
-
-        RunService:BindToRenderStep("RSC_Kill", Enum.RenderPriority.Camera.Value - 1, function()
-            myRoot.CFrame = savedRoot
-            myHead.CFrame = savedHead
-        end)
-
-        conn = RunService.Heartbeat:Connect(function()
-            savedRoot = myRoot.CFrame
-            savedHead = myHead.CFrame
-            myRoot.CFrame = aimPos
-            myHead.CFrame = aimPos
-        end)
-    end
-
-    local function unfreeze()
-        RunService:UnbindFromRenderStep("RSC_Kill")
-        if conn then conn:Disconnect(); conn = nil end
-        if myHead.Parent then myHead.CFrame = savedHead end
-        if myRoot.Parent then myRoot.CFrame = savedRoot end
-    end
-
-    local ok = pcall(function()
-        if far then freeze() end
-        timeout = timeout or 0.65
-        local start = tick()
-
-        while not State.Stopped
-              and part.Parent
-              and not IsPartOwner(part)
-              and myHum.Health ~= 0
-              and myRoot.Parent
-              and (tick() - start) < timeout
-        do
-            if far then
-                aimPos = PredictCFrame(part) - Vector3.new(0, 22, 0)
-            end
-            RunService.Heartbeat:Wait()
-            Grab(part, far and aimPos or nil)
-        end
-    end)
-
-    if far then pcall(unfreeze) end
-    State.Owning = false
-    if not ok then return false end
-
-    return IsPartOwner(part)
-end
-
-local function RNO(part)
-    DestroyGrabLine:FireServer(part)
-end
-
--- ============================================================
--- Kill
--- ============================================================
-local Kill = function(player)
-    if not player or player == LocalPlayer or player.Parent ~= Players then
-        return false
-    end
-
-    local char, root, hum = GetChar(player)
-    if not (char and root and hum) then return false end
-    if hum.Health == 0 then return false end
-    if State.Killing[char] then return false end
-
-    local spawnLoc = workspace:FindFirstChild("SpawnLocation")
-    if spawnLoc and GetDistance(spawnLoc, root) > 15000 then return false end
-
-    State.Killing[char]   = true
-    State.Killing[player] = true
-
-    local originalFallen = workspace.FallenPartsDestroyHeight
-
-    task.spawn(function()
-        local success = SNO(root)
-        if not success then
-            State.Killing[char]   = nil
-            State.Killing[player] = nil
-            return
-        end
-
-        if not (char.Parent and hum.Parent and root.Parent) then
-            State.Killing[char]   = nil
-            State.Killing[player] = nil
-            return
-        end
-
-        hum.BreakJointsOnDeath = false
-        hum:ChangeState(Enum.HumanoidStateType.Dead)
-
-        -- Void teleport trick (matches original DestroyObject)
-        workspace.FallenPartsDestroyHeight = 0/0
-        PivotTo(char, CFrame.new(0, -11111, 0))
-
-        local ping = math.clamp(LocalPlayer:GetNetworkPing() + 0.05, 0.08, 0.25)
-
-        task.delay(ping, function()
-            workspace.FallenPartsDestroyHeight = -10000
-            task.wait()
-            workspace.FallenPartsDestroyHeight = originalFallen
-
-            task.delay(0.5, function()
-                if root and root.Parent then
-                    pcall(RNO, root)
-                end
-            end)
-        end)
-
-        task.delay(1.5, function()
-            State.Killing[char]   = nil
-            State.Killing[player] = nil
-        end)
-    end)
-
-    return true
-end
-
--- ============================================================
--- UI
--- ============================================================
-local COLORS = {
-    Bg          = Color3.fromRGB(18, 18, 22),
-    Main        = Color3.fromRGB(28, 28, 34),
-    Row         = Color3.fromRGB(22, 22, 28),
-    RowHover    = Color3.fromRGB(35, 35, 42),
-    RowSelected = Color3.fromRGB(50, 45, 30),
-    Accent      = Color3.fromRGB(255, 230, 0),
-    Outline     = Color3.fromRGB(55, 55, 65),
-    Text        = Color3.fromRGB(235, 235, 240),
-    SubText     = Color3.fromRGB(150, 150, 160),
-    Danger      = Color3.fromRGB(220, 50, 50),
-    DangerHover = Color3.fromRGB(255, 70, 70),
-    Alive       = Color3.fromRGB(60, 180, 60),
-    Dead        = Color3.fromRGB(80, 80, 80),
-}
-
-local function buildUI()
-    local gui = Instance.new("ScreenGui")
-    gui.Name = "ResonanceKill"
-    gui.ResetOnSpawn = false
-    gui.IgnoreGuiInset = true
-    gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-    pcall(function() gui.Parent = CoreGui end)
-    if not gui.Parent then
-        gui.Parent = LocalPlayer:WaitForChild("PlayerGui")
-    end
-
-    -- Main frame
-    local main = Instance.new("Frame")
-    main.Size = UDim2.fromOffset(260, 460)
-    main.Position = UDim2.new(0.5, -130, 0.5, -230)
-    main.BackgroundColor3 = COLORS.Bg
-    main.BorderSizePixel = 0
-    main.Active = true
-    main.ClipsDescendants = true
-    main.Parent = gui
-    Instance.new("UICorner", main).CornerRadius = UDim.new(0, 10)
-    local mainStroke = Instance.new("UIStroke", main)
-    mainStroke.Color = COLORS.Outline
-
-    -- ============ Title bar ============
-    local bar = Instance.new("Frame")
-    bar.Size = UDim2.new(1, 0, 0, 38)
-    bar.BackgroundColor3 = COLORS.Main
-    bar.BorderSizePixel = 0
-    bar.Parent = main
-    Instance.new("UICorner", bar).CornerRadius = UDim.new(0, 10)
-    local barFix = Instance.new("Frame")
-    barFix.Size = UDim2.new(1, 0, 0, 10)
-    barFix.Position = UDim2.new(0, 0, 1, -10)
-    barFix.BackgroundColor3 = COLORS.Main
-    barFix.BorderSizePixel = 0
-    barFix.Parent = bar
-
-    local accentBar = Instance.new("Frame")
-    accentBar.Size = UDim2.fromOffset(4, 18)
-    accentBar.Position = UDim2.fromOffset(12, 10)
-    accentBar.BackgroundColor3 = COLORS.Accent
-    accentBar.BorderSizePixel = 0
-    accentBar.Parent = bar
-    Instance.new("UICorner", accentBar).CornerRadius = UDim.new(0, 2)
-
-    local title = Instance.new("TextLabel")
-    title.Size = UDim2.new(1, -80, 0, 18)
-    title.Position = UDim2.fromOffset(24, 4)
-    title.BackgroundTransparency = 1
-    title.Text = "Resonance Kill"
-    title.TextColor3 = COLORS.Text
-    title.TextXAlignment = Enum.TextXAlignment.Left
-    title.Font = Enum.Font.GothamBold
-    title.TextSize = 14
-    title.Parent = bar
-
-    local subtitle = Instance.new("TextLabel")
-    subtitle.Size = UDim2.new(1, -80, 0, 12)
-    subtitle.Position = UDim2.fromOffset(24, 20)
-    subtitle.BackgroundTransparency = 1
-    subtitle.Text = "v2.9  •  FTAP"
-    subtitle.TextColor3 = COLORS.SubText
-    subtitle.TextXAlignment = Enum.TextXAlignment.Left
-    subtitle.Font = Enum.Font.Gotham
-    subtitle.TextSize = 10
-    subtitle.Parent = bar
-
-    -- Close button
-    local closeBtn = Instance.new("TextButton")
-    closeBtn.Size = UDim2.fromOffset(24, 24)
-    closeBtn.Position = UDim2.new(1, -30, 0, 7)
-    closeBtn.BackgroundColor3 = COLORS.Danger
-    closeBtn.BorderSizePixel = 0
-    closeBtn.Text = "✕"
-    closeBtn.TextColor3 = Color3.new(1, 1, 1)
-    closeBtn.Font = Enum.Font.GothamBold
-    closeBtn.TextSize = 11
-    closeBtn.Parent = bar
-    Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(0, 4)
-    closeBtn.MouseEnter:Connect(function()
-        TweenService:Create(closeBtn, TweenInfo.new(0.15), {BackgroundColor3 = COLORS.DangerHover}):Play()
-    end)
-    closeBtn.MouseLeave:Connect(function()
-        TweenService:Create(closeBtn, TweenInfo.new(0.15), {BackgroundColor3 = COLORS.Danger}):Play()
-    end)
-    closeBtn.MouseButton1Click:Connect(function()
-        gui.Enabled = false
-    end)
-
-    -- ============ Drag ============
-    local dragging, dragStart, startPos = false, nil, nil
-    bar.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1
-        or input.UserInputType == Enum.UserInputType.Touch then
-            dragging  = true
-            dragStart = input.Position
-            startPos  = main.Position
-            input.Changed:Connect(function()
-                if input.UserInputState == Enum.UserInputState.End then
-                    dragging = false
-                end
-            end)
-        end
-    end)
-    UserInputService.InputChanged:Connect(function(input)
-        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement
-        or input.UserInputType == Enum.UserInputType.Touch) then
-            local delta = input.Position - dragStart
-            main.Position = UDim2.new(
-                startPos.X.Scale, startPos.X.Offset + delta.X,
-                startPos.Y.Scale, startPos.Y.Offset + delta.Y
-            )
-        end
-    end)
-
-    -- ============ Search ============
-    local searchFrame = Instance.new("Frame")
-    searchFrame.Size = UDim2.new(1, -20, 0, 28)
-    searchFrame.Position = UDim2.fromOffset(10, 46)
-    searchFrame.BackgroundColor3 = COLORS.Main
-    searchFrame.BorderSizePixel = 0
-    searchFrame.Parent = main
-    Instance.new("UICorner", searchFrame).CornerRadius = UDim.new(0, 4)
-    local searchStroke = Instance.new("UIStroke", searchFrame)
-    searchStroke.Color = COLORS.Outline
-
-    local searchBox = Instance.new("TextBox")
-    searchBox.Size = UDim2.new(1, -16, 1, 0)
-    searchBox.Position = UDim2.fromOffset(8, 0)
-    searchBox.BackgroundTransparency = 1
-    searchBox.Text = ""
-    searchBox.PlaceholderText = "🔍  Search..."
-    searchBox.PlaceholderColor3 = COLORS.SubText
-    searchBox.TextColor3 = COLORS.Text
-    searchBox.TextXAlignment = Enum.TextXAlignment.Left
-    searchBox.Font = Enum.Font.Gotham
-    searchBox.TextSize = 12
-    searchBox.ClearTextOnFocus = false
-    searchBox.Parent = searchFrame
-    searchBox.Focused:Connect(function()
-        TweenService:Create(searchStroke, TweenInfo.new(0.15), {Color = COLORS.Accent}):Play()
-    end)
-    searchBox.FocusLost:Connect(function()
-        TweenService:Create(searchStroke, TweenInfo.new(0.15), {Color = COLORS.Outline}):Play()
-    end)
-
-    -- ============ Count ============
-    local countLabel = Instance.new("TextLabel")
-    countLabel.Size = UDim2.new(1, -20, 0, 14)
-    countLabel.Position = UDim2.fromOffset(12, 78)
-    countLabel.BackgroundTransparency = 1
-    countLabel.Text = "Players: 0"
-    countLabel.TextColor3 = COLORS.SubText
-    countLabel.TextXAlignment = Enum.TextXAlignment.Left
-    countLabel.Font = Enum.Font.Gotham
-    countLabel.TextSize = 10
-    countLabel.Parent = main
-
-    -- ============ Player list ============
-    local listFrame = Instance.new("Frame")
-    listFrame.Size = UDim2.new(1, -20, 1, -196)
-    listFrame.Position = UDim2.fromOffset(10, 96)
-    listFrame.BackgroundColor3 = COLORS.Main
-    listFrame.BorderSizePixel = 0
-    listFrame.Parent = main
-    Instance.new("UICorner", listFrame).CornerRadius = UDim.new(0, 6)
-    local listStroke = Instance.new("UIStroke", listFrame)
-    listStroke.Color = COLORS.Outline
-
-    local list = Instance.new("ScrollingFrame")
-    list.Size = UDim2.new(1, -8, 1, -8)
-    list.Position = UDim2.fromOffset(4, 4)
-    list.BackgroundTransparency = 1
-    list.BorderSizePixel = 0
-    list.CanvasSize = UDim2.new(0, 0, 0, 0)
-    list.AutomaticCanvasSize = Enum.AutomaticSize.Y
-    list.ScrollBarThickness = 3
-    list.ScrollBarImageColor3 = COLORS.Accent
-    list.ScrollBarImageTransparency = 0.4
-    list.Parent = listFrame
-
-    local layout = Instance.new("UIListLayout")
-    layout.Padding = UDim.new(0, 3)
-    layout.Parent = list
-
-    local listPad = Instance.new("UIPadding", list)
-    listPad.PaddingLeft   = UDim.new(0, 2)
-    listPad.PaddingRight  = UDim.new(0, 2)
-    listPad.PaddingTop    = UDim.new(0, 2)
-    listPad.PaddingBottom = UDim.new(0, 2)
-
-    -- ============ Action bar ============
-    local actionBar = Instance.new("Frame")
-    actionBar.Size = UDim2.new(1, -20, 0, 82)
-    actionBar.Position = UDim2.new(0, 10, 1, -92)
-    actionBar.BackgroundTransparency = 1
-    actionBar.Parent = main
-
-    local selectedLabel = Instance.new("TextLabel")
-    selectedLabel.Size = UDim2.new(1, 0, 0, 16)
-    selectedLabel.BackgroundTransparency = 1
-    selectedLabel.Text = "Selected: none"
-    selectedLabel.TextColor3 = COLORS.SubText
-    selectedLabel.TextXAlignment = Enum.TextXAlignment.Left
-    selectedLabel.Font = Enum.Font.Gotham
-    selectedLabel.TextSize = 10
-    selectedLabel.Parent = actionBar
-
-    local killBtn = Instance.new("TextButton")
-    killBtn.Size = UDim2.new(1, 0, 0, 30)
-    killBtn.Position = UDim2.fromOffset(0, 20)
-    killBtn.BackgroundColor3 = COLORS.Danger
-    killBtn.BorderSizePixel = 0
-    killBtn.Text = "⚔  Kill Selected"
-    killBtn.TextColor3 = Color3.new(1, 1, 1)
-    killBtn.Font = Enum.Font.GothamBold
-    killBtn.TextSize = 13
-    killBtn.Parent = actionBar
-    Instance.new("UICorner", killBtn).CornerRadius = UDim.new(0, 6)
-    killBtn.MouseEnter:Connect(function()
-        TweenService:Create(killBtn, TweenInfo.new(0.15), {BackgroundColor3 = COLORS.DangerHover}):Play()
-    end)
-    killBtn.MouseLeave:Connect(function()
-        TweenService:Create(killBtn, TweenInfo.new(0.15), {BackgroundColor3 = COLORS.Danger}):Play()
-    end)
-
-    local killAllBtn = Instance.new("TextButton")
-    killAllBtn.Size = UDim2.new(1, 0, 0, 26)
-    killAllBtn.Position = UDim2.fromOffset(0, 54)
-    killAllBtn.BackgroundColor3 = COLORS.Main
-    killAllBtn.BorderSizePixel = 0
-    killAllBtn.Text = "💀  Kill All"
-    killAllBtn.TextColor3 = COLORS.Danger
-    killAllBtn.Font = Enum.Font.GothamBold
-    killAllBtn.TextSize = 12
-    killAllBtn.Parent = actionBar
-    Instance.new("UICorner", killAllBtn).CornerRadius = UDim.new(0, 6)
-    local killAllStroke = Instance.new("UIStroke", killAllBtn)
-    killAllStroke.Color = COLORS.Danger
-    killAllStroke.Transparency = 0.5
-    killAllBtn.MouseEnter:Connect(function()
-        TweenService:Create(killAllBtn, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(45, 22, 22)}):Play()
-        TweenService:Create(killAllStroke, TweenInfo.new(0.15), {Transparency = 0}):Play()
-    end)
-    killAllBtn.MouseLeave:Connect(function()
-        TweenService:Create(killAllBtn, TweenInfo.new(0.15), {BackgroundColor3 = COLORS.Main}):Play()
-        TweenService:Create(killAllStroke, TweenInfo.new(0.15), {Transparency = 0.5}):Play()
-    end)
-
-    -- ============ Rows ============
-    local rows = {}
-    local rowConnections = {}
-
-    local function setSelectedUI(player, isSel)
-        local btn = rows[player]
-        if not btn then return end
-        if isSel then
-            btn.BackgroundColor3 = COLORS.RowSelected
-            btn.NameLabel.TextColor3 = COLORS.Accent
-        else
-            btn.BackgroundColor3 = COLORS.Row
-            btn.NameLabel.TextColor3 = COLORS.Text
-        end
-    end
-
-    local function makeRow(player)
-        local btn = Instance.new("TextButton")
-        btn.Size = UDim2.new(1, 0, 0, 34)
-        btn.BackgroundColor3 = COLORS.Row
-        btn.BorderSizePixel = 0
-        btn.Text = ""
-        btn.AutoButtonColor = false
-        btn.Parent = list
-        Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 4)
-
-        local nameLabel = Instance.new("TextLabel")
-        nameLabel.Size = UDim2.new(1, -50, 0, 16)
-        nameLabel.Position = UDim2.fromOffset(10, 2)
-        nameLabel.BackgroundTransparency = 1
-        nameLabel.Text = player.DisplayName
-        nameLabel.TextColor3 = COLORS.Text
-        nameLabel.TextXAlignment = Enum.TextXAlignment.Left
-        nameLabel.Font = Enum.Font.GothamMedium
-        nameLabel.TextSize = 12
-        nameLabel.Parent = btn
-
-        local userLabel = Instance.new("TextLabel")
-        userLabel.Size = UDim2.new(1, -50, 0, 12)
-        userLabel.Position = UDim2.fromOffset(10, 18)
-        userLabel.BackgroundTransparency = 1
-        userLabel.Text = "@" .. player.Name
-        userLabel.TextColor3 = COLORS.SubText
-        userLabel.TextXAlignment = Enum.TextXAlignment.Left
-        userLabel.Font = Enum.Font.Gotham
-        userLabel.TextSize = 10
-        userLabel.Parent = btn
-
-        local dot = Instance.new("Frame")
-        dot.Size = UDim2.fromOffset(8, 8)
-        dot.Position = UDim2.new(1, -18, 0.5, -4)
-        dot.BackgroundColor3 = COLORS.Alive
-        dot.BorderSizePixel = 0
-        dot.Parent = btn
-        Instance.new("UICorner", dot).CornerRadius = UDim.new(1, 0)
-
-        btn.NameLabel = nameLabel
-
-        local function updateStatus()
-            local char, _, hum = GetChar(player)
-            if not char or not hum then
-                dot.BackgroundColor3 = COLORS.Dead
-            elseif hum.Health == 0 then
-                dot.BackgroundColor3 = COLORS.Dead
-            else
-                dot.BackgroundColor3 = COLORS.Alive
-            end
-        end
-        updateStatus()
-
-        btn.MouseEnter:Connect(function()
-            if State.Selected ~= player then
-                btn.BackgroundColor3 = COLORS.RowHover
-            end
-        end)
-        btn.MouseLeave:Connect(function()
-            if State.Selected ~= player then
-                btn.BackgroundColor3 = COLORS.Row
-            end
-        end)
-
-        btn.MouseButton1Click:Connect(function()
-            local prev = State.Selected
-            if prev == player then
-                -- Deselect
-                State.Selected = nil
-                setSelectedUI(player, false)
-                selectedLabel.Text = "Selected: none"
-                selectedLabel.TextColor3 = COLORS.SubText
-                return
-            end
-            if prev and rows[prev] then
-                setSelectedUI(prev, false)
-            end
-            State.Selected = player
-            setSelectedUI(player, true)
-            selectedLabel.Text = "Selected: " .. player.DisplayName
-            selectedLabel.TextColor3 = COLORS.Accent
-        end)
-
-        btn.StatusUpdater = updateStatus
-        rows[player] = btn
-
-        if State.Selected == player then
-            setSelectedUI(player, true)
-        end
-
-        return btn
-    end
-
-    local function refreshList()
-        local prevSelected = State.Selected
-
-        for player, btn in pairs(rows) do
-            btn:Destroy()
-        end
-        rows = {}
-        State.Selected = nil
-
-        local search = searchBox.Text:lower()
-        local playerList = Players:GetPlayers()
-        table.sort(playerList, function(a, b)
-            return a.DisplayName:lower() < b.DisplayName:lower()
-        end)
-
-        local count = 0
-        for _, player in ipairs(playerList) do
-            if player ~= LocalPlayer then
-                if search == ""
-                or player.Name:lower():find(search, 1, true)
-                or player.DisplayName:lower():find(search, 1, true) then
-                    makeRow(player)
-                    count = count + 1
-                end
-            end
-        end
-
-        -- Restore selection if still present
-        if prevSelected and rows[prevSelected] then
-            State.Selected = prevSelected
-            setSelectedUI(prevSelected, true)
-            selectedLabel.Text = "Selected: " .. prevSelected.DisplayName
-            selectedLabel.TextColor3 = COLORS.Accent
-        else
-            State.Selected = nil
-            selectedLabel.Text = "Selected: none"
-            selectedLabel.TextColor3 = COLORS.SubText
-        end
-
-        countLabel.Text = string.format("Players: %d", count)
-    end
-
-    -- Central status updater (single loop, no leak)
-    local statusLoop = task.spawn(function()
-        while gui.Parent and not State.Stopped do
-            task.wait(0.5)
-            for _, btn in pairs(rows) do
-                if btn.StatusUpdater and btn.Parent then
-                    btn.StatusUpdater()
-                end
-            end
-        end
-    end)
-
-    searchBox:GetPropertyChangedSignal("Text"):Connect(refreshList)
-
-    killBtn.MouseButton1Click:Connect(function()
-        if not State.Selected or State.Selected.Parent ~= Players then
-            selectedLabel.Text = "Select a player first!"
-            selectedLabel.TextColor3 = COLORS.Danger
-            task.delay(1.5, function()
-                if State.Selected and State.Selected.Parent == Players then
-                    selectedLabel.Text = "Selected: " .. State.Selected.DisplayName
-                    selectedLabel.TextColor3 = COLORS.Accent
-                else
-                    selectedLabel.Text = "Selected: none"
-                    selectedLabel.TextColor3 = COLORS.SubText
-                end
-            end)
-            return
-        end
-        Kill(State.Selected)
-    end)
-
-    killAllBtn.MouseButton1Click:Connect(function()
-        task.spawn(function()
-            for _, player in ipairs(Players:GetPlayers()) do
-                if player ~= LocalPlayer then
-                    Kill(player)
-                    task.wait(0.5)
-                end
-            end
-        end)
-    end)
-
-    Players.PlayerAdded:Connect(function() task.wait(0.5); refreshList() end)
-    Players.PlayerRemoving:Connect(function() task.wait(0.5); refreshList() end)
-
-    refreshList()
-
-    return gui
-end
-
--- ============================================================
--- Boot
--- ============================================================
-local gui = buildUI()
-
--- Keybind toggle (RightShift)
-local toggleConn = UserInputService.InputBegan:Connect(function(input, gp)
-    if gp then return end
-    if input.KeyCode == Enum.KeyCode.RightShift then
-        gui.Enabled = not gui.Enabled
-    end
-end)
-
--- Public API
-local function unload()
-    State.Stopped = true
-    pcall(function() RunService:UnbindFromRenderStep("RSC_Kill") end)
-    if toggleConn then pcall(function() toggleConn:Disconnect() end) end
-    if gui then pcall(function() gui:Destroy() end) end
-    local env = getgenv and getgenv() or _G
-    env.ResonanceKill = nil
-    env.ResonanceKillUnload = nil
-    env.ResonanceKillShow = nil
-    env.ResonanceKillHide = nil
-    print("[Resonance Kill] Unloaded.")
-end
-
-local env = getgenv and getgenv() or _G
-env.ResonanceKill = {
-    Kill     = Kill,
-    Unload   = unload,
-    IsPartOwner = IsPartOwner,
-    SNO      = SNO,
-}
-env.ResonanceKillUnload = unload
-env.ResonanceKillShow   = function() if gui then gui.Enabled = true end end
-env.ResonanceKillHide   = function() if gui then gui.Enabled = false end end
-
-print("[Resonance Kill] Loaded. RightShift toggles UI. getgenv().ResonanceKillUnload() to unload.")
+-- ... rest of kill functionality
