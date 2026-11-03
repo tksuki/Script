@@ -1411,3 +1411,616 @@ RainGroup:AddToggle("RainEnabled", {
         end
     end,
 })
+
+--------------------------------------------------------------------
+-- 手 (一番下に追加)
+--------------------------------------------------------------------
+-- パレット1枚(手のひら) + ハシゴ14個(指の関節) をスポーンしてSNOを送り、
+-- 自分の真上20スタッド・右15スタッドに、手のひらを前に向けて追従させる。
+-- 剣ありの場合はハシゴをさらに3個スポーンして剣を作り、手に握らせる。
+-- スポーン/SNOは他の機能と同じ runSpawnLoop を使うので、プロット内外どちらでも動く。
+local handItems, handRels, handParts = {}, {}, {}
+local handCenters = {} -- 各物のバウンディング中心(ローカル)
+local handNoCol = {}   -- 手の部品同士がぶつからないようにする制約
+local handPose = nil   -- 剣無しの時、指の開き具合(0〜1)で関節の位置を作り直す関数
+local handConn, handRenderConn
+local handGrabConn -- CreateGrabLine の監視
+local handHandled, handPre = {}, {}
+local handSword = false
+local handInPlot = nil
+local spawningHand = false
+
+-- 本物の手の骨の長さ(cm): 近位 / 中節 / 末節
+-- 並びは左(小指側)→右(人差し指側)。親指は2本のハシゴで表現
+local FINGER_CM = {
+    { 3.3, 1.9, 1.7 }, -- 小指
+    { 4.1, 2.5, 1.9 }, -- 薬指
+    { 4.4, 2.6, 1.9 }, -- 中指
+    { 3.9, 2.3, 1.8 }, -- 人差し指
+}
+local THUMB_CM = { 5.0, 2.8 }
+local REAL_PALM_CM = 9.25 -- 本物の手のひら (幅8.5 / 長さ10) の平均
+
+local function sendHandSNO(item)
+    task.spawn(function()
+        for _ = 1, SNO_COUNT do
+            if not item.Parent then break end
+            local sp = item:FindFirstChild("SoundPart", true)
+            if sp then
+                pcall(function()
+                    ReplicatedStorage.GrabEvents.SetNetworkOwner:FireServer(sp, sp.CFrame)
+                end)
+            end
+            task.wait(SNO_INTERVAL)
+        end
+    end)
+end
+
+-- 他のプレイヤーが手の部品を掴んできた時の監視
+-- CreateGrabLine(他プレイヤー, 掴まれたSoundPart, CFrame) を見て、
+-- 掴まれた物が自分の手のパーツなら、そのパーツにSNOを5回送って取り返す
+local handSnoBusy = {}
+
+local function resendHandSNO(item)
+    if handSnoBusy[item] then return end -- 送信中の重複は避ける
+    handSnoBusy[item] = true
+    task.spawn(function()
+        for _ = 1, SNO_COUNT do
+            if not item.Parent then break end
+            local sp = item:FindFirstChild("SoundPart", true)
+            if sp then
+                pcall(function()
+                    ReplicatedStorage.GrabEvents.SetNetworkOwner:FireServer(sp, sp.CFrame)
+                end)
+            end
+            task.wait(SNO_INTERVAL)
+        end
+        handSnoBusy[item] = nil
+    end)
+end
+
+local function findMyHandItem(obj)
+    local m = obj
+    while m and m ~= workspace do
+        if handHandled[m] then return m end
+        m = m.Parent
+    end
+    return nil
+end
+
+local function startHandMonitor()
+    if handGrabConn then return end
+    local grabEvents = ReplicatedStorage:FindFirstChild("GrabEvents")
+    local remote = grabEvents and grabEvents:FindFirstChild("CreateGrabLine")
+    if not remote then
+        warn("[手] CreateGrabLine が見つからないため監視できません")
+        return
+    end
+    handGrabConn = remote.OnClientEvent:Connect(function(plr, part)
+        if typeof(plr) ~= "Instance" or plr == LocalPlayer then return end -- 他ユーザーだけ
+        if typeof(part) ~= "Instance" then return end
+        local item = findMyHandItem(part) -- 掴まれた物が自分のものか
+        if item then
+            resendHandSNO(item)
+        end
+    end)
+end
+
+local function stopHandMonitor()
+    if handGrabConn then
+        handGrabConn:Disconnect()
+        handGrabConn = nil
+    end
+end
+
+-- 開始前から存在している物を全フォルダから記録
+local function snapshotHand()
+    local pre = {}
+    for _, f in ipairs(getCandidateFolders()) do
+        for _, it in ipairs(f:GetChildren()) do
+            if it.Name == "PalletLightBrown" or it.Name == "LadderLightBrown" then
+                pre[it] = true
+            end
+        end
+    end
+    return pre
+end
+
+-- 今回新しく出た物を、全フォルダの中から「一番多く増えたフォルダ」で集める
+-- (プロット判定に頼らないので、プロット内でも確実に検知できる)
+local function collectHand(toyName)
+    local best = {}
+    for _, f in ipairs(getCandidateFolders()) do
+        local list = {}
+        for _, it in ipairs(f:GetChildren()) do
+            if it.Name == toyName and not handPre[it] then
+                table.insert(list, it)
+            end
+        end
+        if #list > #best then best = list end
+    end
+    for _, it in ipairs(best) do
+        if not handHandled[it] then
+            handHandled[it] = true
+            sendHandSNO(it)
+        end
+    end
+    return best
+end
+
+local function makeHandSpawn(toyName)
+    return function()
+        local char = LocalPlayer.Character
+        local root = char and char:FindFirstChild("HumanoidRootPart")
+        if not root then return false end
+
+        local inPlot
+        if handInPlot ~= nil then
+            inPlot = handInPlot
+        else
+            inPlot = getMyPlotNameCached() ~= nil
+        end
+
+        local y
+        if toyName == "PalletLightBrown" then
+            y = inPlot and -48.5 or -40
+        else
+            y = inPlot and -61 or -129
+        end
+
+        local pos = (root.CFrame * CFrame.new(0, 0, -5)).Position
+        local ok, result = pcall(function()
+            return ReplicatedStorage.MenuToys.SpawnToyRemoteFunction:InvokeServer(
+                toyName, CFrame.new(pos), Vector3.new(0, y, 0))
+        end)
+        task.wait(0.01)
+
+        if ok and typeof(result) == "Instance" then
+            -- 出た場所がPlotNなら、以降はプロット内の値を使う
+            if result.Parent then
+                handInPlot = table.find(PLOT_NAMES, result.Parent.Name) ~= nil
+            end
+            if not handHandled[result] then
+                handHandled[result] = true
+                sendHandSNO(result)
+            end
+            return result
+        end
+        return false
+    end
+end
+
+-- ツールの自分の向きでの大きさと中心を測る
+local function measureItem(item)
+    local pivot = item:GetPivot()
+    local mn = Vector3.new(math.huge, math.huge, math.huge)
+    local mx = -mn
+    local function add(p)
+        local s = p.Size / 2
+        for _, sx in ipairs({ -1, 1 }) do
+            for _, sy in ipairs({ -1, 1 }) do
+                for _, sz in ipairs({ -1, 1 }) do
+                    local c = pivot:PointToObjectSpace(
+                        p.CFrame:PointToWorldSpace(Vector3.new(sx * s.X, sy * s.Y, sz * s.Z)))
+                    mn = Vector3.new(math.min(mn.X, c.X), math.min(mn.Y, c.Y), math.min(mn.Z, c.Z))
+                    mx = Vector3.new(math.max(mx.X, c.X), math.max(mx.Y, c.Y), math.max(mx.Z, c.Z))
+                end
+            end
+        end
+    end
+    if item:IsA("BasePart") then add(item) end
+    for _, d in ipairs(item:GetDescendants()) do
+        if d:IsA("BasePart") then add(d) end
+    end
+    return mx - mn, (mx + mn) / 2
+end
+
+local function sortedSize(size)
+    local t = { size.X, size.Y, size.Z }
+    table.sort(t, function(a, b) return a > b end)
+    return t[1], t[2], t[3]
+end
+
+-- 一番長い軸→targets[1], 2番目→targets[2], 一番短い→targets[3] に向ける回転
+local function makeM(size, targets)
+    local axes = { { 1, size.X }, { 2, size.Y }, { 3, size.Z } }
+    table.sort(axes, function(a, b) return a[2] > b[2] end)
+    local cols = {}
+    for rank, a in ipairs(axes) do cols[a[1]] = targets[rank] end
+    if cols[1]:Dot(cols[2]:Cross(cols[3])) < 0 then cols[3] = -cols[3] end
+    return CFrame.fromMatrix(Vector3.zero, cols[1], cols[2], cols[3])
+end
+
+local X_, Y_, Z_ = Vector3.xAxis, Vector3.yAxis, Vector3.zAxis
+
+-- 手のローカル座標: X=親指側, Y=手の甲側(-Yが手のひら側), Z=指の向き
+local function buildHand(pallet, ladders, withSword)
+    handItems, handRels, handParts = {}, {}, {}
+    handCenters = {}
+    handPose = nil
+    handSword = withSword
+
+    local function place(item, cfCenter, M)
+        local _, c = measureItem(item)
+        table.insert(handItems, item)
+        table.insert(handRels, cfCenter * M * CFrame.new(-c))
+        handCenters[#handItems] = c
+
+        local parts = {}
+        if item:IsA("BasePart") then table.insert(parts, item) end
+        for _, d in ipairs(item:GetDescendants()) do
+            if d:IsA("BasePart") then table.insert(parts, d) end
+        end
+        table.insert(handParts, parts)
+    end
+
+    local palSize = measureItem(pallet)
+    local px, pz, pt = sortedSize(palSize)
+    local ladSize = measureItem(ladders[1])
+    local L, w = sortedSize(ladSize)
+    local fingerScale = (Options.HandFingerScale and Options.HandFingerScale.Value) or 1.8
+    local s = ((px + pz) / 2) / REAL_PALM_CM * fingerScale -- cm → スタッド
+    s = math.max(s, L * 0.45 / 4.4) -- ハシゴが長すぎても関節が短くなりすぎないように
+
+    -- 手のひら(パレット): 長い辺をX、次をZ、薄い方をY
+    place(pallet, CFrame.new(), makeM(palSize, { X_, Z_, Y_ }))
+
+    local fingerM = makeM(ladSize, { Z_, X_, Y_ })
+    local li = 1
+
+    -- 関節の曲がり (MCP / PIP / DIP)。剣ありは握った形
+    local angles = withSword and { 0.9, 1.2, 0.6 } or { 0.15, 0.2, 0.1 }
+
+    local spacing = math.max(px / 4, w + 0.1)
+        * ((Options.HandFingerSpacing and Options.HandFingerSpacing.Value) or 1.3)
+    local midCenters = {}
+    local thumbAng = withSword and { 0.5, 0.7 } or { 0.1, 0.15 }
+    local thumbBaseOut = withSword and 0.45 or 0.9
+    local thumbX = math.max(px * 0.3, 1.5 * spacing + w * 0.6)
+
+    -- 指を開く向きと量 (小指側ほど外へ、人差し指側も少し外へ)
+    local FAN = { -1, -0.5, 0.25, 0.8 }
+    -- 閉じている時から、指を扇形に斜めへ向ける (真っすぐ平行にならないように)
+    local BASE_FAN = { -1.1, -0.5, 0.1, 0.8 }
+    local splayMax = 0.3 * ((Options.HandSplay and Options.HandSplay.Value) or 1) * (withSword and 0.4 or 1)
+    local spreadMax = 0.35 * ((Options.HandSpreadAmt and Options.HandSpreadAmt.Value) or 1)
+
+    local fingerIdx = { {}, {}, {}, {} }
+    local thumbIdx = {}
+
+    -- 関節の配置。open=0 が基本の形、open=1 が一番開いた形(指が少し伸びて横に広がる)
+    -- ハシゴの先端を関節の先に合わせ、ハシゴの方が長ければ手前の骨に重ねる(貫通OK)
+    local function pose(open, initial)
+        local curlMul = 1 - 0.5 * open
+        local li2 = 1
+
+        local function put(cf, idxTable, key)
+            if initial then
+                place(ladders[li2], cf, fingerM)
+                idxTable[key] = #handItems
+            else
+                local idx = idxTable[key]
+                handRels[idx] = cf * fingerM * CFrame.new(-handCenters[idx])
+            end
+            li2 = li2 + 1
+        end
+
+        -- 4本指(各3関節)
+        for f = 1, 4 do
+            local F = CFrame.new((f - 2.5) * spacing, 0, pz / 2)
+                * CFrame.Angles(0, BASE_FAN[f] * splayMax + FAN[f] * spreadMax * open, 0)
+            for j = 1, 3 do
+                local len = FINGER_CM[f][j] * s
+                F = F * CFrame.Angles(angles[j] * curlMul, 0, 0)
+                local off = (L >= len) and (len - L / 2) or (len / 2)
+                put(F * CFrame.new(0, 0, off), fingerIdx[f], j)
+                if j == 2 and initial then
+                    midCenters[f] = (F * CFrame.new(0, 0, len / 2)).Position
+                end
+                F = F * CFrame.new(0, 0, len)
+            end
+        end
+
+        -- 親指(2関節)。開くと横にも離れる
+        local T = CFrame.new(thumbX, -pt / 2, -pz * 0.35)
+            * CFrame.Angles(0, thumbBaseOut + 0.35 * open * ((Options.HandSpreadAmt and Options.HandSpreadAmt.Value) or 1), 0)
+        for j = 1, 2 do
+            local len = THUMB_CM[j] * s
+            T = T * CFrame.Angles(thumbAng[j] * curlMul, 0, 0)
+            local off = (L >= len) and (len - L / 2) or (len / 2)
+            put(T * CFrame.new(0, 0, off), thumbIdx, j)
+            T = T * CFrame.new(0, 0, len)
+        end
+    end
+
+    pose(0, true)
+    li = 15 -- 指と親指でハシゴ14個を使った (剣は15個目から)
+    if not withSword then
+        handPose = function(open) pose(open, false) end
+    end
+
+    -- 剣: 縦のハシゴ2本を端と端でつなぎ、横の棒を下側ハシゴの真ん中につける
+    --     (棒より下の半分が柄、上が刃)。柄を握りこぶしの中に通す
+    if withSword then
+        local mid = (midCenters[2] + midCenters[3]) / 2
+        local gy = (mid.Y - pt / 2) / 2
+        local gz = (mid.Z + pz * 0.15) / 2
+
+        local bladeM = makeM(ladSize, { X_, Y_, Z_ })
+        local guardM = makeM(ladSize, { Z_, Y_, X_ })
+
+        local gx = math.max(L / 4, 1.5 * spacing + w) -- 横の棒(=下側ハシゴの中心)のX位置
+        place(ladders[li], CFrame.new(gx, gy, gz), bladeM)         -- 下側(柄側)
+        place(ladders[li + 1], CFrame.new(gx + L, gy, gz), bladeM) -- 上側(刃側)
+        place(ladders[li + 2], CFrame.new(gx, gy, gz), guardM)     -- 横の棒
+    end
+end
+
+local function stopHand()
+    if handConn then
+        handConn:Disconnect()
+        handConn = nil
+    end
+    if handRenderConn then
+        handRenderConn:Disconnect()
+        handRenderConn = nil
+    end
+    stopHandMonitor()
+    for _, c in ipairs(handNoCol) do
+        if c.Parent then c:Destroy() end
+    end
+    handNoCol = {}
+    for _, it in ipairs(handItems) do
+        if it.Parent then setCollision(it, true) end
+    end
+end
+
+local handCur, handLastT, handLastPos
+local handVel = Vector3.zero
+
+local function updateHand()
+    local now = os.clock()
+    local dt = handLastT and (now - handLastT) or 0
+    handLastT = now
+
+    local char = LocalPlayer.Character
+    local root = char and char:FindFirstChild("HumanoidRootPart")
+    if not root then return end
+
+    local look = root.CFrame.LookVector
+    look = Vector3.new(look.X, 0, look.Z)
+    if look.Magnitude < 0.01 then return end
+    look = look.Unit
+    local up = Vector3.yAxis
+    local right = look:Cross(up)
+
+    -- 配置位置: 真上20スタッド・右15スタッド
+    local pos = root.Position + Vector3.new(0, 20, 0) + right * 15
+
+    -- 手のひら(-Y側)が前を向く。
+    --  剣なし: 指が上、親指が体側
+    --  剣あり: 柄が縦になるよう手首をひねる (親指側が上、指は右向き)
+    local targetCF
+    if handSword then
+        targetCF = CFrame.fromMatrix(pos, up, -look, right)
+    else
+        targetCF = CFrame.fromMatrix(pos, -right, -look, up)
+    end
+
+    -- 自分が動いたら少し遅れて、なめらかに配置位置へ寄っていく
+    if not handCur then
+        handCur = targetCF
+    else
+        local k = (Options.HandFollow and Options.HandFollow.Value) or 4
+        local alpha = 1 - math.exp(-k * dt)
+        handCur = handCur:Lerp(targetCF, alpha)
+    end
+
+    -- 剣無しの時は、手ぶれのようにゆっくり上下に動かす
+    local finalCF = handCur
+    if not handSword then
+        local amp = (Options.HandBobAmp and Options.HandBobAmp.Value) or 1
+        local sp = (Options.HandBobSpeed and Options.HandBobSpeed.Value) or 1.5
+        local bob = amp * (math.sin(now * sp) + 0.3 * math.sin(now * sp * 2.3 + 1.7))
+        finalCF = handCur + Vector3.new(0, bob, 0)
+
+        -- 同時に、指を少し開いて、また閉じる
+        if handPose then
+            local fsp = (Options.HandFingerSpeed and Options.HandFingerSpeed.Value) or 1
+            local open = 0.5 + 0.5 * math.sin(now * fsp)
+            handPose(open)
+        end
+    end
+
+    -- 動きに合わせた速度を物に与えて、他の人から見てもなめらかにする
+    local fp = finalCF.Position
+    if handLastPos and dt > 0.001 then
+        handVel = (fp - handLastPos) / dt
+        if handVel.Magnitude > 300 then handVel = handVel.Unit * 300 end
+    end
+    if dt > 0.001 or not handLastPos then handLastPos = fp end
+
+    for i, it in ipairs(handItems) do
+        if it.Parent then
+            it:PivotTo(finalCF * handRels[i])
+            for _, p in ipairs(handParts[i]) do
+                p.AssemblyLinearVelocity = handVel
+                p.AssemblyAngularVelocity = Vector3.zero
+            end
+        end
+    end
+end
+
+-- 手・剣の当たり判定 (トグルに合わせて全部品のCanCollide/CanTouchを切り替える)
+local function applyHandCollision()
+    local on = Toggles.HandCollision and Toggles.HandCollision.Value
+    on = on and true or false
+    for _, parts in ipairs(handParts) do
+        for _, p in ipairs(parts) do
+            if p.Parent then
+                p.CanCollide = on
+                p.CanTouch = on
+            end
+        end
+    end
+end
+
+-- 当たり判定ありでも、手の部品同士(パレット・ハシゴ)は重なっていてぶつからないようにする
+local function buildHandNoCollide()
+    for _, c in ipairs(handNoCol) do
+        if c.Parent then c:Destroy() end
+    end
+    handNoCol = {}
+    for i = 1, #handParts do
+        for k = i + 1, #handParts do
+            for _, a in ipairs(handParts[i]) do
+                for _, b in ipairs(handParts[k]) do
+                    local c = Instance.new("NoCollisionConstraint")
+                    c.Part0 = a
+                    c.Part1 = b
+                    c.Parent = a
+                    table.insert(handNoCol, c)
+                end
+            end
+        end
+    end
+end
+
+local function startHandFollow()
+    handCur, handLastT, handLastPos = nil, nil, nil
+    handVel = Vector3.zero
+    buildHandNoCollide()
+    applyHandCollision()
+    -- 描画前とフィジックス後の両方で位置を合わせて、カクつきを無くす
+    handRenderConn = RunService.RenderStepped:Connect(updateHand)
+    handConn = RunService.Heartbeat:Connect(updateHand)
+end
+
+local HandGroup = Tabs.Main:AddLeftGroupbox("手")
+
+HandGroup:AddDropdown("HandSword", {
+    Text = "剣",
+    Values = { "剣無し", "剣あり" },
+    Default = 1,
+    Multi = false,
+})
+
+HandGroup:AddSlider("HandFingerScale", {
+    Text = "指の長さ",
+    Default = 1.8, Min = 0.5, Max = 5, Rounding = 1,
+})
+
+HandGroup:AddSlider("HandFingerSpacing", {
+    Text = "指の間隔",
+    Default = 1.3, Min = 0.8, Max = 3, Rounding = 1,
+})
+
+HandGroup:AddSlider("HandFollow", {
+    Text = "追従速度 (小さいほど遅れる)",
+    Default = 4, Min = 0.5, Max = 30, Rounding = 1,
+})
+
+HandGroup:AddSlider("HandBobAmp", {
+    Text = "手ぶれの上下幅 (剣無し)",
+    Default = 1, Min = 0, Max = 5, Rounding = 1, Suffix = "スタッド",
+})
+
+HandGroup:AddSlider("HandSplay", {
+    Text = "指の角度 (扇形の斜め具合)",
+    Default = 1, Min = 0, Max = 3, Rounding = 1,
+})
+
+HandGroup:AddSlider("HandSpreadAmt", {
+    Text = "指の開き幅 (剣無し)",
+    Default = 1, Min = 0, Max = 3, Rounding = 1,
+})
+
+HandGroup:AddSlider("HandFingerSpeed", {
+    Text = "指の開閉の速さ (剣無し)",
+    Default = 1, Min = 0.2, Max = 6, Rounding = 1,
+})
+
+HandGroup:AddSlider("HandBobSpeed", {
+    Text = "手ぶれの速さ (剣無し)",
+    Default = 1.5, Min = 0.2, Max = 6, Rounding = 1,
+})
+
+HandGroup:AddToggle("HandCollision", {
+    Text = "手・剣の当たり判定",
+    Default = true,
+    Callback = function()
+        applyHandCollision()
+    end,
+})
+
+HandGroup:AddToggle("HandSpawn", {
+    Text = "手スポーン",
+    Default = false,
+    Callback = function(value)
+        if not value then
+            spawningHand = false
+            stopHand()
+            return
+        end
+        if spawningHand or handConn then return end
+        spawningHand = true
+        startHandMonitor() -- 手の機能を使っている間、掴みを監視する
+
+        task.spawn(function()
+            local withSword = Options.HandSword.Value == "剣あり"
+            local ladderNeed = withSword and 17 or 14
+
+            -- 既存のものは対象外
+            handPre = snapshotHand()
+            handInPlot = nil
+
+            local isActive = function() return Toggles.HandSpawn.Value end
+
+            -- 1. パレット1枚
+            local palBase = countToys("PalletLightBrown")
+            runSpawnLoop("PalletLightBrown", isActive,
+                function() return palBase + 1 end,
+                makeHandSpawn("PalletLightBrown"))
+
+            -- 2. ハシゴ (14個 / 剣ありは17個)
+            local ladBase = countToys("LadderLightBrown")
+            runSpawnLoop("LadderLightBrown", isActive,
+                function() return ladBase + ladderNeed end,
+                makeHandSpawn("LadderLightBrown"))
+
+            spawningHand = false
+
+            -- 3. ワークスペースから実物を集める (最大5秒待つ)
+            local pallets, ladders = {}, {}
+            local t0 = os.clock()
+            while Toggles.HandSpawn.Value and os.clock() - t0 < 5 do
+                pallets = collectHand("PalletLightBrown")
+                ladders = collectHand("LadderLightBrown")
+                if #pallets >= 1 and #ladders >= ladderNeed then break end
+                task.wait(0.1)
+            end
+
+            print(("[手] パレット %d / ハシゴ %d (必要 %d)"):format(#pallets, #ladders, ladderNeed))
+
+            if Toggles.HandSpawn.Value and #pallets >= 1 and #ladders >= ladderNeed then
+                task.wait(0.3)
+                local ok, err = pcall(function()
+                    buildHand(pallets[1], ladders, withSword)
+                    startHandFollow()
+                end)
+                if not ok then
+                    warn("[手] 組み立てエラー: " .. tostring(err))
+                    stopHand()
+                    Toggles.HandSpawn:SetValue(false)
+                else
+                    print("[手] 完成")
+                end
+            else
+                print("[手] パーツが足りないため中止")
+                if Toggles.HandSpawn.Value then
+                    Toggles.HandSpawn:SetValue(false)
+                end
+            end
+        end)
+    end,
+})
