@@ -1,0 +1,922 @@
+-- This file was generated at discord.gg/syncrypt
+
+local unpack_ = unpack or table.unpack
+local v2, v3, v4 = ipairs({ "https://raw.githubusercontent.com/deividcomsono/Obsidian/main/", "https://cdn.jsdelivr.net/gh/deividcomsono/Obsidian@main/" })
+local v5 = false
+local lib = nil
+
+while true do
+	local v7
+
+	v4, v7 = v2(v3, v4)
+
+	if not v4 then
+		break
+	end
+
+	local ok, result = pcall(function()
+		return {
+			lib = loadstring(game:HttpGet(v7 .. "Library.lua"))(),
+			tm = loadstring(game:HttpGet(v7 .. "addons/ThemeManager.lua"))(),
+			sm = loadstring(game:HttpGet(v7 .. "addons/SaveManager.lua"))()
+		}
+	end)
+
+	if ok then
+		if result then
+			ok = result.lib
+		else
+			ok = result
+		end
+	end
+
+	if ok then
+		lib = result.lib
+
+		local _ = result.tm
+		local _ = result.sm
+
+		v5 = true
+
+		break
+	end
+end
+
+if not v5 then
+	warn("❌ ライブラリ読み込み失敗")
+
+	return
+end
+
+local _ = lib.Options
+local Toggles = lib.Toggles
+
+lib.ForceCheckbox = false
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
+local LocalPlayer = Players.LocalPlayer
+local GrabEvents = ReplicatedStorage:WaitForChild("GrabEvents")
+local SpawnToyRemoteFunction = ReplicatedStorage:WaitForChild("MenuToys"):WaitForChild("SpawnToyRemoteFunction")
+local SetNetworkOwner = GrabEvents:WaitForChild("SetNetworkOwner")
+local DestroyGrabLine = GrabEvents:FindFirstChild("DestroyGrabLine")
+local CreateGrabLine = GrabEvents:FindFirstChild("CreateGrabLine")
+local vector3 = Vector3.new(7, 10, 0)
+local v25 = nil
+
+local function v26(p1)
+	if not p1 then
+		return p1
+	end
+
+	p1 = p1:FindFirstChild("PartOwner") ~= nil
+
+	return p1
+end
+local function v27()
+	for _, kickConn in ipairs(v25.KickConns) do
+		pcall(function()
+			kickConn:Disconnect()
+		end)
+	end
+
+	v25.KickConns = {}
+end
+
+v25 = {
+	Active = false,
+	TargetPlayer = nil,
+	Pallet = nil,
+	RenderConn = nil,
+	LagRunning = false,
+	SpawningPallet = false,
+	TP_Phase = 0,
+	OriginalPos = nil,
+	GrabTPDone = false,
+	KickConns = {}
+}
+
+local function v30()
+	v25.LagRunning = false
+end
+local function v31()
+	local t1 = {}
+
+	for _, player in ipairs(Players:GetPlayers()) do
+		if player ~= LocalPlayer then
+			local v35 = player.DisplayName .. " (@" .. player.Name .. ")"
+
+			table.insert(t1, v35)
+		end
+	end
+
+	if #t1 ~= 0 then
+		return t1
+	end
+
+	table.insert(t1, "なし")
+
+	return t1
+end
+local function v36(p2)
+	if p2 and p2.Character then
+		local Character = p2.Character
+
+		return Character.FindFirstChild(Character, "HumanoidRootPart")
+	else
+		return nil
+	end
+end
+local function v38(p3)
+	if not p3 or p3 == "なし" then
+		return nil
+	else
+		local v39 = Players
+
+		for _, player in ipairs(v39.GetPlayers(v39)) do
+			if player.DisplayName .. " (@" .. player.Name .. ")" == p3 then
+				return player
+			end
+		end
+
+		return nil
+	end
+end
+local function v42()
+	if v25.SpawningPallet then
+		return nil
+	end
+
+	v25.SpawningPallet = true
+
+	local HumanoidRootPart = (LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()):WaitForChild("HumanoidRootPart")
+	local n1 = 0
+	local n2 = 0
+
+	while true do
+		local InPlot = LocalPlayer:FindFirstChild("InPlot")
+
+		if InPlot then
+			InPlot = LocalPlayer.InPlot.Value
+
+			if InPlot then
+				local v47 = LocalPlayer
+
+				InPlot = v47.FindFirstChild(v47, "InOwnedPlot")
+
+				if InPlot then
+					InPlot = not LocalPlayer.InOwnedPlot.Value
+				end
+			end
+		end
+
+		if InPlot then
+			InPlot = n2 < 50
+		end
+
+		if not InPlot then
+			break
+		end
+
+		task.wait(0.1)
+		n1 = n2 + 1
+		n2 = n1
+	end
+
+	local n3 = 0
+
+	while true do
+		local CanSpawnToy = LocalPlayer:FindFirstChild("CanSpawnToy")
+
+		if CanSpawnToy then
+			CanSpawnToy = not LocalPlayer.CanSpawnToy.Value
+
+			if CanSpawnToy then
+				CanSpawnToy = n3 < 50
+			end
+		end
+
+		if not CanSpawnToy then
+			local v50 = HumanoidRootPart.CFrame * CFrame.new(0, 14, 20)
+			local PlotItems = not Workspace:FindFirstChild(LocalPlayer.Name .. "SpawnedInToys") and Workspace:FindFirstChild("PlotItems")
+
+			if PlotItems then
+				PlotItems = PlotItems:FindFirstChild("Plot1") or PlotItems
+			end
+
+			local v52 = PlotItems or Workspace
+			local u53 = nil
+			local connection = v52.ChildAdded:Connect(function(child)
+				local v55
+
+				if child.Name == "PalletLightBrown" then
+					v55 = not u53
+				else
+					v55 = false
+				end
+
+				if not v55 then
+					return
+				end
+
+				u53 = child
+			end)
+
+			task.spawn(function()
+				local function v56()
+					SpawnToyRemoteFunction:InvokeServer("PalletLightBrown", v50, Vector3.zero)
+				end
+
+				pcall(v56)
+			end)
+
+			local now = tick()
+
+			repeat
+				task.wait(0.05)
+			until u53 or tick() - now > 5
+
+			connection:Disconnect()
+
+			if not u53 then
+				v25.SpawningPallet = false
+
+				return nil
+			end
+
+			local SoundPart = u53:FindFirstChild("SoundPart") or u53:WaitForChild("SoundPart", 3)
+
+			if not SoundPart then
+				u53:Destroy()
+				v25.SpawningPallet = false
+
+				return nil
+			end
+
+			local v59 = u53
+			local n4 = 0
+			local BodyVelocity
+
+			while n4 < 10 do
+				if not v25.Active then
+					v59:Destroy()
+					v25.SpawningPallet = false
+
+					return nil
+				end
+
+				local function v62()
+					SetNetworkOwner:FireServer(SoundPart, SoundPart.CFrame)
+				end
+
+				pcall(v62)
+				task.wait()
+
+				if v26(SoundPart) then
+					if v26(SoundPart) then
+						for _, descendant in ipairs(v59:GetDescendants()) do
+							if descendant:IsA("BasePart") then
+								descendant.CanCollide = false
+								descendant.Transparency = 0.7
+							end
+						end
+
+						v59.Name = "RagdollPalete"
+						BodyVelocity = Instance.new("BodyVelocity")
+						BodyVelocity.Name = "PierceVelocity"
+						BodyVelocity.MaxForce = Vector3.new(0, math.huge, 0)
+						BodyVelocity.Velocity = Vector3.new(0, 900, 0)
+						BodyVelocity.Parent = SoundPart
+						v25.SpawningPallet = false
+
+						return v59
+					else
+						v59:Destroy()
+						v25.SpawningPallet = false
+
+						return nil
+					end
+				end
+
+				n4 = n4 + 1
+			end
+
+			if v26(SoundPart) then
+				for _, descendant in ipairs(v59:GetDescendants()) do
+					if descendant:IsA("BasePart") then
+						descendant.CanCollide = false
+						descendant.Transparency = 0.7
+					end
+				end
+
+				v59.Name = "RagdollPalete"
+				BodyVelocity = Instance.new("BodyVelocity")
+				BodyVelocity.Name = "PierceVelocity"
+				BodyVelocity.MaxForce = Vector3.new(0, math.huge, 0)
+				BodyVelocity.Velocity = Vector3.new(0, 900, 0)
+				BodyVelocity.Parent = SoundPart
+				v25.SpawningPallet = false
+
+				return v59
+			else
+				v59:Destroy()
+				v25.SpawningPallet = false
+
+				return nil
+			end
+		end
+
+		task.wait(0.1)
+		n3 = n3 + 1
+	end
+end
+
+local v67 = nil
+
+local function v68(p4)
+	table.insert(v25.KickConns, Players.PlayerRemoving:Connect(function(player)
+		local Active = v25.Active
+
+		if Active then
+			Active = player == p4
+		end
+
+		if not Active then
+			return
+		end
+
+		v67("ターゲットが退出（キック）")
+	end))
+
+	local KickConns = v25.KickConns
+	local CharacterRemoving = p4.CharacterRemoving
+
+	local function v72()
+		if not v25.Active then
+			return
+		end
+
+		task.spawn(function()
+			task.wait(5)
+
+			if not v25.Active then
+				return
+			end
+
+			local Parent = p4.Parent
+
+			if Parent then
+				Parent = not p4.Character
+			end
+
+			if not Parent then
+				return
+			end
+
+			v67("ターゲットがキックされた（キャラ消失）")
+		end)
+	end
+
+	table.insert(KickConns, CharacterRemoving:Connect(v72))
+end
+
+v67 = function(p5)
+	print("[Pallet] 自動OFF:", p5)
+
+	if not Toggles.PalletBreak then
+		return
+	end
+
+	local function v74()
+		Toggles.PalletBreak:Set(false)
+	end
+
+	pcall(v74)
+end
+
+local function v75(p6)
+	if v25.TP_Phase >= 2 then
+		return
+	end
+
+	if not (p6 and p6.Character) then
+		return
+	end
+
+	local v76 = v36(p6)
+	local v77 = v36(LocalPlayer)
+
+	if not (v76 and v77) then
+		return
+	end
+
+	if v25.TP_Phase == 0 then
+		v77.CFrame = v76.CFrame * CFrame.new(0, 0, 2)
+		print("[TP] Phase 0: ターゲットの後ろにTP")
+		v25.TP_Phase = 1
+		task.wait(0.15)
+
+		return
+	end
+
+	if v25.TP_Phase ~= 1 then
+		return
+	end
+
+	if CreateGrabLine then
+		for _ = 1, 8 do
+			local function v79()
+				CreateGrabLine:FireServer(v76, v76.CFrame)
+			end
+
+			pcall(v79)
+		end
+	end
+
+	for _ = 1, 10 do
+		local function v81()
+			SetNetworkOwner:FireServer(v76, v76.CFrame)
+		end
+
+		pcall(v81)
+		task.wait()
+	end
+
+	v77.CFrame = CFrame.new(v25.OriginalPos)
+	task.wait(0.1)
+
+	local position = v25.OriginalPos + vector3
+	local LockBP = v76:FindFirstChild("LockBP")
+
+	if not LockBP then
+		LockBP = Instance.new("BodyPosition")
+		LockBP.Name = "LockBP"
+		LockBP.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+		LockBP.P = 10000000
+		LockBP.D = 500
+		LockBP.Parent = v76
+	end
+
+	LockBP.Position = position
+
+	for _ = 1, 30 do
+		local v85 = v36(p6)
+
+		if not v85 then
+			v25.GrabTPDone = true
+			v25.TP_Phase = 2
+			print("[TP] ★ テレポートシーケンス完了 ★")
+
+			return
+		end
+
+		v85.CFrame = CFrame.new(position)
+		v85.AssemblyLinearVelocity = Vector3.zero
+		v85.AssemblyAngularVelocity = Vector3.zero
+		task.wait(0.02)
+
+		if (v85.Position - position).Magnitude <= 3 then
+			print("[TP] Phase 1: グラブTP完了")
+
+			break
+		end
+	end
+
+	v25.GrabTPDone = true
+	v25.TP_Phase = 2
+	print("[TP] ★ テレポートシーケンス完了 ★")
+end
+local function v86(p7)
+	if not (p7 and p7.Character) then
+		return
+	end
+
+	local Character = p7.Character
+	local HumanoidRootPart = Character:FindFirstChild("HumanoidRootPart")
+	local Humanoid = Character:FindFirstChildOfClass("Humanoid")
+
+	if not HumanoidRootPart then
+		return
+	end
+
+	if Humanoid then
+		pcall(function()
+			Humanoid.WalkSpeed = 0
+			Humanoid.JumpPower = 0
+			Humanoid.JumpHeight = 0
+			Humanoid.PlatformStand = true
+			Humanoid.AutoRotate = false
+		end)
+	end
+
+	local GetDescendants = Character.GetDescendants
+	local v91, v92, v93 = ipairs(GetDescendants(Character))
+
+	while true do
+		local v94
+
+		v93, v94 = v91(v92, v93)
+
+		if not v93 then
+			break
+		end
+
+		if v94:IsA("BasePart") then
+			v94.AssemblyLinearVelocity = Vector3.zero
+			v94.AssemblyAngularVelocity = Vector3.zero
+		end
+	end
+
+	for _, child in ipairs(Character.GetChildren(Character)) do
+		if child:IsA("Tool") then
+			pcall(function()
+				child:Destroy()
+			end)
+		end
+	end
+end
+local function v97()
+	if not v25.RenderConn then
+		return
+	end
+
+	v25.RenderConn:Disconnect()
+	v25.RenderConn = nil
+end
+local function v98()
+	if v25.LagRunning then
+		return
+	end
+
+	if not CreateGrabLine then
+		return
+	end
+
+	v25.LagRunning = true
+	task.spawn(function()
+		local n5 = 11472810
+
+		while v25.LagRunning do
+			local SpawnLocation = Workspace:FindFirstChild("SpawnLocation")
+
+			if not SpawnLocation then
+				SpawnLocation = Workspace:FindFirstChild("Spawn")
+
+				if not SpawnLocation then
+					SpawnLocation = LocalPlayer.Character
+
+					if SpawnLocation then
+						SpawnLocation = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+					end
+				end
+			end
+
+			if SpawnLocation then
+				local function v101()
+					CreateGrabLine:FireServer(SpawnLocation, CFrame.new(math.random(-2010000000, 2000000001), 0, math.random(-2008100000, 2000200000)))
+				end
+
+				pcall(v101)
+			end
+
+			n5 = task.wait
+			n5()
+		end
+	end)
+end
+local function v102(p8)
+	if v25.RenderConn then
+		v25.RenderConn:Disconnect()
+	end
+
+	v25.RenderConn = RunService.RenderStepped:Connect(function()
+		if not v25.Active then
+			return
+		end
+
+		local Pallet = v25.Pallet
+		local Parent
+
+		if Pallet then
+			Parent = Pallet.Parent
+		else
+			Parent = Pallet
+		end
+
+		local SoundPart = Parent and Pallet:FindFirstChild("SoundPart")
+
+		if SoundPart then
+			if v26(SoundPart) then
+				local v106 = v36(p8)
+
+				if v106 then
+					local Character = p8.Character
+
+					if Character then
+						Character = p8.Character:FindFirstChildOfClass("Humanoid")
+					end
+
+					if Character then
+						Character = Character:FindFirstChild("Ragdolled")
+					end
+
+					local v108 = not Character
+
+					if v108 then
+						Character = v108
+					elseif Character then
+						Character = not Character.Value
+					end
+
+					if Character then
+						SoundPart.Position = v106.Position
+					end
+				end
+			else
+				Pallet:Destroy()
+				v25.Pallet = nil
+			end
+		end
+
+		local Character = p8
+
+		if Character then
+			Character = p8.Character
+		end
+
+		if not Character then
+			return
+		end
+
+		local v110 = v36(p8)
+		local Humanoid = p8.Character:FindFirstChildOfClass("Humanoid")
+
+		if not (v110 and Humanoid) then
+			return
+		end
+
+		if Humanoid.WalkSpeed ~= 0 then
+			Humanoid.WalkSpeed = 0
+		end
+
+		if Humanoid.JumpPower ~= 0 then
+			Humanoid.JumpPower = 0
+		end
+
+		if not Humanoid.PlatformStand then
+			Humanoid.PlatformStand = true
+		end
+
+		v110.AssemblyLinearVelocity = Vector3.zero
+		v110.AssemblyAngularVelocity = Vector3.zero
+		pcall(function()
+			Humanoid:BreakJoints()
+		end)
+
+		local ipairs_ = ipairs
+		local Character2 = p8.Character
+
+		for _, child in ipairs_(Character2.GetChildren(Character2)) do
+			if child:IsA("Tool") then
+				pcall(function()
+					child:Destroy()
+				end)
+			end
+		end
+	end)
+end
+
+local v116 = nil
+
+local function v117()
+	task.spawn(function()
+		while v25.Active do
+			local TargetPlayer = v25.TargetPlayer
+			local Character
+
+			if TargetPlayer then
+				Character = TargetPlayer.Character
+			else
+				Character = TargetPlayer
+			end
+
+			if Character then
+				local v120 = v36(LocalPlayer)
+				local v121 = v36(TargetPlayer)
+
+				if v120 and v121 then
+					if v25.TP_Phase < 2 then
+						v75(TargetPlayer)
+					end
+
+					v86(TargetPlayer)
+
+					if v25.GrabTPDone then
+						v116(TargetPlayer, v120.Position + vector3)
+					end
+
+					if DestroyGrabLine then
+						local function v122()
+							DestroyGrabLine:FireServer(v121)
+						end
+
+						pcall(v122)
+					end
+				end
+			end
+
+			task.wait(0.03)
+		end
+	end)
+end
+
+v116 = function(p9, p10)
+	local v123 = v36(p9)
+
+	if not v123 then
+		return
+	end
+
+	pcall(function()
+		SetNetworkOwner:FireServer(v123, v123.CFrame)
+	end)
+	v123.CFrame = CFrame.new(p10)
+
+	local LockBP = v123:FindFirstChild("LockBP")
+
+	if not LockBP then
+		return
+	end
+
+	LockBP.Position = p10
+end
+
+local function v125()
+	if v25.Active then
+		return
+	end
+
+	if not v25.TargetPlayer then
+		warn("[Pallet] ターゲット未選択")
+
+		return
+	end
+
+	local v126 = v36(LocalPlayer)
+
+	if not v126 then
+		return
+	end
+
+	v25.OriginalPos = v126.Position
+	v25.TP_Phase = 0
+	v25.GrabTPDone = false
+	v25.Active = true
+	print("[Pallet] 開始 OriginalPos:", v25.OriginalPos)
+	v68(v25.TargetPlayer)
+	task.spawn(function()
+		v25.Pallet = v42()
+	end)
+	task.spawn(function()
+		while v25.Active do
+			if not (v25.Pallet and v25.Pallet.Parent) then
+				v25.Pallet = v42()
+			end
+
+			task.wait(1)
+		end
+	end)
+	v86(v25.TargetPlayer)
+	v102(v25.TargetPlayer)
+	v98()
+	v117()
+end
+local function v127()
+	v25.Active = false
+	v97()
+	v30()
+	v27()
+
+	local TargetPlayer = v25.TargetPlayer
+
+	if TargetPlayer then
+		TargetPlayer = v25.TargetPlayer.Character
+	end
+
+	if TargetPlayer then
+		local Humanoid = v25.TargetPlayer.Character:FindFirstChildOfClass("Humanoid")
+
+		if Humanoid then
+			pcall(function()
+				Humanoid.WalkSpeed = 16
+				Humanoid.JumpPower = 50
+				Humanoid.PlatformStand = false
+				Humanoid.AutoRotate = true
+			end)
+		end
+
+		local HumanoidRootPart = v25.TargetPlayer.Character:FindFirstChild("HumanoidRootPart")
+		local LockBP = HumanoidRootPart and HumanoidRootPart:FindFirstChild("LockBP")
+
+		if LockBP then
+			LockBP:Destroy()
+		end
+	end
+
+	if not v25.Pallet then
+		v25.Pallet = nil
+		v25.TP_Phase = 0
+		v25.GrabTPDone = false
+		v25.OriginalPos = nil
+
+		return
+	end
+
+	if DestroyToy then
+		local function v132()
+			DestroyToy:FireServer(v25.Pallet)
+		end
+
+		pcall(v132)
+	end
+
+	if not v25.Pallet.Parent then
+		v25.Pallet = nil
+		v25.TP_Phase = 0
+		v25.GrabTPDone = false
+		v25.OriginalPos = nil
+
+		return
+	end
+
+	v25.Pallet:Destroy()
+	v25.Pallet = nil
+	v25.TP_Phase = 0
+	v25.GrabTPDone = false
+	v25.OriginalPos = nil
+end
+
+local Target = lib.CreateWindow(lib, {
+	Title = "Grab Kick | Pallet",
+	Footer = "Delta Executor",
+	Icon = 95816097006870,
+	NotifySide = "Right",
+	ShowCustomCursor = true,
+	Size = UDim2.fromOffset(580, 460),
+	Theme = "Dark"
+}):AddTab("パレット", "palette"):AddLeftGroupbox("Target")
+local v134 = Target.AddDropdown(Target, "TargetPlayer", {
+	Text = "Target Player",
+	Values = v31(),
+	Default = "なし",
+	Multi = false,
+	Callback = function(p11)
+		v25.TargetPlayer = v38(p11)
+	end
+})
+local t2 = {
+	Text = "Pallet Bone Break",
+	Default = false,
+	Tooltip = "後ろにTP → グラブでTP → 元位置に戻る → 動いてもターゲット追従 + 骨折り継続",
+	Callback = function(p12)
+		if not p12 then
+			v127()
+
+			return
+		end
+
+		if v25.TargetPlayer then
+			v125()
+
+			return
+		end
+
+		warn("[Pallet] ターゲット未選択")
+
+		if not Toggles.PalletBreak then
+			return
+		end
+
+		Toggles.PalletBreak:Set(false)
+	end
+}
+
+Target.AddToggle(Target, "PalletBreak", t2)
+Players.PlayerAdded:Connect(function()
+	task.wait(0.5)
+
+	if not v134 then
+		return
+	end
+
+	v134:SetValues(unpack_({ v31() }))
+end)
+Players.PlayerRemoving:Connect(function()
+	if not v134 then
+		return
+	end
+
+	v134:SetValues(v31())
+end)
