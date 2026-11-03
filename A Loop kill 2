@@ -81,6 +81,9 @@ local State = {
     KillTimeout = 0.65,
     KillDelay   = 0.4,
     Killing     = setmetatable({}, { __mode = "k" }),
+    AutoKill    = false,   -- トグル：選択ターゲットをループキル
+    AutoKillAll = false,   -- トグル：全員をループキル
+    AutoLoopGen = 0,       -- ループ世代管理（多重起動防止）
 }
 local PartOwnerCache = setmetatable({}, { __mode = "k" })
 local VelocityCache  = setmetatable({}, { __mode = "k" })
@@ -294,6 +297,51 @@ local function Kill(player)
 end
 
 -- ============================================================
+-- Auto Kill loop（トグルONの間ずっと実行）
+-- ============================================================
+local function AutoKillLoop()
+    State.AutoLoopGen = State.AutoLoopGen + 1
+    local myGen = State.AutoLoopGen
+
+    task.spawn(function()
+        while not State.Stopped
+              and State.AutoLoopGen == myGen
+              and (State.AutoKill or State.AutoKillAll)
+        do
+            local targets = {}
+            if State.AutoKillAll then
+                for _, p in ipairs(Players:GetPlayers()) do
+                    if p ~= LocalPlayer then
+                        targets[#targets + 1] = p
+                    end
+                end
+            else
+                for player in pairs(Selected) do
+                    if player and player.Parent == Players then
+                        targets[#targets + 1] = player
+                    end
+                end
+            end
+
+            for _, player in ipairs(targets) do
+                if State.Stopped
+                   or State.AutoLoopGen ~= myGen
+                   or not (State.AutoKill or State.AutoKillAll) then
+                    break
+                end
+                local _, _, hum = GetChar(player)
+                if hum and hum.Health > 0 then
+                    Kill(player)
+                end
+                task.wait(State.KillDelay)
+            end
+
+            task.wait(0.1)
+        end
+    end)
+end
+
+-- ============================================================
 -- Format player for the Player dropdown
 -- ============================================================
 local function FormatPlayer(p, onNewLine, showYou)
@@ -416,6 +464,34 @@ TargetGroup:AddButton({
     end,
 })
 
+TargetGroup:AddDivider()
+
+-- ★ トグル：選択ターゲットをループキル
+TargetGroup:AddToggle("AutoKillToggle", {
+    Text    = "Auto Kill (Loop)",
+    Default = false,
+    Tooltip = "ONの間ずっと選択ターゲットをキルし続ける",
+    Callback = function(state)
+        State.AutoKill = state
+        if state then
+            AutoKillLoop()
+        end
+    end,
+})
+
+-- ★ トグル：全員をループキル
+TargetGroup:AddToggle("AutoKillAllToggle", {
+    Text    = "Auto Kill All (Loop)",
+    Default = false,
+    Tooltip = "ONの間ずっと全プレイヤーをキルし続ける",
+    Callback = function(state)
+        State.AutoKillAll = state
+        if state then
+            AutoKillLoop()
+        end
+    end,
+})
+
 -- -------- Settings tab --------
 local SettingsGroup = SettingsTab:AddLeftGroupbox("Kill Settings", "wrench")
 
@@ -463,7 +539,10 @@ SaveManager:LoadAutoloadConfig()
 -- ============================================================
 local function unload()
     if State.Stopped then return end
-    State.Stopped = true
+    State.Stopped     = true
+    State.AutoKill    = false
+    State.AutoKillAll = false
+    State.AutoLoopGen = State.AutoLoopGen + 1  -- ループを確実に止める
     pcall(function() RunService:UnbindFromRenderStep("RSC_Kill") end)
     pcall(function() Library:Unload() end)
     getgenv().ResonanceKillRunning = false
