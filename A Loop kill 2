@@ -1,364 +1,476 @@
-local repo = "https://raw.githubusercontent.com/deividcomsono/Obsidian/main/"
-local Library = loadstring(game:HttpGet(repo .. "Library.lua"))()
-local ThemeManager = loadstring(game:HttpGet(repo .. "addons/ThemeManager.lua"))()
-local SaveManager = loadstring(game:HttpGet(repo .. "addons/SaveManager.lua"))()
-local Options = Library.Options
-local Toggles = Library.Toggles
+--[[
+    Resonance Kill v2.9 - Obsidian UI (external fetch, main branch)
+    Implements: player selection + kill only
 
-local Players = game:GetService("Players")
-local Workspace = game:GetService("Workspace")
-local RunService = game:GetService("RunService")
+    Game: Fling Things and People (6961824067)
+]]
+
+-- ============================================================
+-- Gate
+-- ============================================================
+if game.PlaceId ~= 6961824067 then
+    return warn("[Resonance Kill] FTAP only (PlaceId 6961824067)")
+end
+if getgenv().ResonanceKillRunning then
+    return warn("[Resonance Kill] Already running. Unload first.")
+end
+getgenv().ResonanceKillRunning = true
+
+local Players           = game:GetService("Players")
+local RunService        = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local LocalPlayer = Players.LocalPlayer
+local Stats             = game:GetService("Stats")
+local StarterGui        = game:GetService("StarterGui")
+local LocalPlayer       = Players.LocalPlayer
 
-local GrabEvents = ReplicatedStorage:WaitForChild("GrabEvents")
-local DestroyGrabLine = GrabEvents:WaitForChild("DestroyGrabLine")
-local SetNetworkOwner = GrabEvents:WaitForChild("SetNetworkOwner")
-
-local LoopList = {}
-_G.LoopKill = false
-_G.NoclipToggle = false
-
-local DisplayToUsername = {}
-
-local function tableAlphabeticOrder(a, b)
-    return a:lower() < b:lower()
-end
-
-local function lookAt(pos1, pos2)
-    local diff = (pos2 - pos1).Unit
-    local right = diff:Cross(Vector3.new(0, 1, 0))
-    local up = right:Cross(diff)
-    return CFrame.fromMatrix(pos1, right, up)
-end
-
-local function IsPlayerInsideSafeZone(player)
-    if typeof(player) == "Instance" and player:IsA("Player") and player:FindFirstChild("InPlot") and player.InPlot.Value then
-        return true
-    end
-    return false
-end
-
-local function CheckNetworkOwnerShipOnPlayer(player)
-    if typeof(player) == "Instance" and player:IsA("Player") and player.Character
-    and player.Character:FindFirstChild("Head")
-    and player.Character.Head:FindFirstChild("PartOwner")
-    and player.Character.Head.PartOwner.Value == LocalPlayer.Name then
-        return true
-    end
-    return false
-end
-
-local function SNOWshipPlayer(targetPlayer, callback)
-    if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-    and typeof(targetPlayer) == "Instance" and targetPlayer:IsA("Player")
-    and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
-
-        local targetRoot = targetPlayer.Character.HumanoidRootPart
-        local distance = LocalPlayer:DistanceFromCharacter(targetRoot.Position)
-
-        if CheckNetworkOwnerShipOnPlayer(targetPlayer) then
-            if type(callback) == "function" then
-                callback()
-            end
-            return true
-        end
-
-        if distance <= 30 then
-            -- 1フレームに3回SNOを送る
-            local cframe = lookAt(LocalPlayer.Character.HumanoidRootPart.Position, targetRoot.Position)
-            SetNetworkOwner:FireServer(targetRoot, cframe)
-            SetNetworkOwner:FireServer(targetRoot, cframe)
-            SetNetworkOwner:FireServer(targetRoot, cframe)
-        end
-    end
-end
-
-local function CreateSkyVelocity(part)
-    if not part:FindFirstChild("SkyVelocity") then
-        local bv = Instance.new("BodyVelocity", part)
-        bv.Name = "SkyVelocity"
-        bv.Velocity = Vector3.new(0, -2147483647, 0) -- 21億（int32最大値）で真下（奈落）に落とす
-        bv.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
-    end
-end
-
--- ===== 相手をNoclipにする処理 =====
-local targetNoclipConnections = {}
-
-local function StartTargetNoclip(targetPlayer)
-    if not targetPlayer or not targetPlayer.Character then return end
-
-    local char = targetPlayer.Character
-    if targetNoclipConnections[targetPlayer] then return end
-
-    -- 既存のパーツをNoclip化
-    for _, part in pairs(char:GetChildren()) do
-        if part:IsA("BasePart") then
-            part.CanCollide = false
-        end
-    end
-
-    -- 新しく追加されるパーツにも適用
-    local conn = char.ChildAdded:Connect(function(part)
-        if part:IsA("BasePart") then
-            task.wait()
-            part.CanCollide = false
-        end
+local function notify(text, duration)
+    pcall(function()
+        StarterGui:SetCore("SendNotification", {
+            Title    = "Resonance Kill",
+            Text     = text,
+            Duration = duration or 5,
+            Icon     = "rbxassetid://79685990879972",
+        })
     end)
-    targetNoclipConnections[targetPlayer] = conn
-
-    -- Steppedでも継続的にNoclip化
-    local steppedConn = RunService.Stepped:Connect(function()
-        if targetPlayer.Character then
-            for _, part in pairs(targetPlayer.Character:GetChildren()) do
-                if part:IsA("BasePart") and part.CanCollide then
-                    part.CanCollide = false
-                end
-            end
-        end
-    end)
-    targetNoclipConnections[targetPlayer .. "_stepped"] = steppedConn
 end
 
-local function StopTargetNoclip(targetPlayer)
-    if not targetPlayer then return end
+-- ============================================================
+-- Fetch Obsidian (external, main branch)
+-- ============================================================
+local repo = "https://raw.githubusercontent.com/deividcomsono/Obsidian/main/"
 
-    if targetNoclipConnections[targetPlayer] then
-        targetNoclipConnections[targetPlayer]:Disconnect()
-        targetNoclipConnections[targetPlayer] = nil
-    end
+local Library, ThemeManager, SaveManager, Options, Toggles
 
-    if targetNoclipConnections[targetPlayer .. "_stepped"] then
-        targetNoclipConnections[targetPlayer .. "_stepped"]:Disconnect()
-        targetNoclipConnections[targetPlayer .. "_stepped"] = nil
-    end
+local loadOk, loadErr = pcall(function()
+    Library      = loadstring(game:HttpGet(repo .. "Library.lua"))()
+    ThemeManager = loadstring(game:HttpGet(repo .. "addons/ThemeManager.lua"))()
+    SaveManager  = loadstring(game:HttpGet(repo .. "addons/SaveManager.lua"))()
+    Options      = Library.Options
+    Toggles      = Library.Toggles
+end)
+
+if not loadOk or not Library then
+    notify("Obsidian load failed: " .. tostring(loadErr), 10)
+    getgenv().ResonanceKillRunning = false
+    return
 end
 
-local function IsValidTarget(player)
-    if typeof(player) == "Instance" and player ~= LocalPlayer
-    and player.Character
-    and player.Character:IsDescendantOf(Workspace)
-    and player.Character:FindFirstChild("HumanoidRootPart")
-    and player.Character:FindFirstChild("Humanoid")
-    and player.Character.Humanoid.Health > 0 then
-        if not IsPlayerInsideSafeZone(player) then
-            return true
-        end
-    end
-    return false
+-- ============================================================
+-- Remotes (FTAP specific)
+-- ============================================================
+local GrabEvents = ReplicatedStorage:WaitForChild("GrabEvents", 15)
+if not GrabEvents then
+    notify("GrabEvents not found", 5)
+    getgenv().ResonanceKillRunning = false
+    return
+end
+local SetNetworkOwner = GrabEvents:WaitForChild("SetNetworkOwner", 5)
+local DestroyGrabLine = GrabEvents:WaitForChild("DestroyGrabLine", 5)
+if not (SetNetworkOwner and DestroyGrabLine) then
+    notify("Required remotes not found", 5)
+    getgenv().ResonanceKillRunning = false
+    return
 end
 
-local function GetPlayerCharacter()
-    if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") and LocalPlayer.Character:FindFirstChildOfClass("Humanoid") then
-        return LocalPlayer.Character
-    end
-end
-
-local function GetPlayerCFrame()
-    local char = GetPlayerCharacter()
-    if char then
-        return char.HumanoidRootPart.CFrame
-    end
-end
-
-local function TeleportPlayer(cframe)
-    local char = GetPlayerCharacter()
-    if char and typeof(cframe) == "CFrame" then
-        local root = char.HumanoidRootPart
-        local hum = char:FindFirstChildOfClass("Humanoid")
-        root.CFrame = root.CFrame.Rotation + cframe.Position
-
-        if hum.SeatPart == nil or tostring(hum.SeatPart.Parent) ~= "CreatureBlobman" then
-            hum.Sit = false
-        end
-    end
-end
-
-local noclipConnection = nil
-local noclipDebounce = false
-
-local function StartNoclip()
-    if not noclipConnection then
-        noclipDebounce = false
-        local function noclipLoop()
-            if noclipDebounce == false and LocalPlayer.Character ~= nil then
-                for _, part in pairs(LocalPlayer.Character:GetChildren()) do
-                    if part:IsA("BasePart") and part.CanCollide then
-                        part.CanCollide = false
-                    end
-                end
-            end
-        end
-        noclipConnection = RunService.Stepped:Connect(noclipLoop)
-    end
-end
-
-local function StopNoclip()
-    if not _G.NoclipToggle then
-        if noclipConnection then
-            noclipConnection:Disconnect()
-            noclipConnection = nil
-        end
-        noclipDebounce = true
-    end
-end
-
--- ===== UI構築 (Obsidian) =====
-
-local Window = Library:CreateWindow({
-    Title = 'ループキル',
-    Center = true,
-    AutoShow = true,
-    TabPadding = 8,
-    MenuFadeTime = 0.2
-})
-
-local Tabs = {
-    Main = Window:AddTab('メイン'),
-    ['UI Settings'] = Window:AddTab('UI設定'),
+-- ============================================================
+-- State
+-- ============================================================
+local State = {
+    Stopped     = false,
+    Owning      = false,
+    KillTimeout = 0.65,
+    KillDelay   = 0.4,
+    Killing     = setmetatable({}, { __mode = "k" }),
 }
+local PartOwnerCache = setmetatable({}, { __mode = "k" })
+local VelocityCache  = setmetatable({}, { __mode = "k" })
+local Selected       = {}
 
-local TargetGroup = Tabs.Main:AddLeftGroupbox('ターゲット選択')
-local SettingsGroup = Tabs.Main:AddRightGroupbox('実行設定')
-
--- ドロップダウンの作成
-TargetGroup:AddDropdown('PlayerSelect', {
-    Values = {},
-    Default = 0,
-    Multi = true,
-    Text = 'プレイヤー',
-    Tooltip = 'ループキルするプレイヤーを複数選択できます',
-})
-
--- プレイヤーリストの更新関数
-local function UpdatePlayerDropdown()
-    local list = {}
-    DisplayToUsername = {}
-    for _, v in pairs(Players:GetPlayers()) do
-        if v ~= LocalPlayer then
-            local displayStr = v.DisplayName .. " (@" .. v.Name .. ")"
-            table.insert(list, displayStr)
-            DisplayToUsername[displayStr] = v.Name
-        end
-    end
-    table.sort(list, tableAlphabeticOrder)
-
-    if Options.PlayerSelect then
-        Options.PlayerSelect:SetValues(list)
-    end
+-- ============================================================
+-- Helpers
+-- ============================================================
+local function GetChar(player)
+    player = player or LocalPlayer
+    local char = player.Character
+    if not char then return end
+    return char,
+        char:FindFirstChild("realHrp") or char:FindFirstChild("HumanoidRootPart"),
+        char:FindFirstChild("Humanoid")
 end
 
-TargetGroup:AddButton('リストを手動更新', function()
-    UpdatePlayerDropdown()
-end)
+local function GetMagnitude(a, b)
+    if not (a and b) then return math.huge end
+    return (a.Position - b.Position).Magnitude
+end
 
--- ドロップダウンの値が変更されたときの処理
-Options.PlayerSelect:OnChanged(function()
-    LoopList = {}
-    local selected = Options.PlayerSelect.Value
+local function IsPartOwner(part)
+    if not (part and part:IsA("BasePart")) then return false end
+    local cached = PartOwnerCache[part]
+    if cached and cached.Parent then
+        return cached.Value == LocalPlayer.Name
+    end
+    local parent = part.Parent
+    local head = part.Name == "HumanoidRootPart" and parent and parent:FindFirstChild("Head")
+    head = head and head:FindFirstChild("PartOwner")
+    if head and head.Value == LocalPlayer.Name then
+        PartOwnerCache[part] = head
+        return true
+    end
+    local own = part:FindFirstChild("PartOwner")
+    if own and own.Value == LocalPlayer.Name then
+        PartOwnerCache[part] = own
+        return true
+    end
+    return false
+end
 
-    if type(selected) == "table" then
-        for displayStr, isSelected in pairs(selected) do
-            if isSelected and DisplayToUsername[displayStr] then
-                table.insert(LoopList, DisplayToUsername[displayStr])
-            end
+local function GetVelocity(part)
+    local now = os.clock()
+    local e = VelocityCache[part]
+    if not e then
+        VelocityCache[part] = { Pos = part.Position, Time = now, Vel = Vector3.zero }
+        return Vector3.zero
+    end
+    local dt = now - e.Time
+    if dt < 0.001 then return e.Vel end
+    local delta = (part.Position - e.Pos) / dt
+    if dt > 0.25 or delta.Magnitude > 300 then
+        e.Vel = Vector3.zero
+    else
+        e.Vel = e.Vel:Lerp(delta, 1 - math.exp(-dt * 40))
+        if e.Vel.Magnitude < 0.05 then e.Vel = Vector3.zero end
+    end
+    e.Pos  = part.Position
+    e.Time = now
+    return e.Vel
+end
+
+local function PredictCFrame(part, base)
+    base = base or part.CFrame
+    local ping = math.clamp(LocalPlayer:GetNetworkPing(), 0, 0.35)
+    return base + GetVelocity(part) * ping
+end
+
+local function ResetVel(part)
+    if not (part and part:IsA("BasePart")) then return end
+    if part.AssemblyAngularVelocity ~= Vector3.zero then part.AssemblyAngularVelocity = Vector3.zero end
+    if part.AssemblyLinearVelocity  ~= Vector3.zero then part.AssemblyLinearVelocity  = Vector3.zero end
+end
+
+local function PivotTo(model, cframe)
+    if not (model and model:IsA("Model")) or typeof(cframe) ~= "CFrame" then return false end
+    local offset = cframe * model:GetPivot():Inverse()
+    local parts  = model:QueryDescendants("BasePart")
+    local newCF  = {}
+    for i, p in ipairs(parts) do
+        local root = p:IsDescendantOf(model) and p.AssemblyRootPart
+        if root and not p.Anchored and not root.Anchored then
+            newCF[i] = offset * p.CFrame
         end
     end
-end)
+    for i, cf in pairs(newCF) do parts[i].CFrame = cf end
+    return true
+end
 
--- ループキルのトグル
-SettingsGroup:AddToggle('LoopKillToggle', {
-    Text = 'ループキル実行',
-    Default = false,
-    Tooltip = '選択したプレイヤーへのループキルを開始/停止します',
-    Callback = function(Value)
-        _G.LoopKill = Value
-        _G.NoclipToggle = Value
+-- ============================================================
+-- Kill core (Grab / SNO / RNO / Kill)
+-- ============================================================
+local function Grab(part, at)
+    local _, root, hum = GetChar()
+    if not (root and hum and hum.Health > 0) then return end
+    if not (part and part.Parent and part:IsA("BasePart")) then return end
+    local myPos  = (at or root.CFrame) * CFrame.new(0, 1.593, 0)
+    local target = PredictCFrame(part)
+    SetNetworkOwner:FireServer(part, CFrame.new(myPos.Position, target.Position))
+end
 
-        if Value then
-            StartNoclip()
+local function SNO(part, timeout)
+    local myChar, myRoot, myHum = GetChar()
+    local myHead    = myChar and myChar:FindFirstChild("Head")
+    local ragdolled = myHum and myHum:FindFirstChild("Ragdolled")
+    if not (myHead and ragdolled and myRoot and myHum and myHum.Health > 0) then return false end
+    if not (part and part:IsA("BasePart") and part.Parent) then return false end
+    if IsPartOwner(part) then return true end
+    if State.Owning then return false end
 
-            task.spawn(function()
-                while _G.LoopKill do
-                    local originalPos = GetPlayerCFrame()
+    local far = GetMagnitude(myRoot, part) >= 31
+    State.Owning = true
 
-                    for _, playerName in pairs(LoopList) do
-                        local targetPlayer = Players:FindFirstChild(playerName)
+    local savedRoot, savedHead, aimPos, conn
+    local function freeze()
+        savedRoot = myRoot.CFrame
+        savedHead = myHead.CFrame
+        aimPos    = myRoot.CFrame
+        RunService:BindToRenderStep("RSC_Kill", Enum.RenderPriority.Camera.Value - 1, function()
+            myRoot.CFrame = savedRoot
+            myHead.CFrame = savedHead
+        end)
+        conn = RunService.Heartbeat:Connect(function()
+            savedRoot = myRoot.CFrame
+            savedHead = myHead.CFrame
+            myRoot.CFrame = aimPos
+            myHead.CFrame = aimPos
+        end)
+    end
+    local function unfreeze()
+        RunService:UnbindFromRenderStep("RSC_Kill")
+        if conn then conn:Disconnect(); conn = nil end
+        if myHead.Parent then myHead.CFrame = savedHead end
+        if myRoot.Parent then myRoot.CFrame = savedRoot end
+    end
 
-                        if targetPlayer and IsValidTarget(targetPlayer) then
-                            local targetRoot = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
-                            local targetHumanoid = targetPlayer.Character:FindFirstChild("Humanoid")
+    local ok = pcall(function()
+        if far then freeze() end
+        timeout = timeout or State.KillTimeout or 0.65
+        local start = tick()
+        while not State.Stopped
+              and part.Parent
+              and not IsPartOwner(part)
+              and myHum.Health ~= 0
+              and myRoot.Parent
+              and (tick() - start) < timeout
+        do
+            if far then aimPos = PredictCFrame(part) - Vector3.new(0, 22, 0) end
+            RunService.Heartbeat:Wait()
+            Grab(part, far and aimPos or nil)
+        end
+    end)
 
-                            if targetRoot and targetHumanoid then
-                                -- 相手をNoclipにする
-                                StartTargetNoclip(targetPlayer)
+    if far then pcall(unfreeze) end
+    State.Owning = false
+    if not ok then return false end
+    return IsPartOwner(part)
+end
 
-                                for i = 0, 50 do
-                                    StartNoclip()
-                                    SNOWshipPlayer(targetPlayer)
+local function RNO(part)
+    DestroyGrabLine:FireServer(part)
+end
 
-                                    if not IsValidTarget(targetPlayer) or (not _G.LoopKill or (CheckNetworkOwnerShipOnPlayer(targetPlayer) or targetRoot.AssemblyLinearVelocity.Magnitude > 500)) then
-                                        -- 相手をNoclipのまま維持
-                                        StartTargetNoclip(targetPlayer)
-                                        -- 先に奈落へ落とす
-                                        CreateSkyVelocity(targetRoot)
-                                        -- 0.05秒待ってからグラブラインを破棄する
-                                        task.wait(0.05)
-                                        DestroyGrabLine:FireServer(targetRoot)
-                                        break
-                                    end
+local function Kill(player)
+    if not player or player == LocalPlayer or player.Parent ~= Players then return false end
+    local char, root, hum = GetChar(player)
+    if not (char and root and hum) then return false end
+    if hum.Health == 0 then return false end
+    if State.Killing[char] then return false end
 
-                                    task.wait()
+    local spawnLoc = workspace:FindFirstChild("SpawnLocation")
+    if spawnLoc and GetMagnitude(spawnLoc, root) > 15000 then return false end
 
-                                    if targetRoot.Position.Y <= -12 then
-                                        TeleportPlayer(CFrame.new(targetRoot.Position + Vector3.new(0, 5, -15)))
-                                    else
-                                        TeleportPlayer(CFrame.new(targetRoot.Position + Vector3.new(0, -10, -10)))
-                                    end
+    State.Killing[char] = true
+    local originalFallen = workspace.FallenPartsDestroyHeight
 
-                                    targetHumanoid.BreakJointsOnDeath = false
-                                    targetHumanoid:ChangeState(Enum.HumanoidStateType.Dead)
-                                    targetHumanoid.Jump = true
-                                    targetHumanoid.Sit = false
-                                end
+    task.spawn(function()
+        local success = SNO(root, State.KillTimeout)
+        if not success then
+            State.Killing[char] = nil
+            return
+        end
+        if not (char.Parent and hum.Parent and root.Parent) then
+            State.Killing[char] = nil
+            return
+        end
 
-                                -- 処理後もNoclipを維持（奈落に落ちるまで）
-                                task.delay(2, function()
-                                    StopTargetNoclip(targetPlayer)
-                                end)
-                            end
-                        end
-                    end
+        hum.BreakJointsOnDeath = false
+        hum:ChangeState(Enum.HumanoidStateType.Dead)
+        workspace.FallenPartsDestroyHeight = 0/0
+        PivotTo(char, CFrame.new(0, -11111, 0))
 
-                    if originalPos then
-                        TeleportPlayer(originalPos)
-                    end
-                    task.wait(0.2)
-                end
-
-                StopNoclip()
+        local ping = math.clamp(LocalPlayer:GetNetworkPing() + 0.05, 0.08, 0.25)
+        task.delay(ping, function()
+            workspace.FallenPartsDestroyHeight = -10000
+            task.wait()
+            workspace.FallenPartsDestroyHeight = originalFallen
+            task.delay(0.5, function()
+                if root and root.Parent then pcall(RNO, root) end
             end)
-        else
-            StopNoclip()
-        end
-    end
+        end)
+
+        task.delay(1.5, function()
+            State.Killing[char] = nil
+        end)
+    end)
+
+    return true
+end
+
+-- ============================================================
+-- Format player for the Player dropdown
+-- ============================================================
+local function FormatPlayer(p, onNewLine, showYou)
+    if type(p) ~= "table" then p = Players:FindFirstChild(p) end
+    if not p then return "???" end
+    if p == LocalPlayer and showYou then return "You" end
+    return ("%s%s (@%s)"):format(p.DisplayName, onNewLine and "\n" or "", p.Name)
+end
+
+-- ============================================================
+-- Build UI with Obsidian
+-- ============================================================
+local Window = Library:CreateWindow({
+    Title         = "<b>Resonance Kill</b>",
+    Footer        = "<b>Project Resonance v2.9 | Obsidian</b>",
+    ToggleKeybind = Enum.KeyCode.RightShift,
+    Center        = true,
+    AutoShow      = true,
+    EnableSidebarResize = true,
+    Icon          = 79685990879972,
+    IconSize      = UDim2.fromOffset(32, 32),
+    CornerRadius  = 6,
+    Compact       = true,
+    Animations = {
+        ToggleWindow = false,
+        TabSwitch    = true,
+        Dropdown     = true,
+        Groupbox     = true,
+        KeyPicker    = true,
+    },
+    TabSwipeFrom = "Auto",
+    TabButtonsStyle = {
+        Gap         = 3,
+        Padding     = 8,
+        CornerRadius= 6,
+        Indicator   = true,
+        IndicatorWidth  = 2,
+        IndicatorHeight = 20,
+    },
 })
 
--- UI設定タブの構築
+-- Watermark (Obsidian draggable label)
+local Watermark = Library:AddDraggableLabel("Resonance Kill", 79685990879972)
+Watermark:SetVisible(true)
+
+task.spawn(function()
+    while Watermark and Watermark.Label and Watermark.Label.Parent and not State.Stopped do
+        local ping = math.floor(Stats.Network.ServerStatsItem["Data Ping"]:GetValue())
+        local fps  = math.floor(Stats.Workspace.Heartbeat:GetValue())
+        Watermark:SetText(("Resonance Kill v2.9 | %d fps | %d ms"):format(fps, ping))
+        task.wait(1)
+    end
+end)
+
+-- Tabs
+local KillTab     = Window:AddTab("<b>Kill</b>",     "crosshair", "Kill targets")
+local SettingsTab = Window:AddTab("<b>Settings</b>", "settings",  "Script settings")
+
+-- -------- Kill tab --------
+local TargetGroup = KillTab:AddLeftGroupbox("Targets", "circle-user-round")
+
+TargetGroup:AddDropdown("KillTargets", {
+    SpecialType         = "Player",
+    Default             = nil,
+    ExcludeLocalPlayer  = true,
+    Multi               = true,
+    AllowNull           = true,
+    Searchable          = true,
+    Text                = "Targets",
+    FormatListValue     = FormatPlayer,
+    FormatDisplayValue  = FormatPlayer,
+    EnablePlayerImages  = true,
+    Callback = function(value)
+        table.clear(Selected)
+        for k, v in pairs(value) do
+            Selected[k] = v
+        end
+    end,
+})
+
+TargetGroup:AddDivider()
+
+TargetGroup:AddButton({
+    Text        = "Kill Selected",
+    DoubleClick = true,
+    Tooltip     = "Kill every selected player",
+    Func = function()
+        local count = 0
+        for player in pairs(Selected) do
+            if player and player.Parent == Players then count = count + 1 end
+        end
+        if count == 0 then
+            notify("No targets selected")
+            return
+        end
+        task.spawn(function()
+            for player in pairs(Selected) do
+                if player and player.Parent == Players then
+                    Kill(player)
+                    task.wait(State.KillDelay)
+                end
+            end
+        end)
+    end,
+})
+
+TargetGroup:AddButton({
+    Text        = "Kill All",
+    DoubleClick = true,
+    Tooltip     = "Kill every player on the server",
+    Func = function()
+        task.spawn(function()
+            for _, player in ipairs(Players:GetPlayers()) do
+                if player ~= LocalPlayer then
+                    Kill(player)
+                    task.wait(State.KillDelay)
+                end
+            end
+        end)
+    end,
+})
+
+-- -------- Settings tab --------
+local SettingsGroup = SettingsTab:AddLeftGroupbox("Kill Settings", "wrench")
+
+SettingsGroup:AddSlider("KillTimeout", {
+    Text     = "Kill Timeout",
+    Default  = 0.65,
+    Min      = 0.3,
+    Max      = 2,
+    Rounding = 2,
+    Suffix   = " sec",
+    Compact  = true,
+    Callback = function(v) State.KillTimeout = v end,
+})
+
+SettingsGroup:AddSlider("KillDelay", {
+    Text     = "Delay Between Kills",
+    Default  = 0.4,
+    Min      = 0.1,
+    Max      = 3,
+    Rounding = 2,
+    Suffix   = " sec",
+    Compact  = true,
+    Callback = function(v) State.KillDelay = v end,
+})
+
+SettingsGroup:AddDivider()
+
+SettingsGroup:AddLabel("Method: SNO + Void Teleport", true)
+SettingsGroup:AddLabel("Far targets (>31 studs): tracking grab", true)
+
+-- ============================================================
+-- ThemeManager / SaveManager setup
+-- ============================================================
 ThemeManager:SetLibrary(Library)
+ThemeManager:SetFolder("Resonance")
+ThemeManager:ApplyToTab(SettingsTab)
+
 SaveManager:SetLibrary(Library)
-SaveManager:IgnoreThemeSettings()
-SaveManager:SetIgnoreIndexes({'PlayerSelect'}) 
-ThemeManager:SetFolder('LoopKillSettings')
-SaveManager:SetFolder('LoopKillSettings/main')
-SaveManager:BuildConfigSection(Tabs['UI Settings'])
-ThemeManager:BuildThemeSection(Tabs['UI Settings'])
+SaveManager:SetFolder("Resonance/FTAP")
+SaveManager:BuildConfigSection(SettingsTab)
+SaveManager:LoadAutoloadConfig()
 
--- 初期化とイベント接続
-UpdatePlayerDropdown()
-Players.PlayerAdded:Connect(UpdatePlayerDropdown)
-Players.PlayerRemoving:Connect(UpdatePlayerDropdown)
+-- ============================================================
+-- Cleanup
+-- ============================================================
+local function unload()
+    if State.Stopped then return end
+    State.Stopped = true
+    pcall(function() RunService:UnbindFromRenderStep("RSC_Kill") end)
+    pcall(function() Library:Unload() end)
+    getgenv().ResonanceKillRunning = false
+    print("[Resonance Kill] Unloaded")
+end
 
--- UI表示用通知
-Library:Notify('UIが読み込まれました。右シフト(RightShift)で開閉できます。', 3)
+Library:OnUnload(unload)
+
+notify("Loaded. RightShift toggles window.", 4)
+print("[Resonance Kill] Loaded (Obsidian main branch, external fetch)")
