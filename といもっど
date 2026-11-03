@@ -742,17 +742,17 @@ OrbitGroup:AddDropdown("OrbitMethod", {
 
 OrbitGroup:AddSlider("OrbitHeight", {
     Text = "頭の上の高さ(中心)",
-    Default = 3, Min = -5, Max = 100, Rounding = 1, Suffix = "スタッド",
+    Default = 3, Min = -5, Max = 10000, Rounding = 1, Suffix = "スタッド",
 })
 
 OrbitGroup:AddSlider("OrbitRadius", {
     Text = "半径",
-    Default = 6, Min = 1, Max = 100, Rounding = 1, Suffix = "スタッド",
+    Default = 6, Min = 1, Max = 10000, Rounding = 1, Suffix = "スタッド",
 })
 
 OrbitGroup:AddSlider("OrbitSpeed", {
     Text = "速度",
-    Default = 2, Min = 0.1, Max = 500, Rounding = 1,
+    Default = 2, Min = 0.1, Max = 50000, Rounding = 1,
 })
 
 -- アップグレード円
