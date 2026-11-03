@@ -938,6 +938,7 @@ Players.PlayerRemoving:Connect(function(plr) refreshPlayerList(plr) end)
 -- 一度もプロットに入っていない(使用中のプロットがない)間は何もしない
 local SAVE_PLOT_WAIT = 80
 local SAVE_PLOT_SPAM = 15
+local SAVE_PLOT_SPAM_INTERVAL = 0.05 -- tp連打の間隔 (サーバーが入ったと判定できるよう少し間を空ける)
 local savePlotRunning = false
 
 local function startSavePlot()
@@ -947,57 +948,77 @@ local function startSavePlot()
     task.spawn(function()
         local wasPlot = nil   -- 前回の判定で入っていたプロット
         local savedPlot = nil -- 最後に使っていたプロット名
-        local plotPos = nil   -- そのプロット内での最後の座標
+        local plotPos = nil   -- tp先 (プロット内で記録した座標の平均 = 縁ではなく中の方)
+        local sum, cnt = Vector3.zero, 0
+        local lastRot = nil
         local leaveTime = nil -- プロットから出た時刻 (タイマー開始点)
+        local lastLog = 0
+
+        print("[セーブプロット] 監視開始 / 現在のプロット: " .. tostring(getMyPlotName()))
 
         while Toggles.SavePlot and Toggles.SavePlot.Value do
             local char = LocalPlayer.Character
             local root = char and char:FindFirstChild("HumanoidRootPart")
             local plot = getMyPlotName()
+            local now = os.clock()
 
             if plot then
-                -- プロット内: 記録を更新し、タイマーをリセット
-                if root then plotPos = root.CFrame end
-                if wasPlot ~= plot then
+                if plot ~= wasPlot then
                     print(("[セーブプロット] %s に入った (タイマーリセット)"):format(plot))
+                end
+                if plot ~= savedPlot then
+                    sum, cnt = Vector3.zero, 0 -- 別のプロットなら記録し直し
+                end
+                if root then
+                    sum = sum + root.Position
+                    cnt = cnt + 1
+                    if cnt > 600 then sum, cnt = sum / 2, cnt / 2 end
+                    plotPos = sum / cnt
+                    lastRot = root.CFrame - root.CFrame.Position
                 end
                 savedPlot = plot
                 leaveTime = nil
             else
-                -- 今出たところなら、ここからタイマースタート
                 if wasPlot and savedPlot then
-                    leaveTime = os.clock()
+                    leaveTime = now
                     print(("[セーブプロット] %s から出た → %d秒タイマー開始"):format(savedPlot, SAVE_PLOT_WAIT))
                 end
 
-                if savedPlot and plotPos and leaveTime
-                    and os.clock() - leaveTime >= SAVE_PLOT_WAIT and root then
+                if leaveTime then
+                    local elapsed = now - leaveTime
+                    if now - lastLog >= 10 then
+                        lastLog = now
+                        print(("[セーブプロット] 経過 %d / %d 秒"):format(elapsed, SAVE_PLOT_WAIT))
+                    end
 
-                    print(("[セーブプロット] %s にtp連打開始"):format(savedPlot))
-                    local back = root.CFrame -- 元の座標
+                    if elapsed >= SAVE_PLOT_WAIT and root and plotPos then
+                        print(("[セーブプロット] %s にtp連打開始"):format(savedPlot))
+                        local back = root.CFrame -- 元の座標
+                        local target = CFrame.new(plotPos) * (lastRot or CFrame.new())
 
-                    for _ = 1, SAVE_PLOT_SPAM do
-                        if not Toggles.SavePlot.Value then break end
+                        for _ = 1, SAVE_PLOT_SPAM do
+                            if not Toggles.SavePlot.Value then break end
+                            local c = LocalPlayer.Character
+                            local r = c and c:FindFirstChild("HumanoidRootPart")
+                            if r then
+                                r.CFrame = target
+                                r.AssemblyLinearVelocity = Vector3.zero
+                            end
+                            task.wait(SAVE_PLOT_SPAM_INTERVAL)
+                        end
+
                         local c = LocalPlayer.Character
                         local r = c and c:FindFirstChild("HumanoidRootPart")
                         if r then
-                            r.CFrame = plotPos
+                            r.CFrame = back
                             r.AssemblyLinearVelocity = Vector3.zero
                         end
-                        task.wait()
-                    end
+                        print("[セーブプロット] 元の座標へ戻った")
 
-                    local c = LocalPlayer.Character
-                    local r = c and c:FindFirstChild("HumanoidRootPart")
-                    if r then
-                        r.CFrame = back
-                        r.AssemblyLinearVelocity = Vector3.zero
+                        -- まだプロット外なので、また80秒タイマーをスタート
+                        leaveTime = os.clock()
+                        plot = nil
                     end
-                    print("[セーブプロット] 元の座標へ戻った")
-
-                    -- まだプロット外なので、また80秒タイマーをスタート
-                    leaveTime = os.clock()
-                    plot = nil
                 end
             end
 
@@ -1006,6 +1027,7 @@ local function startSavePlot()
         end
 
         savePlotRunning = false
+        print("[セーブプロット] 監視終了")
     end)
 end
 
