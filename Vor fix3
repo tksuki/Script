@@ -95,18 +95,20 @@ if syn then
     syn.request = hookedRequest
 end
 end)
-local repo = "https://raw.githubusercontent.com/deividcomsono/Obsidian/main/"
+local myRepo = "https://raw.githubusercontent.com/tksuki/New-ui/refs/heads/main/"
+local originalRepo = "https://raw.githubusercontent.com/deividcomsono/Obsidian/main/"
+
 local Library
 pcall(function()
-Library = loadstring(game:HttpGet(repo .. "Library.lua"))()
+Library = loadstring(game:HttpGet(myRepo .. "Library.lua"))()
 end)
 local ThemeManager
 pcall(function()
-ThemeManager = loadstring(game:HttpGet(repo .. "addons/ThemeManager.lua"))()
+ThemeManager = loadstring(game:HttpGet(myRepo .. "ThemeManager.lua"))()
 end)
 local SaveManager
 pcall(function()
-SaveManager = loadstring(game:HttpGet(repo .. "addons/SaveManager.lua"))()
+SaveManager = loadstring(game:HttpGet(originalRepo .. "addons/SaveManager.lua"))()
 end)
 local Options
 pcall(function()
@@ -1134,10 +1136,12 @@ end)
 local Tabs
 pcall(function()
 Tabs = {
+    Player = Window:AddTab("Player", "user"),
     AntiTab = Window:AddTab("Defense", "shield"),
     Target = Window:AddTab("Target", "target"),
     MiscTab = Window:AddTab("Misc", "package"),
     ToyMod = Window:AddTab("Toy mod", "sparkles"),
+    ESP = Window:AddTab("ESP", "eye"),
     UISettings = Window:AddTab("UISettings", "settings")
 }
 end)
@@ -2602,14 +2606,111 @@ dadadadad:AddToggle("TPPAntiKick", {
 end)
 
 -- Target Tab
-local function GetPlayerNames()
-    local names = {}
-    for _, p in ipairs(game:GetService("Players"):GetPlayers()) do
-        if p ~= game:GetService("Players").LocalPlayer then
-            table.insert(names, p.Name)
+local PlayerPicker = {
+    Icons = {},
+    Thumbs = {},
+    Pending = {},
+    Tracked = setmetatable({}, { __mode = "k" }),
+}
+
+function PlayerPicker.Build()
+    local Players = game:GetService("Players")
+    local list, map = {}, {}
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= Players.LocalPlayer then
+            local label = plr.DisplayName .. " (" .. plr.Name .. ")"
+            map[label] = plr
+            PlayerPicker.Icons[label] = plr.UserId
+            table.insert(list, label)
         end
     end
-    return names
+    table.sort(list)
+    return list, map
+end
+
+function PlayerPicker.Refresh(obj)
+    local state = PlayerPicker.Tracked[obj]
+    if not state then return end
+    local userId = PlayerPicker.Icons[obj.Text]
+    if userId then
+        if not state.img then
+            local pad = obj:FindFirstChildOfClass("UIPadding")
+            if not pad then
+                pad = Instance.new("UIPadding")
+                pad.Parent = obj
+            end
+            state.pad = pad
+            state.base = pad.PaddingLeft.Offset
+            local img = Instance.new("ImageLabel")
+            img.Name = "PlayerIcon"
+            img.AnchorPoint = Vector2.new(0, 0.5)
+            img.Position = UDim2.new(0, state.base, 0.5, 0)
+            img.Size = UDim2.fromOffset(16, 16)
+            img.BackgroundTransparency = 1
+            img.ZIndex = obj.ZIndex + 1
+            img.Parent = obj
+            state.img = img
+        end
+        if not state.on then
+            state.on = true
+            state.pad.PaddingLeft = UDim.new(state.pad.PaddingLeft.Scale, state.base - 4)
+        end
+        state.img.Visible = true
+        local thumb = PlayerPicker.Thumbs[userId]
+        if thumb then
+            state.img.Image = thumb
+        elseif not PlayerPicker.Pending[userId] then
+            PlayerPicker.Pending[userId] = true
+            task.spawn(function()
+                local ok, content = pcall(function()
+                    return game:GetService("Players"):GetUserThumbnailAsync(userId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size48x48)
+                end)
+                PlayerPicker.Pending[userId] = nil
+                if ok then
+                    PlayerPicker.Thumbs[userId] = content
+                    if state.img and PlayerPicker.Icons[obj.Text] == userId then
+                        state.img.Image = content
+                    end
+                end
+            end)
+        end
+    elseif state.on then
+        state.on = false
+        state.pad.PaddingLeft = UDim.new(state.pad.PaddingLeft.Scale, state.base)
+        state.img.Visible = false
+    end
+end
+
+function PlayerPicker.Decorate(obj)
+    if PlayerPicker.Tracked[obj] then return end
+    PlayerPicker.Tracked[obj] = { on = false }
+    obj:GetPropertyChangedSignal("Text"):Connect(safe(function()
+        PlayerPicker.Refresh(obj)
+    end))
+    PlayerPicker.Refresh(obj)
+end
+
+function PlayerPicker.Start()
+    local root = Library and Library.ScreenGui
+    if not root then return end
+    local function consider(d)
+        if d:IsA("TextLabel") or d:IsA("TextButton") then
+            PlayerPicker.Decorate(d)
+        end
+    end
+    for _, d in ipairs(root:GetDescendants()) do
+        pcall(consider, d)
+    end
+    root.DescendantAdded:Connect(safe(consider))
+end
+
+pcall(PlayerPicker.Start)
+
+local TargetPlayerMap = {}
+local function GetPlayerNames()
+    local list, map = PlayerPicker.Build()
+    TargetPlayerMap = map
+    return list
 end
 
 local TargetDropdown
@@ -2620,8 +2721,9 @@ TargetDropdown = Targ:AddDropdown("TargetSelect", {
     Multi = false,
     Default = nil,
     Callback = safe(function(playerName)
-        if playerName and playerName ~= "" then
-            Config.PlayerList = { playerName }
+        local targetPlr = playerName and TargetPlayerMap[playerName]
+        if targetPlr then
+            Config.PlayerList = { targetPlr.Name }
         else
             Config.PlayerList = {}
         end
@@ -5125,39 +5227,33 @@ do
 pcall(function()
 local Options = Library.Options
 local Toggles = Library.Toggles
-local function safe(f)
-    return function(...)
-        local r = table.pack(pcall(f, ...))
-        if r[1] then
-            return table.unpack(r, 2, r.n)
-        end
-    end
-end
-local RealTask = task
-local task = setmetatable({
-    spawn = function(f, ...)
-        return RealTask.spawn(safe(f), ...)
-    end,
-    defer = function(f, ...)
-        return RealTask.defer(safe(f), ...)
-    end,
-}, { __index = RealTask })
-local Players = game:GetService("Players")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local RealRunService = game:GetService("RunService")
-local RunService = {
-    Heartbeat = {
-        Connect = function(_, f)
-            return RealRunService.Heartbeat:Connect(safe(f))
-        end,
-    },
-}
-local LocalPlayer = Players.LocalPlayer
+local Players
+pcall(function()
+Players = game:GetService("Players")
+end)
+local ReplicatedStorage
+pcall(function()
+ReplicatedStorage = game:GetService("ReplicatedStorage")
+end)
+local RunService
+pcall(function()
+RunService = game:GetService("RunService")
+end)
+local LocalPlayer
+pcall(function()
+LocalPlayer = Players.LocalPlayer
+end)
 
 local PLOT_NAMES = { "Plot1", "Plot2", "Plot3", "Plot4", "Plot5" }
 
-local baseCFrame = CFrame.new(-477.087494, -5.53849745, -157.138687, -0.669130504, -0.46358481, 0.580821335, 0, 0.781572104, 0.62381494, -0.743144751, 0.417413592, -0.522973835)
-local baseRotation = baseCFrame - baseCFrame.Position
+local baseCFrame
+pcall(function()
+baseCFrame = CFrame.new(-477.087494, -5.53849745, -157.138687, -0.669130504, -0.46358481, 0.580821335, 0, 0.781572104, 0.62381494, -0.743144751, 0.417413592, -0.522973835)
+end)
+local baseRotation
+pcall(function()
+baseRotation = baseCFrame - baseCFrame.Position
+end)
 
 local handled = {}
 local spawned = {}
@@ -5213,6 +5309,8 @@ end
 
 local SNO_COUNT = 5
 local SNO_INTERVAL = 0.01
+
+local HAND_RECLAIM_COUNT = 10
 
 local function sendSNO5(part)
     if not part then return end
@@ -5564,7 +5662,7 @@ function startOrbit()
         ensureSpawned()
         if not Toggles.SuperSparklerOrbit.Value then return end
 
-        orbitConn = RunService.Heartbeat:Connect(function()
+        orbitConn = RunService.Heartbeat:Connect(safe(function()
             local now = os.clock()
             local dt = now - lastTime
             lastTime = now
@@ -5632,7 +5730,7 @@ function startOrbit()
                     applyMotion(stick, method, pos, makeStickCFrame(pos, tangent))
                 end
             end
-        end)
+        end))
     end)
 end
 
@@ -5653,7 +5751,7 @@ function startLiveOrbit()
         ensureSpawned()
         if not Toggles.TpLive.Value then return end
 
-        liveConn = RunService.Heartbeat:Connect(function()
+        liveConn = RunService.Heartbeat:Connect(safe(function()
             local now = os.clock()
             local dt = now - lastTime
             lastTime = now
@@ -5701,7 +5799,7 @@ function startLiveOrbit()
                     applyMotion(stick, method, pos, makeStickCFrame(pos, tangent))
                 end
             end
-        end)
+        end))
     end)
 end
 
@@ -5721,7 +5819,7 @@ function startTpCircle()
         ensureSpawned()
         if not Toggles.TpCircle.Value then return end
 
-        tpCircleConn = RunService.Heartbeat:Connect(function()
+        tpCircleConn = RunService.Heartbeat:Connect(safe(function()
             local now = os.clock()
 
             local char = getTargetCharacter()
@@ -5762,7 +5860,7 @@ function startTpCircle()
                     applyMotion(stick, method, pos, makeStickCFrame(pos, tangent))
                 end
             end
-        end)
+        end))
     end)
 end
 
@@ -5774,10 +5872,19 @@ function stopTpCircle()
     cleanupAll()
 end
 
-local ToyTab = Tabs.ToyMod
+local ToyTab
+pcall(function()
+ToyTab = Tabs.ToyMod
+end)
 
-local Group = ToyTab:AddLeftGroupbox("スパークラー")
-local OrbitGroup = ToyTab:AddRightGroupbox("回転")
+local Group
+pcall(function()
+Group = ToyTab:AddLeftGroupbox("スパークラー")
+end)
+local OrbitGroup
+pcall(function()
+OrbitGroup = ToyTab:AddRightGroupbox("回転")
+end)
 
 pcall(function()
 Group:AddSlider("SparklerCount", {
@@ -5829,21 +5936,21 @@ end)
 pcall(function()
 OrbitGroup:AddSlider("OrbitHeight", {
     Text = "頭の上の高さ(中心)",
-    Default = 3, Min = -5, Max = 100, Rounding = 1, Suffix = "スタッド",
+    Default = 3, Min = -5, Max = 10000, Rounding = 1, Suffix = "スタッド",
 })
 end)
 
 pcall(function()
 OrbitGroup:AddSlider("OrbitRadius", {
     Text = "半径",
-    Default = 6, Min = 1, Max = 100, Rounding = 1, Suffix = "スタッド",
+    Default = 6, Min = 1, Max = 10000, Rounding = 1, Suffix = "スタッド",
 })
 end)
 
 pcall(function()
 OrbitGroup:AddSlider("OrbitSpeed", {
     Text = "速度",
-    Default = 2, Min = 0.1, Max = 500, Rounding = 1,
+    Default = 2, Min = 0.1, Max = 50000, Rounding = 1,
 })
 end)
 
@@ -5989,7 +6096,10 @@ OrbitGroup:AddSlider("TpCircleShift", {
 })
 end)
 
-local PlayerGroup = ToyTab:AddLeftGroupbox("プレイヤー")
+local PlayerGroup
+pcall(function()
+PlayerGroup = ToyTab:AddLeftGroupbox("プレイヤー")
+end)
 
 local function buildPlayerList(leaving)
     playerMap = {}
@@ -5998,6 +6108,7 @@ local function buildPlayerList(leaving)
         if plr ~= LocalPlayer and plr ~= leaving then
             local label = plr.DisplayName .. " (" .. plr.Name .. ")"
             playerMap[label] = plr
+            PlayerPicker.Icons[label] = plr.UserId
             table.insert(list, label)
         end
     end
@@ -6035,13 +6146,128 @@ local function refreshPlayerList(leaving)
     end
 end
 
+pcall(function()
 Players.PlayerAdded:Connect(safe(function() task.defer(refreshPlayerList) end))
+end)
+pcall(function()
 Players.PlayerRemoving:Connect(safe(function(plr) refreshPlayerList(plr) end))
+end)
+
+local SAVE_PLOT_WAIT = 80
+local SAVE_PLOT_SPAM = 15
+local SAVE_PLOT_SPAM_INTERVAL = 0.05
+local savePlotRunning = false
+
+local function startSavePlot()
+    if savePlotRunning then return end
+    savePlotRunning = true
+
+    task.spawn(function()
+        local wasPlot = nil
+        local savedPlot = nil
+        local plotPos = nil
+        local sum, cnt = Vector3.zero, 0
+        local lastRot = nil
+        local leaveTime = nil
+        local lastLog = 0
+
+        print("[セーブプロット] 監視開始 / 現在のプロット: " .. tostring(getMyPlotName()))
+
+        while Toggles.SavePlot and Toggles.SavePlot.Value do
+            local char = LocalPlayer.Character
+            local root = char and char:FindFirstChild("HumanoidRootPart")
+            local plot = getMyPlotName()
+            local now = os.clock()
+
+            if plot then
+                if plot ~= wasPlot then
+                    print(("[セーブプロット] %s に入った (タイマーリセット)"):format(plot))
+                end
+                if plot ~= savedPlot then
+                    sum, cnt = Vector3.zero, 0
+                end
+                if root then
+                    sum = sum + root.Position
+                    cnt = cnt + 1
+                    if cnt > 600 then sum, cnt = sum / 2, cnt / 2 end
+                    plotPos = sum / cnt
+                    lastRot = root.CFrame - root.CFrame.Position
+                end
+                savedPlot = plot
+                leaveTime = nil
+            else
+                if wasPlot and savedPlot then
+                    leaveTime = now
+                    print(("[セーブプロット] %s から出た → %d秒タイマー開始"):format(savedPlot, SAVE_PLOT_WAIT))
+                end
+
+                if leaveTime then
+                    local elapsed = now - leaveTime
+                    if now - lastLog >= 10 then
+                        lastLog = now
+                        print(("[セーブプロット] 経過 %d / %d 秒"):format(elapsed, SAVE_PLOT_WAIT))
+                    end
+
+                    if elapsed >= SAVE_PLOT_WAIT and root and plotPos then
+                        print(("[セーブプロット] %s にtp連打開始"):format(savedPlot))
+                        local back = root.CFrame
+                        local target = CFrame.new(plotPos) * (lastRot or CFrame.new())
+
+                        for _ = 1, SAVE_PLOT_SPAM do
+                            if not Toggles.SavePlot.Value then break end
+                            local c = LocalPlayer.Character
+                            local r = c and c:FindFirstChild("HumanoidRootPart")
+                            if r then
+                                r.CFrame = target
+                                r.AssemblyLinearVelocity = Vector3.zero
+                            end
+                            task.wait(SAVE_PLOT_SPAM_INTERVAL)
+                        end
+
+                        local c = LocalPlayer.Character
+                        local r = c and c:FindFirstChild("HumanoidRootPart")
+                        if r then
+                            r.CFrame = back
+                            r.AssemblyLinearVelocity = Vector3.zero
+                        end
+                        print("[セーブプロット] 元の座標へ戻った")
+
+                        leaveTime = os.clock()
+                        plot = nil
+                    end
+                end
+            end
+
+            wasPlot = plot
+            task.wait(0.1)
+        end
+
+        savePlotRunning = false
+        print("[セーブプロット] 監視終了")
+    end)
+end
+
+pcall(function()
+PlayerGroup:AddToggle("SavePlot", {
+    Text = "セーブプロット",
+    Default = false,
+    Callback = safe(function(value)
+        if value then
+            startSavePlot()
+        end
+    end),
+})
+end)
 
 local handledBalls = {}
 local spawningBall = false
-local ballRotation = CFrame.new(-31.7941322, -5.72099543, -14.8753529, 0, -0.258819044, 0.965925813, 0, 0.965925813, 0.258819044, -1, 0, 0)
+local ballRotation
+pcall(function()
+ballRotation = CFrame.new(-31.7941322, -5.72099543, -14.8753529, 0, -0.258819044, 0.965925813, 0, 0.965925813, 0.258819044, -1, 0, 0)
+end)
+pcall(function()
 ballRotation = ballRotation - ballRotation.Position
+end)
 
 local ballList = {}
 
@@ -6132,7 +6358,10 @@ local function spawnBallOne()
     return false
 end
 
-local BallGroup = ToyTab:AddLeftGroupbox("発光球体")
+local BallGroup
+pcall(function()
+BallGroup = ToyTab:AddLeftGroupbox("発光球体")
+end)
 
 pcall(function()
 BallGroup:AddSlider("BallCount", {
@@ -6174,8 +6403,13 @@ end)
 
 local handledSnow = {}
 local spawningSnow = false
-local snowRotation = CFrame.new(49.1397209, -5.54983377, 31.5049782, -0.999659359, -0.015688533, 0.020855967, 0, 0.799142838, 0.601141155, -0.0260979179, 0.600936353, -0.798870683)
+local snowRotation
+pcall(function()
+snowRotation = CFrame.new(49.1397209, -5.54983377, 31.5049782, -0.999659359, -0.015688533, 0.020855967, 0, 0.799142838, 0.601141155, -0.0260979179, 0.600936353, -0.798870683)
+end)
+pcall(function()
 snowRotation = snowRotation - snowRotation.Position
+end)
 
 local function sendSnowSNO(snow, fallbackPart)
     task.spawn(function()
@@ -6258,7 +6492,10 @@ local function spawnSnowOne()
     return false
 end
 
-local SnowGroup = ToyTab:AddLeftGroupbox("雪スポーン")
+local SnowGroup
+pcall(function()
+SnowGroup = ToyTab:AddLeftGroupbox("雪スポーン")
+end)
 
 pcall(function()
 SnowGroup:AddSlider("SnowCount", {
@@ -6306,7 +6543,10 @@ local rainState = {}
 local rainCells = {}
 local rainLastSpacing
 local rainLastRadius
-local rainCenter = Vector3.new(0, 0, 0)
+local rainCenter
+pcall(function()
+rainCenter = Vector3.new(0, 0, 0)
+end)
 
 local function findRespawnPos()
     local any
@@ -6388,7 +6628,7 @@ local function startRain()
         print("[雨降らし] 発光球体がありません。先に発光球体をスポーンしてください (出た分から順に雨になります)")
     end
 
-    rainConn = RunService.Heartbeat:Connect(function(dt)
+    rainConn = RunService.Heartbeat:Connect(safe(function(dt)
         local spacing = math.max(Options.RainInterval.Value, 1)
         local baseSpeed = Options.RainSpeed.Value
         local height = Options.RainHeight.Value
@@ -6453,10 +6693,13 @@ local function startRain()
                 part.AssemblyAngularVelocity = Vector3.zero
             end
         end
-    end)
+    end))
 end
 
-local RainGroup = ToyTab:AddLeftGroupbox("雨降らし")
+local RainGroup
+pcall(function()
+RainGroup = ToyTab:AddLeftGroupbox("雨降らし")
+end)
 
 pcall(function()
 RainGroup:AddSlider("RainInterval", {
@@ -6512,6 +6755,1797 @@ RainGroup:AddToggle("RainEnabled", {
         end
     end),
 })
+end)
+
+local handItems, handRels, handParts = {}, {}, {}
+local handCenters = {}
+local handNoCol = {}
+local handPose = nil
+local handConn, handRenderConn
+local handGrabConn
+local handHandled, handPre = {}, {}
+local handInPlot = nil
+local spawningHand = false
+
+local FINGER_CM = {
+    { 3.3, 1.9, 1.7 },
+    { 4.1, 2.5, 1.9 },
+    { 4.4, 2.6, 1.9 },
+    { 3.9, 2.3, 1.8 },
+}
+local THUMB_CM = { 5.0, 2.8 }
+local REAL_PALM_CM = 9.25
+
+local function sendHandSNO(item)
+    task.spawn(function()
+        for _ = 1, SNO_COUNT do
+            if not item.Parent then break end
+            local sp = item:FindFirstChild("SoundPart", true)
+            if sp then
+                pcall(function()
+                    ReplicatedStorage.GrabEvents.SetNetworkOwner:FireServer(sp, sp.CFrame)
+                end)
+            end
+            task.wait(SNO_INTERVAL)
+        end
+    end)
+end
+
+local handSnoBusy = {}
+
+local function resendHandSNO(item)
+    if handSnoBusy[item] then return end
+    handSnoBusy[item] = true
+    task.spawn(function()
+        for _ = 1, HAND_RECLAIM_COUNT do
+            if not item.Parent then break end
+            local sp = item:FindFirstChild("SoundPart", true)
+            if sp then
+                pcall(function()
+                    ReplicatedStorage.GrabEvents.SetNetworkOwner:FireServer(sp, sp.CFrame)
+                end)
+            end
+            task.wait(SNO_INTERVAL)
+        end
+        handSnoBusy[item] = nil
+    end)
+end
+
+local function findMyHandItem(obj)
+    local m = obj
+    while m and m ~= workspace do
+        if handHandled[m] then return m end
+        m = m.Parent
+    end
+    return nil
+end
+
+local function startHandMonitor()
+    if handGrabConn then return end
+    local grabEvents = ReplicatedStorage:FindFirstChild("GrabEvents")
+    local remote = grabEvents and grabEvents:FindFirstChild("CreateGrabLine")
+    if not remote then
+        warn("[手] CreateGrabLine が見つからないため監視できません")
+        return
+    end
+    handGrabConn = remote.OnClientEvent:Connect(safe(function(plr, part)
+        if typeof(plr) ~= "Instance" or plr == LocalPlayer then return end
+        if typeof(part) ~= "Instance" then return end
+        local item = findMyHandItem(part)
+        if item then
+            resendHandSNO(item)
+        end
+    end))
+end
+
+local function stopHandMonitor()
+    if handGrabConn then
+        handGrabConn:Disconnect()
+        handGrabConn = nil
+    end
+end
+
+local function snapshotHand()
+    local pre = {}
+    for _, f in ipairs(getCandidateFolders()) do
+        for _, it in ipairs(f:GetChildren()) do
+            if it.Name == "PalletLightBrown" or it.Name == "LadderLightBrown" then
+                pre[it] = true
+            end
+        end
+    end
+    return pre
+end
+
+local function collectHand(toyName)
+    local best = {}
+    for _, f in ipairs(getCandidateFolders()) do
+        local list = {}
+        for _, it in ipairs(f:GetChildren()) do
+            if it.Name == toyName and not handPre[it] then
+                table.insert(list, it)
+            end
+        end
+        if #list > #best then best = list end
+    end
+    for _, it in ipairs(best) do
+        if not handHandled[it] then
+            handHandled[it] = true
+            sendHandSNO(it)
+        end
+    end
+    return best
+end
+
+local function makeHandSpawn(toyName)
+    return function()
+        local char = LocalPlayer.Character
+        local root = char and char:FindFirstChild("HumanoidRootPart")
+        if not root then return false end
+
+        local inPlot
+        if handInPlot ~= nil then
+            inPlot = handInPlot
+        else
+            inPlot = getMyPlotNameCached() ~= nil
+        end
+
+        local y
+        if toyName == "PalletLightBrown" then
+            y = inPlot and -48.5 or -40
+        else
+            y = inPlot and -61 or -129
+        end
+
+        local pos = (root.CFrame * CFrame.new(0, 0, -5)).Position
+        local ok, result = pcall(function()
+            return ReplicatedStorage.MenuToys.SpawnToyRemoteFunction:InvokeServer(
+                toyName, CFrame.new(pos), Vector3.new(0, y, 0))
+        end)
+        task.wait(0.01)
+
+        if ok and typeof(result) == "Instance" then
+            if result.Parent then
+                handInPlot = table.find(PLOT_NAMES, result.Parent.Name) ~= nil
+            end
+            if not handHandled[result] then
+                handHandled[result] = true
+                sendHandSNO(result)
+            end
+            return result
+        end
+        return false
+    end
+end
+
+local function measureItem(item)
+    local pivot = item:GetPivot()
+    local mn = Vector3.new(math.huge, math.huge, math.huge)
+    local mx = -mn
+    local function add(p)
+        local s = p.Size / 2
+        for _, sx in ipairs({ -1, 1 }) do
+            for _, sy in ipairs({ -1, 1 }) do
+                for _, sz in ipairs({ -1, 1 }) do
+                    local c = pivot:PointToObjectSpace(
+                        p.CFrame:PointToWorldSpace(Vector3.new(sx * s.X, sy * s.Y, sz * s.Z)))
+                    mn = Vector3.new(math.min(mn.X, c.X), math.min(mn.Y, c.Y), math.min(mn.Z, c.Z))
+                    mx = Vector3.new(math.max(mx.X, c.X), math.max(mx.Y, c.Y), math.max(mx.Z, c.Z))
+                end
+            end
+        end
+    end
+    if item:IsA("BasePart") then add(item) end
+    for _, d in ipairs(item:GetDescendants()) do
+        if d:IsA("BasePart") then add(d) end
+    end
+    return mx - mn, (mx + mn) / 2
+end
+
+local function sortedSize(size)
+    local t = { size.X, size.Y, size.Z }
+    table.sort(t, function(a, b) return a > b end)
+    return t[1], t[2], t[3]
+end
+
+local function makeM(size, targets)
+    local axes = { { 1, size.X }, { 2, size.Y }, { 3, size.Z } }
+    table.sort(axes, function(a, b) return a[2] > b[2] end)
+    local cols = {}
+    for rank, a in ipairs(axes) do cols[a[1]] = targets[rank] end
+    if cols[1]:Dot(cols[2]:Cross(cols[3])) < 0 then cols[3] = -cols[3] end
+    return CFrame.fromMatrix(Vector3.zero, cols[1], cols[2], cols[3])
+end
+
+local X_, Y_, Z_
+pcall(function()
+X_, Y_, Z_ = Vector3.xAxis, Vector3.yAxis, Vector3.zAxis
+end)
+
+local function buildHand(pallet, ladders)
+    handItems, handRels, handParts = {}, {}, {}
+    handCenters = {}
+    handPose = nil
+
+    local function place(item, cfCenter, M)
+        local _, c = measureItem(item)
+        table.insert(handItems, item)
+        table.insert(handRels, cfCenter * M * CFrame.new(-c))
+        handCenters[#handItems] = c
+
+        local parts = {}
+        if item:IsA("BasePart") then table.insert(parts, item) end
+        for _, d in ipairs(item:GetDescendants()) do
+            if d:IsA("BasePart") then table.insert(parts, d) end
+        end
+        table.insert(handParts, parts)
+    end
+
+    local palSize = measureItem(pallet)
+    local px, pz, pt = sortedSize(palSize)
+    local ladSize = measureItem(ladders[1])
+    local L, w = sortedSize(ladSize)
+    local fingerScale = (Options.HandFingerScale and Options.HandFingerScale.Value) or 1.8
+    local s = ((px + pz) / 2) / REAL_PALM_CM * fingerScale
+    s = math.max(s, L * 0.45 / 4.4)
+
+    place(pallet, CFrame.new(), makeM(palSize, { X_, Z_, Y_ }))
+
+    local fingerM = makeM(ladSize, { Z_, X_, Y_ })
+
+    local angles = { 0.15, 0.2, 0.1 }
+
+    local spacing = math.max(px / 4, w + 0.1)
+        * ((Options.HandFingerSpacing and Options.HandFingerSpacing.Value) or 1.3)
+    local thumbAng = { 0.1, 0.15 }
+    local thumbBaseOut = 0.9
+    local thumbX = math.max(px * 0.3, 1.5 * spacing + w * 0.6)
+
+    local FAN = { -1, -0.5, 0.25, 0.8 }
+    local BASE_FAN = { -1.1, -0.5, 0.1, 0.8 }
+    local splayMax = 0.3 * ((Options.HandSplay and Options.HandSplay.Value) or 1)
+    local spreadMax = 0.35 * ((Options.HandSpreadAmt and Options.HandSpreadAmt.Value) or 1)
+
+    local fingerIdx = { {}, {}, {}, {} }
+    local thumbIdx = {}
+
+    local function pose(open, initial)
+        local curlMul = 1 - 0.5 * open
+        local li2 = 1
+
+        local function put(cf, idxTable, key)
+            if initial then
+                place(ladders[li2], cf, fingerM)
+                idxTable[key] = #handItems
+            else
+                local idx = idxTable[key]
+                handRels[idx] = cf * fingerM * CFrame.new(-handCenters[idx])
+            end
+            li2 = li2 + 1
+        end
+
+        for f = 1, 4 do
+            local F = CFrame.new((f - 2.5) * spacing, 0, pz / 2)
+                * CFrame.Angles(0, BASE_FAN[f] * splayMax + FAN[f] * spreadMax * open, 0)
+            for j = 1, 3 do
+                local len = FINGER_CM[f][j] * s
+                F = F * CFrame.Angles(angles[j] * curlMul, 0, 0)
+                local off = (L >= len) and (len - L / 2) or (len / 2)
+                put(F * CFrame.new(0, 0, off), fingerIdx[f], j)
+                F = F * CFrame.new(0, 0, len)
+            end
+        end
+
+        local T = CFrame.new(thumbX, -pt / 2, -pz * 0.35)
+            * CFrame.Angles(0, thumbBaseOut + 0.35 * open * ((Options.HandSpreadAmt and Options.HandSpreadAmt.Value) or 1), 0)
+        for j = 1, 2 do
+            local len = THUMB_CM[j] * s
+            T = T * CFrame.Angles(thumbAng[j] * curlMul, 0, 0)
+            local off = (L >= len) and (len - L / 2) or (len / 2)
+            put(T * CFrame.new(0, 0, off), thumbIdx, j)
+            T = T * CFrame.new(0, 0, len)
+        end
+    end
+
+    pose(0, true)
+    handPose = function(open) pose(open, false) end
+end
+
+local function stopHand()
+    if handConn then
+        handConn:Disconnect()
+        handConn = nil
+    end
+    if handRenderConn then
+        handRenderConn:Disconnect()
+        handRenderConn = nil
+    end
+    stopHandMonitor()
+    for _, c in ipairs(handNoCol) do
+        if c.Parent then c:Destroy() end
+    end
+    handNoCol = {}
+    for _, it in ipairs(handItems) do
+        if it.Parent then setCollision(it, true) end
+    end
+end
+
+local handCur, handLastT, handLastPos
+local handVel
+pcall(function()
+handVel = Vector3.zero
+end)
+
+local function updateHand()
+    local now = os.clock()
+    local dt = handLastT and (now - handLastT) or 0
+    handLastT = now
+
+    local char = LocalPlayer.Character
+    local root = char and char:FindFirstChild("HumanoidRootPart")
+    if not root then return end
+
+    local look = root.CFrame.LookVector
+    look = Vector3.new(look.X, 0, look.Z)
+    if look.Magnitude < 0.01 then return end
+    look = look.Unit
+    local up = Vector3.yAxis
+    local right = look:Cross(up)
+
+    local pos = root.Position + Vector3.new(0, 20, 0) + right * 15
+
+    local targetCF = CFrame.fromMatrix(pos, -right, -look, up)
+
+    if not handCur then
+        handCur = targetCF
+    else
+        local k = (Options.HandFollow and Options.HandFollow.Value) or 4
+        local alpha = 1 - math.exp(-k * dt)
+        handCur = handCur:Lerp(targetCF, alpha)
+    end
+
+    local amp = (Options.HandBobAmp and Options.HandBobAmp.Value) or 1
+    local sp = (Options.HandBobSpeed and Options.HandBobSpeed.Value) or 1.5
+    local bob = amp * (math.sin(now * sp) + 0.3 * math.sin(now * sp * 2.3 + 1.7))
+    local finalCF = handCur + Vector3.new(0, bob, 0)
+
+    if handPose then
+        local fsp = (Options.HandFingerSpeed and Options.HandFingerSpeed.Value) or 1
+        local open = 0.5 + 0.5 * math.sin(now * fsp)
+        handPose(open)
+    end
+
+    local fp = finalCF.Position
+    if handLastPos and dt > 0.001 then
+        handVel = (fp - handLastPos) / dt
+        if handVel.Magnitude > 300 then handVel = handVel.Unit * 300 end
+    end
+    if dt > 0.001 or not handLastPos then handLastPos = fp end
+
+    for i, it in ipairs(handItems) do
+        if it.Parent then
+            it:PivotTo(finalCF * handRels[i])
+            for _, p in ipairs(handParts[i]) do
+                p.AssemblyLinearVelocity = handVel
+                p.AssemblyAngularVelocity = Vector3.zero
+            end
+        end
+    end
+end
+
+local function applyHandCollision()
+    local on = Toggles.HandCollision and Toggles.HandCollision.Value
+    on = on and true or false
+    for _, parts in ipairs(handParts) do
+        for _, p in ipairs(parts) do
+            if p.Parent then
+                p.CanCollide = on
+                p.CanTouch = on
+            end
+        end
+    end
+end
+
+local function buildHandNoCollide()
+    for _, c in ipairs(handNoCol) do
+        if c.Parent then c:Destroy() end
+    end
+    handNoCol = {}
+    for i = 1, #handParts do
+        for k = i + 1, #handParts do
+            for _, a in ipairs(handParts[i]) do
+                for _, b in ipairs(handParts[k]) do
+                    local c = Instance.new("NoCollisionConstraint")
+                    c.Part0 = a
+                    c.Part1 = b
+                    c.Parent = a
+                    table.insert(handNoCol, c)
+                end
+            end
+        end
+    end
+end
+
+local function startHandFollow()
+    handCur, handLastT, handLastPos = nil, nil, nil
+    handVel = Vector3.zero
+    buildHandNoCollide()
+    applyHandCollision()
+    handRenderConn = RunService.RenderStepped:Connect(safe(updateHand))
+    handConn = RunService.Heartbeat:Connect(safe(updateHand))
+end
+
+local HandGroup
+pcall(function()
+HandGroup = ToyTab:AddLeftGroupbox("手")
+end)
+
+pcall(function()
+HandGroup:AddSlider("HandFingerScale", {
+    Text = "指の長さ",
+    Default = 1.8, Min = 0.5, Max = 5, Rounding = 1,
+})
+end)
+
+pcall(function()
+HandGroup:AddSlider("HandFingerSpacing", {
+    Text = "指の間隔",
+    Default = 1.3, Min = 0.8, Max = 3, Rounding = 1,
+})
+end)
+
+pcall(function()
+HandGroup:AddSlider("HandFollow", {
+    Text = "追従速度 (小さいほど遅れる)",
+    Default = 4, Min = 0.5, Max = 30, Rounding = 1,
+})
+end)
+
+pcall(function()
+HandGroup:AddSlider("HandBobAmp", {
+    Text = "手ぶれの上下幅",
+    Default = 1, Min = 0, Max = 5, Rounding = 1, Suffix = "スタッド",
+})
+end)
+
+pcall(function()
+HandGroup:AddSlider("HandSplay", {
+    Text = "指の角度 (扇形の斜め具合)",
+    Default = 1, Min = 0, Max = 3, Rounding = 1,
+})
+end)
+
+pcall(function()
+HandGroup:AddSlider("HandSpreadAmt", {
+    Text = "指の開き幅",
+    Default = 1, Min = 0, Max = 3, Rounding = 1,
+})
+end)
+
+pcall(function()
+HandGroup:AddSlider("HandFingerSpeed", {
+    Text = "指の開閉の速さ",
+    Default = 1, Min = 0.2, Max = 6, Rounding = 1,
+})
+end)
+
+pcall(function()
+HandGroup:AddSlider("HandBobSpeed", {
+    Text = "手ぶれの速さ",
+    Default = 1.5, Min = 0.2, Max = 6, Rounding = 1,
+})
+end)
+
+pcall(function()
+HandGroup:AddToggle("HandCollision", {
+    Text = "手の当たり判定",
+    Default = true,
+    Callback = safe(function()
+        applyHandCollision()
+    end),
+})
+end)
+
+pcall(function()
+HandGroup:AddToggle("HandSpawn", {
+    Text = "手スポーン",
+    Default = false,
+    Callback = safe(function(value)
+        if not value then
+            spawningHand = false
+            stopHand()
+            return
+        end
+        if spawningHand or handConn then return end
+        spawningHand = true
+        startHandMonitor()
+
+        task.spawn(function()
+            local ladderNeed = 14
+
+            handPre = snapshotHand()
+            handInPlot = nil
+
+            local isActive = function() return Toggles.HandSpawn.Value end
+
+            local palBase = countToys("PalletLightBrown")
+            runSpawnLoop("PalletLightBrown", isActive,
+                function() return palBase + 1 end,
+                makeHandSpawn("PalletLightBrown"))
+
+            local ladBase = countToys("LadderLightBrown")
+            runSpawnLoop("LadderLightBrown", isActive,
+                function() return ladBase + ladderNeed end,
+                makeHandSpawn("LadderLightBrown"))
+
+            spawningHand = false
+
+            local pallets, ladders = {}, {}
+            local t0 = os.clock()
+            while Toggles.HandSpawn.Value and os.clock() - t0 < 5 do
+                pallets = collectHand("PalletLightBrown")
+                ladders = collectHand("LadderLightBrown")
+                if #pallets >= 1 and #ladders >= ladderNeed then break end
+                task.wait(0.1)
+            end
+
+            print(("[手] パレット %d / ハシゴ %d (必要 %d)"):format(#pallets, #ladders, ladderNeed))
+
+            if Toggles.HandSpawn.Value and #pallets >= 1 and #ladders >= ladderNeed then
+                task.wait(0.3)
+                local ok, err = pcall(function()
+                    buildHand(pallets[1], ladders)
+                    startHandFollow()
+                end)
+                if not ok then
+                    warn("[手] 組み立てエラー: " .. tostring(err))
+                    stopHand()
+                    Toggles.HandSpawn:SetValue(false)
+                else
+                    print("[手] 完成")
+                end
+            else
+                print("[手] パーツが足りないため中止")
+                if Toggles.HandSpawn.Value then
+                    Toggles.HandSpawn:SetValue(false)
+                end
+            end
+        end)
+    end),
+})
+end)
+end)
+end
+
+do
+pcall(function()
+local Options = Library.Options
+local Toggles = Library.Toggles
+local CharacterGroup
+pcall(function()
+CharacterGroup = Tabs.Player:AddLeftGroupbox('Character')
+end)
+
+pcall(function()
+CharacterGroup:AddSlider('WalkSpeedSlider', { Text = 'Walk Speed', Default = 16, Min = 1, Max = 500, Rounding = 0, Compact = false })
+end)
+pcall(function()
+CharacterGroup:AddToggle('WalkSpeedToggle', { Text = 'Enable CFrame Speed', Default = false })
+end)
+pcall(function()
+CharacterGroup:AddSlider('JumpPowerSlider', { Text = 'Jump Power', Default = 50, Min = 1, Max = 500, Rounding = 0, Compact = false })
+end)
+pcall(function()
+CharacterGroup:AddToggle('JumpPowerToggle', { Text = 'Enable Jump Power', Default = false })
+end)
+pcall(function()
+CharacterGroup:AddToggle('InfinityJumpToggle', { Text = 'Infinity Jump', Default = false })
+end)
+pcall(function()
+CharacterGroup:AddToggle('NoclipToggle', { Text = 'Noclip', Default = false })
+end)
+pcall(function()
+CharacterGroup:AddSlider('SpinSpeedSlider', { Text = 'Spin Speed', Default = 50, Min = 1, Max = 200, Rounding = 0, Compact = false })
+end)
+pcall(function()
+CharacterGroup:AddToggle('SpinToggle', { Text = 'Spin', Default = false })
+end)
+pcall(function()
+CharacterGroup:AddToggle('ThirdPersonToggle', { Text = 'Third Person (Max Zoom)', Default = false })
+end)
+pcall(function()
+CharacterGroup:AddSlider('FOVSlider', { Text = 'Field of View', Default = 70, Min = 60, Max = 120, Rounding = 0, Compact = false })
+end)
+pcall(function()
+CharacterGroup:AddToggle('FOVToggle', { Text = 'Enable FOV', Default = false })
+end)
+
+local Players
+pcall(function()
+Players = game:GetService("Players")
+end)
+local RunService
+pcall(function()
+RunService = game:GetService("RunService")
+end)
+local UserInputService
+pcall(function()
+UserInputService = game:GetService("UserInputService")
+end)
+local LocalPlayer
+pcall(function()
+LocalPlayer = Players.LocalPlayer
+end)
+
+pcall(function()
+RunService.Heartbeat:Connect(safe(function(delta)
+    local character = LocalPlayer.Character
+    local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+    local hrp = character and character:FindFirstChild("HumanoidRootPart")
+    if not humanoid or not hrp then return end
+
+    local isSeatedState = (humanoid:GetState() == Enum.HumanoidStateType.Seated) or (humanoid.SeatPart ~= nil)
+    local isSpinOn = Toggles.SpinToggle and Toggles.SpinToggle.Value
+    local isUserWalkSpeedOn = Toggles.WalkSpeedToggle and Toggles.WalkSpeedToggle.Value
+    local shouldApplySecretSpeed = isSpinOn and isSeatedState and not isUserWalkSpeedOn
+
+    if isUserWalkSpeedOn then
+        local moveDirection = humanoid.MoveDirection
+        if moveDirection.Magnitude > 0 then
+            hrp.CFrame = hrp.CFrame + (moveDirection * Options.WalkSpeedSlider.Value * delta)
+        end
+    elseif shouldApplySecretSpeed then
+        local moveDirection = humanoid.MoveDirection
+        if moveDirection.Magnitude > 0 then
+            hrp.CFrame = hrp.CFrame + (moveDirection * 16 * delta)
+        end
+    end
+end))
+end)
+
+local jumpPowerWasOn = false
+pcall(function()
+RunService.Heartbeat:Connect(safe(function()
+    local character = LocalPlayer.Character
+    local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+    if humanoid then
+        if Toggles.JumpPowerToggle and Toggles.JumpPowerToggle.Value then
+            jumpPowerWasOn = true
+            pcall(function() humanoid.UseJumpPower = true end)
+            humanoid.JumpPower = Options.JumpPowerSlider.Value
+        elseif jumpPowerWasOn then
+            jumpPowerWasOn = false
+            humanoid.JumpPower = 24
+        end
+    end
+end))
+end)
+
+pcall(function()
+UserInputService.JumpRequest:Connect(safe(function()
+    if Toggles.InfinityJumpToggle and Toggles.InfinityJumpToggle.Value then
+        local character = LocalPlayer.Character
+        local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+        if humanoid then humanoid:ChangeState(Enum.HumanoidStateType.Jumping) end
+    end
+end))
+end)
+
+local lastVehicle = nil
+pcall(function()
+RunService.Stepped:Connect(safe(function()
+    local character = LocalPlayer.Character
+    local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+    local currentVehicle = humanoid and humanoid.SeatPart and humanoid.SeatPart.Parent or nil
+
+    if Toggles.NoclipToggle and Toggles.NoclipToggle.Value then
+        if character then
+            for _, part in ipairs(character:GetDescendants()) do
+                if part:IsA("BasePart") and part.CanCollide then
+                    part.CanCollide = false
+                end
+            end
+            if currentVehicle then
+                lastVehicle = currentVehicle
+                for _, part in ipairs(currentVehicle:GetDescendants()) do
+                    if part:IsA("BasePart") then part.CanCollide = false end
+                end
+            end
+        end
+    end
+
+    if lastVehicle and (not currentVehicle or currentVehicle ~= lastVehicle) then
+        for _, part in ipairs(lastVehicle:GetDescendants()) do
+            if part:IsA("BasePart") then part.CanCollide = true end
+        end
+        lastVehicle = nil
+    end
+    if currentVehicle then lastVehicle = currentVehicle end
+end))
+end)
+
+pcall(function()
+RunService.RenderStepped:Connect(safe(function()
+    if Toggles.SpinToggle and Toggles.SpinToggle.Value then
+        local character = LocalPlayer.Character
+        local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+        local hrp = character and character:FindFirstChild("HumanoidRootPart")
+        if hrp and humanoid then
+            local spinSpeed = Options.SpinSpeedSlider.Value
+            if humanoid.SeatPart then
+                local vehicleModel = humanoid.SeatPart.Parent
+                if vehicleModel and vehicleModel:IsA("Model") and vehicleModel.PrimaryPart then
+                    vehicleModel:SetPrimaryPartCFrame(vehicleModel.PrimaryPart.CFrame * CFrame.Angles(0, math.rad(spinSpeed * 0.5), 0))
+                else
+                    humanoid.SeatPart.CFrame = humanoid.SeatPart.CFrame * CFrame.Angles(0, math.rad(spinSpeed * 0.5), 0)
+                end
+            else
+                hrp.CFrame = hrp.CFrame * CFrame.Angles(0, math.rad(spinSpeed * 0.5), 0)
+            end
+        end
+    end
+end))
+end)
+
+local thirdPersonInitialized = false
+pcall(function()
+RunService.Heartbeat:Connect(safe(function()
+    if Toggles.ThirdPersonToggle and Toggles.ThirdPersonToggle.Value then
+        pcall(function()
+            LocalPlayer.CameraMaxZoomDistance = 999999999
+            LocalPlayer.CameraMode = Enum.CameraMode.Classic
+        end)
+        if not thirdPersonInitialized then
+            thirdPersonInitialized = true
+            pcall(function()
+                local PopperClient = LocalPlayer:WaitForChild("PlayerScripts").PlayerModule.CameraModule.ZoomController.Popper
+                for _, v in next, getgc() do
+                    if getfenv(v).script == PopperClient and typeof(v) == "function" then
+                        for i2, v2 in next, debug.getconstants(v) do
+                            if tonumber(v2) == 0.25 then
+                                debug.setconstant(v, i2, 0)
+                            elseif tonumber(v2) == 0 then
+                                debug.setconstant(v, i2, 0.25)
+                            end
+                        end
+                    end
+                end
+            end)
+        end
+    elseif thirdPersonInitialized then
+        thirdPersonInitialized = false
+        pcall(function() LocalPlayer.CameraMaxZoomDistance = 0 end)
+    end
+end))
+end)
+
+local fovWasOn = false
+pcall(function()
+RunService.Heartbeat:Connect(safe(function()
+    local camera = workspace.CurrentCamera
+    if camera then
+        if Toggles.FOVToggle and Toggles.FOVToggle.Value then
+            fovWasOn = true
+            camera.FieldOfView = Options.FOVSlider.Value
+        elseif fovWasOn then
+            fovWasOn = false
+            camera.FieldOfView = 70
+        end
+    end
+end))
+end)
+end)
+end
+
+do
+pcall(function()
+local Options = Library.Options
+local Toggles = Library.Toggles
+local ESPGroup
+pcall(function()
+ESPGroup = Tabs.ESP:AddLeftGroupbox('Player')
+end)
+
+pcall(function()
+ESPGroup:AddToggle('PlayerESPToggle', { Text = 'Player ESP (Name & Icon)', Default = false })
+end)
+pcall(function()
+ESPGroup:AddToggle('SkeletonESPToggle', { Text = 'Skeleton ESP', Default = false })
+end)
+pcall(function()
+ESPGroup:AddToggle('BoxESPToggle', { Text = 'Box ESP', Default = false })
+end)
+pcall(function()
+ESPGroup:AddToggle('TracerESPToggle', { Text = 'Tracer ESP', Default = false })
+end)
+pcall(function()
+ESPGroup:AddToggle('PCLDESPToggle', { Text = 'PCLD ESP', Default = false })
+end)
+pcall(function()
+ESPGroup:AddToggle('PCLDNameESPToggle', { Text = 'PCLD NAME ESP', Default = false })
+end)
+pcall(function()
+ESPGroup:AddToggle('StickyESPToggle', { Text = 'Sticky ESP', Default = false })
+end)
+pcall(function()
+ESPGroup:AddToggle('BlobmanESPToggle', { Text = 'Blobman ESP', Default = false })
+end)
+pcall(function()
+ESPGroup:AddToggle('BlackHoleESPToggle', { Text = 'Black Hole ESP', Default = false })
+end)
+
+local ColorGroup
+pcall(function()
+ColorGroup = Tabs.ESP:AddRightGroupbox('ESP Color')
+end)
+
+pcall(function()
+ColorGroup:AddDropdown('ESPColorMode', {
+    Values = { 'Solid', 'Rainbow', 'Gradient' },
+    Default = 1,
+    Text = 'Color Mode',
+})
+end)
+
+pcall(function()
+ColorGroup:AddLabel('Solid / Gradient Start'):AddColorPicker('ESPSolidColor', {
+    Default = Color3.fromRGB(0, 255, 255),
+    Title = 'ESP Color',
+})
+end)
+
+pcall(function()
+ColorGroup:AddLabel('Gradient End'):AddColorPicker('ESPGradientColor', {
+    Default = Color3.fromRGB(255, 0, 255),
+    Title = 'Gradient End Color',
+})
+end)
+
+local Players
+pcall(function()
+Players = game:GetService("Players")
+end)
+local RunService
+pcall(function()
+RunService = game:GetService("RunService")
+end)
+local UserInputService
+pcall(function()
+UserInputService = game:GetService("UserInputService")
+end)
+local CoreGui
+pcall(function()
+CoreGui = game:GetService("CoreGui")
+end)
+local LocalPlayer
+pcall(function()
+LocalPlayer = Players.LocalPlayer
+end)
+local Camera
+pcall(function()
+Camera = workspace.CurrentCamera
+end)
+
+local ESPFolder
+pcall(function()
+ESPFolder = Instance.new("Folder")
+end)
+pcall(function()
+ESPFolder.Name = "CustomESPFolder"
+end)
+pcall(function()
+ESPFolder.Parent = CoreGui
+end)
+
+local ESPGui
+pcall(function()
+ESPGui = Instance.new("ScreenGui")
+end)
+pcall(function()
+ESPGui.Name = "CustomESPLines"
+end)
+pcall(function()
+ESPGui.IgnoreGuiInset = true
+end)
+pcall(function()
+ESPGui.ResetOnSpawn = false
+end)
+pcall(function()
+ESPGui.DisplayOrder = 999
+end)
+pcall(function()
+ESPGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+end)
+pcall(function() if syn and syn.protect_gui then syn.protect_gui(ESPGui) end end)
+local okParent
+pcall(function()
+okParent = pcall(function() ESPGui.Parent = (gethui and gethui()) or CoreGui end)
+end)
+pcall(function()
+if not okParent or not ESPGui.Parent then
+    ESPGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+end
+end)
+
+local espCache = {}
+
+local function getDynamicColor(index)
+    local mode = Options.ESPColorMode.Value
+    if mode == 'Rainbow' then
+        return Color3.fromHSV((tick() % 5) / 5, 1, 1)
+    elseif mode == 'Gradient' then
+        local alpha = (math.sin(tick() * 2 + index * 0.5) + 1) / 2
+        return Options.ESPSolidColor.Value:Lerp(Options.ESPGradientColor.Value, alpha)
+    end
+    return Options.ESPSolidColor.Value
+end
+
+local function newLine()
+    local f = Instance.new("Frame")
+    f.AnchorPoint = Vector2.new(0.5, 0.5)
+    f.BorderSizePixel = 0
+    f.Visible = false
+    f.Parent = ESPGui
+    return f
+end
+
+local function setLine(f, a, b, col)
+    local d = b - a
+    f.Position = UDim2.fromOffset((a.X + b.X) / 2, (a.Y + b.Y) / 2)
+    f.Size = UDim2.fromOffset(d.Magnitude, 1.5)
+    f.Rotation = math.deg(math.atan2(d.Y, d.X))
+    f.BackgroundColor3 = col
+    f.Visible = true
+end
+
+local function createESPForPlayer(player)
+    if player == LocalPlayer or espCache[player] then return end
+    espCache[player] = {
+        billboard = nil, imgLabel = nil, nameLabel = nil, userLabel = nil,
+        lines = {}, boxLines = {}, tracerLine = newLine(),
+    }
+end
+
+local function removeESPForPlayer(player)
+    local data = espCache[player]
+    if not data then return end
+    if data.billboard then data.billboard:Destroy() end
+    if data.tracerLine then data.tracerLine:Destroy() end
+    for _, l in pairs(data.lines) do l:Destroy() end
+    for _, l in pairs(data.boxLines) do l:Destroy() end
+    espCache[player] = nil
+end
+
+pcall(function()
+Players.PlayerAdded:Connect(safe(createESPForPlayer))
+end)
+pcall(function()
+Players.PlayerRemoving:Connect(safe(removeESPForPlayer))
+end)
+pcall(function()
+for _, p in ipairs(Players:GetPlayers()) do createESPForPlayer(p) end
+end)
+
+local R15Joints = {
+    {"Head", "UpperTorso"}, {"UpperTorso", "LowerTorso"},
+    {"UpperTorso", "LeftUpperArm"}, {"LeftUpperArm", "LeftLowerArm"}, {"LeftLowerArm", "LeftHand"},
+    {"UpperTorso", "RightUpperArm"}, {"RightUpperArm", "RightLowerArm"}, {"RightLowerArm", "RightHand"},
+    {"LowerTorso", "LeftUpperLeg"}, {"LeftUpperLeg", "LeftLowerLeg"}, {"LeftLowerLeg", "LeftFoot"},
+    {"LowerTorso", "RightUpperLeg"}, {"RightUpperLeg", "RightLowerLeg"}, {"RightLowerLeg", "RightFoot"},
+}
+local R6Joints = {
+    {"Head", "Torso"}, {"Torso", "Left Arm"}, {"Torso", "Right Arm"},
+    {"Torso", "Left Leg"}, {"Torso", "Right Leg"},
+}
+
+local function hideAll(data)
+    if data.billboard then data.billboard.Enabled = false end
+    data.tracerLine.Visible = false
+    for _, l in ipairs(data.boxLines) do l.Visible = false end
+    for _, l in ipairs(data.lines) do l.Visible = false end
+end
+
+local function updatePlayerESP(player, data, col)
+    local character = player.Character
+    local hrp = character and character:FindFirstChild("HumanoidRootPart")
+    local head = character and character:FindFirstChild("Head")
+    local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+
+    if not (character and hrp and head and humanoid and humanoid.Health > 0) then
+        hideAll(data)
+        return
+    end
+
+    if Toggles.PlayerESPToggle.Value then
+        if not data.billboard then
+            local bb = Instance.new("BillboardGui")
+            bb.Name = "PlayerESP"
+            bb.Size = UDim2.new(0, 220, 0, 80)
+            bb.StudsOffset = Vector3.new(0, 9, 0)
+            bb.AlwaysOnTop = true
+            bb.ResetOnSpawn = false
+            bb.LightInfluence = 0
+
+            local img = Instance.new("ImageLabel")
+            img.Name = "Icon"
+            img.Size = UDim2.new(0, 30, 0, 30)
+            img.Position = UDim2.new(0.5, -15, 0, 0)
+            img.BackgroundTransparency = 1
+            img.Parent = bb
+
+            local nameLabel = Instance.new("TextLabel")
+            nameLabel.Name = "DisplayName"
+            nameLabel.Size = UDim2.new(1, 0, 0, 24)
+            nameLabel.Position = UDim2.new(0, 0, 0, 32)
+            nameLabel.BackgroundTransparency = 1
+            nameLabel.Font = Enum.Font.GothamBold
+            nameLabel.TextSize = 16
+            nameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+            nameLabel.TextStrokeTransparency = 0
+            nameLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+            nameLabel.TextXAlignment = Enum.TextXAlignment.Center
+            nameLabel.TextYAlignment = Enum.TextYAlignment.Center
+            nameLabel.Parent = bb
+
+            local userLabel = Instance.new("TextLabel")
+            userLabel.Name = "Username"
+            userLabel.Size = UDim2.new(1, 0, 0, 20)
+            userLabel.Position = UDim2.new(0, 0, 0, 56)
+            userLabel.BackgroundTransparency = 1
+            userLabel.Font = Enum.Font.Gotham
+            userLabel.TextSize = 13
+            userLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+            userLabel.TextStrokeTransparency = 0
+            userLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+            userLabel.TextXAlignment = Enum.TextXAlignment.Center
+            userLabel.TextYAlignment = Enum.TextYAlignment.Center
+            userLabel.Parent = bb
+
+            data.billboard, data.imgLabel = bb, img
+            data.nameLabel, data.userLabel = nameLabel, userLabel
+            bb.Parent = ESPFolder
+
+            task.spawn(function()
+                local ok, content = pcall(function()
+                    return Players:GetUserThumbnailAsync(player.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size48x48)
+                end)
+                if ok and img.Parent then img.Image = content end
+            end)
+        end
+        data.billboard.Adornee = head
+        data.billboard.Enabled = true
+        data.nameLabel.Text = player.DisplayName
+        data.userLabel.Text = "@" .. player.Name
+        data.nameLabel.TextColor3 = col
+    elseif data.billboard then
+        data.billboard.Enabled = false
+    end
+
+    local rootPos, rootOn = Camera:WorldToViewportPoint(hrp.Position)
+    local inFront = rootPos.Z > 0
+
+    if Toggles.TracerESPToggle.Value and inFront then
+        local vs = Camera.ViewportSize
+        local origin = Vector2.new(vs.X / 2, vs.Y)
+        local zoom = (Camera.CFrame.Position - Camera.Focus.Position).Magnitude
+        if zoom > 1 then
+            local lchar = LocalPlayer.Character
+            local lhrp = lchar and lchar:FindFirstChild("HumanoidRootPart")
+            if lhrp then
+                local lp = Camera:WorldToViewportPoint(lhrp.Position)
+                if lp.Z > 0 then origin = Vector2.new(lp.X, lp.Y) end
+            end
+        end
+        setLine(data.tracerLine, origin, Vector2.new(rootPos.X, rootPos.Y), col)
+    else
+        data.tracerLine.Visible = false
+    end
+
+    if Toggles.BoxESPToggle.Value then
+        if #data.boxLines == 0 then
+            for i = 1, 4 do data.boxLines[i] = newLine() end
+        end
+        local topPos = Camera:WorldToViewportPoint(head.Position + Vector3.new(0, 0.8, 0))
+        local botPos = Camera:WorldToViewportPoint(hrp.Position - Vector3.new(0, 3, 0))
+        if inFront and topPos.Z > 0 and botPos.Z > 0 then
+            local height = math.abs(botPos.Y - topPos.Y)
+            local width = height / 2
+            local cx = rootPos.X
+            local tl = Vector2.new(cx - width / 2, topPos.Y)
+            local tr = Vector2.new(cx + width / 2, topPos.Y)
+            local bl = Vector2.new(cx - width / 2, botPos.Y)
+            local br = Vector2.new(cx + width / 2, botPos.Y)
+            local b = data.boxLines
+            setLine(b[1], tl, tr, col)
+            setLine(b[2], tr, br, col)
+            setLine(b[3], br, bl, col)
+            setLine(b[4], bl, tl, col)
+        else
+            for _, l in ipairs(data.boxLines) do l.Visible = false end
+        end
+    else
+        for _, l in ipairs(data.boxLines) do l.Visible = false end
+    end
+
+    if Toggles.SkeletonESPToggle.Value then
+        local joints = character:FindFirstChild("UpperTorso") and R15Joints or R6Joints
+        for i = #data.lines + 1, #R15Joints do data.lines[i] = newLine() end
+
+        for i, line in ipairs(data.lines) do
+            local j = joints[i]
+            local p1 = j and character:FindFirstChild(j[1])
+            local p2 = j and character:FindFirstChild(j[2])
+            if p1 and p2 then
+                local v1 = Camera:WorldToViewportPoint(p1.Position)
+                local v2 = Camera:WorldToViewportPoint(p2.Position)
+                if v1.Z > 0 and v2.Z > 0 then
+                    setLine(line, Vector2.new(v1.X, v1.Y), Vector2.new(v2.X, v2.Y), col)
+                else
+                    line.Visible = false
+                end
+            else
+                line.Visible = false
+            end
+        end
+    else
+        for _, l in ipairs(data.lines) do l.Visible = false end
+    end
+end
+
+pcall(function()
+RunService.RenderStepped:Connect(safe(function()
+    Camera = workspace.CurrentCamera
+    local idx = 0
+    for player, data in pairs(espCache) do
+        idx = idx + 1
+        pcall(updatePlayerESP, player, data, getDynamicColor(idx))
+    end
+end))
+end)
+
+local PCLD_NAME = "PlayerCharacterLocationDetector"
+local PCLD_SMOOTH_SPEED = 8
+local pcldFound = {}
+local pcldCache = {}
+local pcldTrack = {}
+
+local NAME_GRADIENT
+pcall(function()
+NAME_GRADIENT = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 80, 200)),
+    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(255, 220, 80)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(80, 220, 255)),
+})
+end)
+
+local function makePCLDName(proxy)
+    local bb = Instance.new("BillboardGui")
+    bb.Name = "PCLDName"
+    bb.Size = UDim2.new(0, 220, 0, 44)
+    bb.StudsOffset = Vector3.new(0, 3, 0)
+    bb.AlwaysOnTop = true
+    bb.LightInfluence = 0
+    bb.Adornee = proxy
+    bb.Parent = ESPFolder
+
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1, 0, 1, 0)
+    label.BackgroundTransparency = 1
+    label.Font = Enum.Font.GothamBold
+    label.TextSize = 15
+    label.TextColor3 = Color3.fromRGB(255, 255, 255)
+    label.TextStrokeTransparency = 0
+    label.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+    label.Parent = bb
+
+    local grad = Instance.new("UIGradient")
+    grad.Color = NAME_GRADIENT
+    grad.Parent = label
+
+    return bb, label, grad
+end
+
+local PLAYER_LABEL_H = 80
+local PCLD_LABEL_H = 44
+local PCLD_BASE_OFFSET = 3
+
+local function adjustPCLDName(e)
+    local base = Vector3.new(0, PCLD_BASE_OFFSET, 0)
+    local cp = Camera:WorldToViewportPoint(e.proxy.Position + base)
+    if cp.Z <= 0 then
+        e.nameBB.StudsOffset = base
+        return
+    end
+
+    local studsPerPx = 2 * cp.Z * math.tan(math.rad(Camera.FieldOfView / 2)) / Camera.ViewportSize.Y
+    local need = (PLAYER_LABEL_H + PCLD_LABEL_H) / 2 + 6
+
+    local shiftPx, dir = 0, 1
+    for _, data in pairs(espCache) do
+        local bb = data.billboard
+        if bb and bb.Enabled and bb.Adornee then
+            local pp = Camera:WorldToViewportPoint(bb.Adornee.Position + bb.StudsOffset)
+            if pp.Z > 0 and math.abs(pp.X - cp.X) < 220 then
+                local dy = cp.Y - pp.Y
+                if math.abs(dy) < need then
+                    local s = need - math.abs(dy)
+                    if s > shiftPx then
+                        shiftPx = s
+                        dir = (dy <= 0) and 1 or -1
+                    end
+                end
+            end
+        end
+    end
+
+    e.nameBB.StudsOffset = base + Vector3.new(0, dir * shiftPx * studsPerPx, 0)
+end
+
+local function removePCLD(inst)
+    local e = pcldCache[inst]
+    if not e then return end
+    if e.adorn then e.adorn:Destroy() end
+    if e.box then e.box:Destroy() end
+    if e.nameBB then e.nameBB:Destroy() end
+    if e.proxy then e.proxy:Destroy() end
+    pcldCache[inst] = nil
+end
+
+local function trackPCLD(inst)
+    if inst.Name == PCLD_NAME and (inst:IsA("BasePart") or inst:IsA("Model")) then
+        pcldFound[inst] = true
+    end
+end
+
+pcall(function()
+for _, d in ipairs(workspace:GetDescendants()) do trackPCLD(d) end
+end)
+pcall(function()
+workspace.DescendantAdded:Connect(safe(trackPCLD))
+end)
+pcall(function()
+workspace.DescendantRemoving:Connect(safe(function(inst)
+    pcldFound[inst] = nil
+    removePCLD(inst)
+end))
+end)
+
+local function getPCLDTarget(inst)
+    if inst:IsA("BasePart") then
+        return inst.CFrame, inst.Size
+    end
+    local ok, cf, size = pcall(function() return inst:GetBoundingBox() end)
+    if ok then return cf, size end
+    return nil
+end
+
+pcall(function()
+RunService.RenderStepped:Connect(safe(function(dt)
+    if not (Toggles.PCLDESPToggle and Toggles.PCLDESPToggle.Value) then
+        for inst in pairs(pcldCache) do removePCLD(inst) end
+        return
+    end
+
+    local alpha = 1 - math.exp(-PCLD_SMOOTH_SPEED * dt)
+    local col = getDynamicColor(0)
+
+    for inst in pairs(pcldFound) do
+        if not inst:IsDescendantOf(workspace) then
+            pcldFound[inst] = nil
+            removePCLD(inst)
+        else
+            local cf, size = getPCLDTarget(inst)
+            if cf then
+                local e = pcldCache[inst]
+                if not e then
+                    local proxy = Instance.new("Part")
+                    proxy.Name = "PCLDProxy"
+                    proxy.Anchored = true
+                    proxy.CanCollide = false
+                    proxy.CanQuery = false
+                    proxy.CanTouch = false
+                    proxy.Transparency = 1
+                    proxy.Size = size
+                    proxy.CFrame = cf
+                    proxy.Parent = workspace.CurrentCamera
+
+                    local adorn = Instance.new("BoxHandleAdornment")
+                    adorn.Adornee = proxy
+                    adorn.AlwaysOnTop = true
+                    adorn.ZIndex = 1
+                    adorn.Transparency = 0.6
+                    adorn.Size = size
+                    adorn.Parent = ESPFolder
+
+                    local box = Instance.new("SelectionBox")
+                    box.Adornee = proxy
+                    box.LineThickness = 0.05
+                    box.SurfaceTransparency = 1
+                    box.Parent = ESPFolder
+
+                    e = { proxy = proxy, adorn = adorn, box = box }
+                    pcldCache[inst] = e
+                end
+
+                if (e.proxy.Position - cf.Position).Magnitude > 100 then
+                    e.proxy.CFrame = cf
+                else
+                    e.proxy.CFrame = e.proxy.CFrame:Lerp(cf, alpha)
+                end
+                e.proxy.Size = size
+                e.adorn.Size = size
+                e.adorn.Color3 = col
+                e.box.Color3 = col
+
+                local tr = pcldTrack[inst]
+                local owner = tr and tr.owner
+                if Toggles.PCLDNameESPToggle and Toggles.PCLDNameESPToggle.Value
+                    and owner and owner.Parent == Players then
+                    if not e.nameBB then
+                        e.nameBB, e.nameLabel, e.nameGrad = makePCLDName(e.proxy)
+                    end
+                    e.nameBB.Enabled = true
+                    local txt = string.format("%s\n(@%s)", owner.DisplayName, owner.Name)
+                    if e.nameLabel.Text ~= txt then e.nameLabel.Text = txt end
+                    e.nameGrad.Offset = Vector2.new(math.sin(tick() * 1.5) * 0.5, 0)
+                    adjustPCLDName(e)
+                elseif e.nameBB then
+                    e.nameBB.Enabled = false
+                end
+            end
+        end
+    end
+end))
+end)
+
+local playerHist = {}
+
+pcall(function()
+Players.PlayerRemoving:Connect(safe(function(plr)
+    playerHist[plr] = nil
+    for _, tr in pairs(pcldTrack) do
+        tr.scores[plr] = nil
+        if tr.owner == plr then tr.owner = nil end
+    end
+end))
+end)
+
+pcall(function()
+RunService.Heartbeat:Connect(safe(function()
+    local now = tick()
+
+    for _, plr in ipairs(Players:GetPlayers()) do
+        local ch = plr.Character
+        local hrp = ch and ch:FindFirstChild("HumanoidRootPart")
+        if hrp then
+            local h = playerHist[plr]
+            if not h then h = {}; playerHist[plr] = h end
+            local last = h[#h]
+            if not last or now - last.t >= 0.05 then
+                h[#h + 1] = { t = now, p = hrp.Position }
+            end
+        end
+    end
+    for plr, h in pairs(playerHist) do
+        while h[1] and now - h[1].t > 1.2 do table.remove(h, 1) end
+        if #h == 0 then playerHist[plr] = nil end
+    end
+
+    for inst in pairs(pcldFound) do
+        local cf = getPCLDTarget(inst)
+        if cf then
+            local pos = cf.Position
+            local tr = pcldTrack[inst]
+            if not tr then
+                tr = { scores = {}, lastPos = pos, owner = nil }
+                pcldTrack[inst] = tr
+            end
+
+            local moved = (pos - tr.lastPos).Magnitude > 0.02
+            tr.lastPos = pos
+            local weight = moved and 1 or 0.2
+
+            for plr, h in pairs(playerHist) do
+                local best = math.huge
+                for i = 1, #h do
+                    local d = (h[i].p - pos).Magnitude
+                    if d < best then best = d end
+                end
+                tr.scores[plr] = (tr.scores[plr] or 0) * 0.97 + (1 / (1 + best)) * weight
+            end
+
+            local bestP, bestS, second = nil, 0, 0
+            for plr, sc in pairs(tr.scores) do
+                if sc > bestS then
+                    second = bestS
+                    bestS = sc
+                    bestP = plr
+                elseif sc > second then
+                    second = sc
+                end
+            end
+            if bestP and bestS > 2 and bestS > second * 1.1 then
+                tr.owner = bestP
+            end
+        end
+    end
+
+    for inst in pairs(pcldTrack) do
+        if not pcldFound[inst] then pcldTrack[inst] = nil end
+    end
+end))
+end)
+
+local MINE_COLOR
+pcall(function()
+MINE_COLOR = Color3.fromRGB(0, 255, 0)
+end)
+local function isMine(inst)
+    local p = inst.Parent
+    while p and p ~= workspace do
+        if p:IsA("Folder") and string.find(p.Name, "SpawnedInToys", 1, true)
+            and string.find(p.Name, LocalPlayer.Name, 1, true) then
+            return true
+        end
+        p = p.Parent
+    end
+    return false
+end
+
+local STICKY_NAME = "StickyPart"
+local TOYS_FOLDER_KEY = "SpawnedInToys"
+local stickyToys = {}
+
+local function findToy(inst)
+    local p = inst
+    while p and p.Parent and p.Parent ~= workspace do
+        local par = p.Parent
+        if par:IsA("Folder") and string.find(par.Name, TOYS_FOLDER_KEY, 1, true) then
+            return p
+        end
+        p = par
+    end
+    return nil
+end
+
+local function removePartESP(d, part)
+    local e = d.parts[part]
+    if not e then return end
+    e.adorn:Destroy()
+    e.box:Destroy()
+    d.parts[part] = nil
+end
+
+local function clearToyVisuals(d)
+    for part in pairs(d.parts) do removePartESP(d, part) end
+    d.last = 0
+end
+
+local function removeToy(toy)
+    local d = stickyToys[toy]
+    if not d then return end
+    clearToyVisuals(d)
+    stickyToys[toy] = nil
+end
+
+local function trackSticky(inst)
+    if inst.Name == STICKY_NAME then
+        local toy = findToy(inst)
+        if toy and toy ~= inst and toy.Name ~= "CreatureBlobman" and not stickyToys[toy] then
+            stickyToys[toy] = { parts = {}, last = 0 }
+        end
+    end
+end
+
+pcall(function()
+for _, d in ipairs(workspace:GetDescendants()) do trackSticky(d) end
+end)
+pcall(function()
+workspace.DescendantAdded:Connect(safe(trackSticky))
+end)
+pcall(function()
+workspace.DescendantRemoving:Connect(safe(function(inst)
+    if stickyToys[inst] then
+        removeToy(inst)
+        return
+    end
+    for _, d in pairs(stickyToys) do
+        if d.parts[inst] then removePartESP(d, inst) end
+    end
+end))
+end)
+
+pcall(function()
+RunService.RenderStepped:Connect(safe(function()
+    if not (Toggles.StickyESPToggle and Toggles.StickyESPToggle.Value) then
+        for _, d in pairs(stickyToys) do clearToyVisuals(d) end
+        return
+    end
+
+    local now = tick()
+    local col = getDynamicColor(0)
+
+    for toy, d in pairs(stickyToys) do
+        if now - d.last > 0.5 then
+            d.last = now
+            if not toy:IsDescendantOf(workspace) or not toy:FindFirstChild(STICKY_NAME, true) then
+                removeToy(toy)
+                continue
+            end
+
+            d.mine = isMine(toy)
+            local seen = {}
+            for _, desc in ipairs(toy:GetDescendants()) do
+                if desc:IsA("BasePart") and desc.Name ~= STICKY_NAME then
+                    seen[desc] = true
+                    if not d.parts[desc] then
+                        local adorn = Instance.new("BoxHandleAdornment")
+                        adorn.Adornee = desc
+                        adorn.AlwaysOnTop = true
+                        adorn.ZIndex = 1
+                        adorn.Transparency = 0.35
+                        adorn.Size = desc.Size
+                        adorn.Parent = ESPFolder
+
+                        local box = Instance.new("SelectionBox")
+                        box.Adornee = desc
+                        box.LineThickness = 0.04
+                        box.SurfaceTransparency = 1
+                        box.Parent = ESPFolder
+
+                        d.parts[desc] = { adorn = adorn, box = box }
+                    end
+                end
+            end
+            for part in pairs(d.parts) do
+                if not seen[part] then removePartESP(d, part) end
+            end
+        end
+
+        local c = d.mine and MINE_COLOR or col
+        for part, e in pairs(d.parts) do
+            e.adorn.Size = part.Size
+            e.adorn.Color3 = c
+            e.box.Color3 = c
+        end
+    end
+end))
+end)
+
+local BLOB_NAME = "CreatureBlobman"
+local BLOB_HIDDEN_MIN = 0.9
+local blobFound = {}
+
+local function removeBlob(inst)
+    local d = blobFound[inst]
+    if not d then return end
+    for part in pairs(d.parts) do removePartESP(d, part) end
+    blobFound[inst] = nil
+end
+
+local function hasBlobAncestor(inst)
+    local p = inst.Parent
+    while p and p ~= workspace do
+        if p.Name == BLOB_NAME then return true end
+        p = p.Parent
+    end
+    return false
+end
+
+local function trackBlob(inst)
+    if inst.Name == BLOB_NAME and (inst:IsA("Model") or inst:IsA("BasePart"))
+        and not blobFound[inst] and not hasBlobAncestor(inst) then
+        blobFound[inst] = { parts = {}, last = 0, mine = false }
+    end
+end
+
+pcall(function()
+for _, d in ipairs(workspace:GetDescendants()) do trackBlob(d) end
+end)
+pcall(function()
+workspace.DescendantAdded:Connect(safe(trackBlob))
+end)
+pcall(function()
+workspace.DescendantRemoving:Connect(safe(function(inst)
+    if blobFound[inst] then
+        removeBlob(inst)
+        return
+    end
+    for _, d in pairs(blobFound) do
+        if d.parts[inst] then removePartESP(d, inst) end
+    end
+end))
+end)
+
+pcall(function()
+RunService.RenderStepped:Connect(safe(function()
+    if not (Toggles.BlobmanESPToggle and Toggles.BlobmanESPToggle.Value) then
+        for _, d in pairs(blobFound) do
+            for part in pairs(d.parts) do removePartESP(d, part) end
+            d.last = 0
+        end
+        return
+    end
+
+    local now = tick()
+    local col = getDynamicColor(0)
+
+    for inst, d in pairs(blobFound) do
+        if now - d.last > 0.5 then
+            d.last = now
+            if not inst:IsDescendantOf(workspace) then
+                removeBlob(inst)
+                continue
+            end
+            if hasBlobAncestor(inst) then
+                removeBlob(inst)
+                continue
+            end
+            d.mine = isMine(inst)
+
+            local seen = {}
+            for _, desc in ipairs(inst:GetDescendants()) do
+                if desc:IsA("BasePart") and desc.Name ~= BLOB_NAME and desc.Transparency >= BLOB_HIDDEN_MIN then
+                    seen[desc] = true
+                    if not d.parts[desc] then
+                        local adorn = Instance.new("BoxHandleAdornment")
+                        adorn.Adornee = desc
+                        adorn.AlwaysOnTop = true
+                        adorn.ZIndex = 1
+                        adorn.Transparency = 0.35
+                        adorn.Size = desc.Size
+                        adorn.Parent = ESPFolder
+
+                        local box = Instance.new("SelectionBox")
+                        box.Adornee = desc
+                        box.LineThickness = 0.04
+                        box.SurfaceTransparency = 1
+                        box.Parent = ESPFolder
+
+                        d.parts[desc] = { adorn = adorn, box = box }
+                    end
+                end
+            end
+            for part in pairs(d.parts) do
+                if not seen[part] then removePartESP(d, part) end
+            end
+        end
+
+        local c = d.mine and MINE_COLOR or col
+        for part, e in pairs(d.parts) do
+            e.adorn.Size = part.Size
+            e.adorn.Color3 = c
+            e.box.Color3 = c
+        end
+    end
+end))
+end)
+
+local BH_NAME = "BlackHoleKick"
+local BH_COLOR
+pcall(function()
+BH_COLOR = Color3.fromRGB(170, 0, 255)
+end)
+local BH_WINDOW = 3
+
+local bhFound = {}
+local leaveLog = {}
+local lastBHSpawn
+pcall(function()
+lastBHSpawn = -math.huge
+end)
+
+local function bhNotify(title, desc)
+    local ok = pcall(function()
+        Library:Notify({ Title = title, Description = desc, Time = 5 })
+    end)
+    if not ok then
+        pcall(function() Library:Notify(title .. ": " .. desc, 5) end)
+    end
+end
+
+local function bhEnabled()
+    return Toggles.BlackHoleESPToggle and Toggles.BlackHoleESPToggle.Value
+end
+
+local function removeBH(obj)
+    local line = bhFound[obj]
+    if typeof(line) == "Instance" then line:Destroy() end
+    bhFound[obj] = nil
+end
+
+local function onBlackHoleSpawn(obj)
+    if obj.Name ~= BH_NAME or bhFound[obj] then return end
+    bhFound[obj] = true
+
+    if bhEnabled() then
+        local now = tick()
+        lastBHSpawn = now
+        for _, entry in ipairs(leaveLog) do
+            if not entry.notified and now - entry.t <= BH_WINDOW then
+                entry.notified = true
+                bhNotify("BlackHoleKick", entry.text .. " was kicked.")
+            end
+        end
+    end
+end
+
+pcall(function()
+Players.PlayerRemoving:Connect(safe(function(plr)
+    local now = tick()
+    local entry = {
+        t = now,
+        text = string.format("%s (@%s)", plr.DisplayName, plr.Name),
+        notified = false,
+    }
+    table.insert(leaveLog, entry)
+
+    for i = #leaveLog, 1, -1 do
+        if now - leaveLog[i].t > 10 then table.remove(leaveLog, i) end
+    end
+
+    if bhEnabled() and now - lastBHSpawn <= BH_WINDOW then
+        entry.notified = true
+        bhNotify("BlackHoleKick", entry.text .. " was kicked.")
+    end
+end))
+end)
+
+pcall(function()
+for _, obj in ipairs(workspace:GetChildren()) do
+    if obj.Name == BH_NAME then bhFound[obj] = true end
+end
+end)
+pcall(function()
+workspace.ChildAdded:Connect(safe(onBlackHoleSpawn))
+end)
+pcall(function()
+workspace.ChildRemoved:Connect(safe(removeBH))
+end)
+
+pcall(function()
+RunService.RenderStepped:Connect(safe(function()
+    if not bhEnabled() then
+        for obj, line in pairs(bhFound) do
+            if typeof(line) == "Instance" then line.Visible = false end
+        end
+        return
+    end
+
+    local vs = Camera.ViewportSize
+    local origin = Vector2.new(vs.X / 2, vs.Y)
+    local zoom = (Camera.CFrame.Position - Camera.Focus.Position).Magnitude
+    if zoom > 1 then
+        local lchar = LocalPlayer.Character
+        local lhrp = lchar and lchar:FindFirstChild("HumanoidRootPart")
+        if lhrp then
+            local lp = Camera:WorldToViewportPoint(lhrp.Position)
+            if lp.Z > 0 then origin = Vector2.new(lp.X, lp.Y) end
+        end
+    end
+
+    for obj, line in pairs(bhFound) do
+        if not obj:IsDescendantOf(workspace) then
+            removeBH(obj)
+        else
+            if typeof(line) ~= "Instance" then
+                line = newLine()
+                bhFound[obj] = line
+            end
+            local ok, pivot = pcall(function() return obj:GetPivot() end)
+            if ok then
+                local p = Camera:WorldToViewportPoint(pivot.Position)
+                if p.Z > 0 then
+                    setLine(line, origin, Vector2.new(p.X, p.Y), BH_COLOR)
+                else
+                    line.Visible = false
+                end
+            else
+                line.Visible = false
+            end
+        end
+    end
+end))
 end)
 end)
 end
