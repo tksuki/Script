@@ -95,18 +95,20 @@ if syn then
     syn.request = hookedRequest
 end
 end)
-local repo = "https://raw.githubusercontent.com/deividcomsono/Obsidian/main/"
+local myRepo = "https://raw.githubusercontent.com/tksuki/New-ui/refs/heads/main/"
+local originalRepo = "https://raw.githubusercontent.com/deividcomsono/Obsidian/main/"
+
 local Library
 pcall(function()
-Library = loadstring(game:HttpGet(repo .. "Library.lua"))()
+Library = loadstring(game:HttpGet(myRepo .. "Library.lua"))()
 end)
 local ThemeManager
 pcall(function()
-ThemeManager = loadstring(game:HttpGet(repo .. "addons/ThemeManager.lua"))()
+ThemeManager = loadstring(game:HttpGet(myRepo .. "ThemeManager.lua"))()
 end)
 local SaveManager
 pcall(function()
-SaveManager = loadstring(game:HttpGet(repo .. "addons/SaveManager.lua"))()
+SaveManager = loadstring(game:HttpGet(originalRepo .. "addons/SaveManager.lua"))()
 end)
 local Options
 pcall(function()
