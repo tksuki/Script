@@ -1,0 +1,480 @@
+local myRepo = "https://raw.githubusercontent.com/tksuki/New-ui/refs/heads/main/"
+local originalRepo = "https://raw.githubusercontent.com/deividcomsono/Obsidian/main/"
+
+local Library = loadstring(game:HttpGet(myRepo .. "Library.lua"))()
+local ThemeManager = loadstring(game:HttpGet(myRepo .. "ThemeManager.lua"))()
+local SaveManager = loadstring(game:HttpGet(originalRepo .. "addons/SaveManager.lua"))()
+local Options = Library.Options
+local Toggles = Library.Toggles
+
+local Window = Library:CreateWindow({
+    Title = 'Player & ESP Script UI',
+    Center = true,
+    AutoShow = true,
+    TabPadding = 8,
+    MenuFadeTime = 0.2
+})
+
+local Tabs = {
+    Player = Window:AddTab('Player'),
+    ESP = Window:AddTab('ESP'),
+}
+
+-- [Player]
+local CharacterGroup = Tabs.Player:AddLeftGroupbox('Character')
+
+CharacterGroup:AddSlider('WalkSpeedSlider', { Text = 'Walk Speed', Default = 16, Min = 1, Max = 500, Rounding = 0, Compact = false })
+CharacterGroup:AddToggle('WalkSpeedToggle', { Text = 'Enable CFrame Speed', Default = false })
+CharacterGroup:AddSlider('JumpPowerSlider', { Text = 'Jump Power', Default = 50, Min = 1, Max = 500, Rounding = 0, Compact = false })
+CharacterGroup:AddToggle('JumpPowerToggle', { Text = 'Enable Jump Power', Default = false })
+CharacterGroup:AddToggle('InfinityJumpToggle', { Text = 'Infinity Jump', Default = false })
+CharacterGroup:AddToggle('NoclipToggle', { Text = 'Noclip', Default = false })
+CharacterGroup:AddSlider('SpinSpeedSlider', { Text = 'Spin Speed', Default = 50, Min = 1, Max = 200, Rounding = 0, Compact = false })
+CharacterGroup:AddToggle('SpinToggle', { Text = 'Spin', Default = false })
+CharacterGroup:AddToggle('ThirdPersonToggle', { Text = 'Third Person (Max Zoom)', Default = false })
+CharacterGroup:AddSlider('FOVSlider', { Text = 'Field of View', Default = 70, Min = 60, Max = 120, Rounding = 0, Compact = false })
+CharacterGroup:AddToggle('FOVToggle', { Text = 'Enable FOV', Default = false })
+
+-- [ESP]
+local ESPGroup = Tabs.ESP:AddLeftGroupbox('Player')
+
+ESPGroup:AddToggle('PlayerESPToggle', { Text = 'Player ESP (Name & Icon)', Default = false })
+ESPGroup:AddToggle('SkeletonESPToggle', { Text = 'Skeleton ESP', Default = false })
+ESPGroup:AddToggle('BoxESPToggle', { Text = 'Box ESP', Default = false })
+ESPGroup:AddToggle('TracerESPToggle', { Text = 'Tracer ESP', Default = false })
+
+-- [ESP Color] 別グループ
+local ColorGroup = Tabs.ESP:AddRightGroupbox('ESP Color')
+
+ColorGroup:AddDropdown('ESPColorMode', {
+    Values = { 'Solid', 'Rainbow', 'Gradient' },
+    Default = 1,
+    Text = 'Color Mode',
+})
+
+ColorGroup:AddLabel('Solid / Gradient Start'):AddColorPicker('ESPSolidColor', {
+    Default = Color3.fromRGB(0, 255, 255),
+    Title = 'ESP Color',
+})
+
+ColorGroup:AddLabel('Gradient End'):AddColorPicker('ESPGradientColor', {
+    Default = Color3.fromRGB(255, 0, 255),
+    Title = 'Gradient End Color',
+})
+
+-- サービス
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local CoreGui = game:GetService("CoreGui")
+local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
+
+local ESPFolder = Instance.new("Folder")
+ESPFolder.Name = "CustomESPFolder"
+ESPFolder.Parent = CoreGui
+
+-- Drawing APIを使わず、Frameで線を描画（どの環境でも動く）
+local ESPGui = Instance.new("ScreenGui")
+ESPGui.Name = "CustomESPLines"
+ESPGui.IgnoreGuiInset = true
+ESPGui.ResetOnSpawn = false
+ESPGui.DisplayOrder = 999
+ESPGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+pcall(function() if syn and syn.protect_gui then syn.protect_gui(ESPGui) end end)
+local okParent = pcall(function() ESPGui.Parent = (gethui and gethui()) or CoreGui end)
+if not okParent or not ESPGui.Parent then
+    ESPGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+end
+
+local espCache = {}
+
+local function getDynamicColor(index)
+    local mode = Options.ESPColorMode.Value
+    if mode == 'Rainbow' then
+        return Color3.fromHSV(((tick() + index * 0.2) % 5) / 5, 1, 1)
+    elseif mode == 'Gradient' then
+        local alpha = (math.sin(tick() * 2 + index * 0.5) + 1) / 2
+        return Options.ESPSolidColor.Value:Lerp(Options.ESPGradientColor.Value, alpha)
+    end
+    return Options.ESPSolidColor.Value
+end
+
+local function newLine()
+    local f = Instance.new("Frame")
+    f.AnchorPoint = Vector2.new(0.5, 0.5)
+    f.BorderSizePixel = 0
+    f.Visible = false
+    f.Parent = ESPGui
+    return f
+end
+
+local function setLine(f, a, b, col)
+    local d = b - a
+    f.Position = UDim2.fromOffset((a.X + b.X) / 2, (a.Y + b.Y) / 2)
+    f.Size = UDim2.fromOffset(d.Magnitude, 1.5)
+    f.Rotation = math.deg(math.atan2(d.Y, d.X))
+    f.BackgroundColor3 = col
+    f.Visible = true
+end
+
+local function createESPForPlayer(player)
+    if player == LocalPlayer or espCache[player] then return end
+    espCache[player] = {
+        billboard = nil, imgLabel = nil, nameLabel = nil, userLabel = nil,
+        lines = {}, boxLines = {}, tracerLine = newLine(),
+    }
+end
+
+local function removeESPForPlayer(player)
+    local data = espCache[player]
+    if not data then return end
+    if data.billboard then data.billboard:Destroy() end
+    if data.tracerLine then data.tracerLine:Destroy() end
+    for _, l in pairs(data.lines) do l:Destroy() end
+    for _, l in pairs(data.boxLines) do l:Destroy() end
+    espCache[player] = nil
+end
+
+Players.PlayerAdded:Connect(createESPForPlayer)
+Players.PlayerRemoving:Connect(removeESPForPlayer)
+for _, p in ipairs(Players:GetPlayers()) do createESPForPlayer(p) end
+
+local R15Joints = {
+    {"Head", "UpperTorso"}, {"UpperTorso", "LowerTorso"},
+    {"UpperTorso", "LeftUpperArm"}, {"LeftUpperArm", "LeftLowerArm"}, {"LeftLowerArm", "LeftHand"},
+    {"UpperTorso", "RightUpperArm"}, {"RightUpperArm", "RightLowerArm"}, {"RightLowerArm", "RightHand"},
+    {"LowerTorso", "LeftUpperLeg"}, {"LeftUpperLeg", "LeftLowerLeg"}, {"LeftLowerLeg", "LeftFoot"},
+    {"LowerTorso", "RightUpperLeg"}, {"RightUpperLeg", "RightLowerLeg"}, {"RightLowerLeg", "RightFoot"},
+}
+local R6Joints = {
+    {"Head", "Torso"}, {"Torso", "Left Arm"}, {"Torso", "Right Arm"},
+    {"Torso", "Left Leg"}, {"Torso", "Right Leg"},
+}
+
+local function hideAll(data)
+    if data.billboard then data.billboard.Enabled = false end
+    data.tracerLine.Visible = false
+    for _, l in ipairs(data.boxLines) do l.Visible = false end
+    for _, l in ipairs(data.lines) do l.Visible = false end
+end
+
+local function updatePlayerESP(player, data, col)
+    local character = player.Character
+    local hrp = character and character:FindFirstChild("HumanoidRootPart")
+    local head = character and character:FindFirstChild("Head")
+    local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+
+    if not (character and hrp and head and humanoid and humanoid.Health > 0) then
+        hideAll(data)
+        return
+    end
+
+    -- 1. Name & Icon (BillboardGui + TextLabel)
+    if Toggles.PlayerESPToggle.Value then
+        if not data.billboard then
+            local bb = Instance.new("BillboardGui")
+            bb.Name = "PlayerESP"
+            bb.Size = UDim2.new(0, 220, 0, 80)
+            bb.StudsOffset = Vector3.new(0, 3.2, 0)
+            bb.AlwaysOnTop = true
+            bb.ResetOnSpawn = false
+            bb.LightInfluence = 0
+
+            local img = Instance.new("ImageLabel")
+            img.Name = "Icon"
+            img.Size = UDim2.new(0, 30, 0, 30)
+            img.Position = UDim2.new(0.5, -15, 0, 0)
+            img.BackgroundTransparency = 1
+            img.Parent = bb
+
+            -- 表示名
+            local nameLabel = Instance.new("TextLabel")
+            nameLabel.Name = "DisplayName"
+            nameLabel.Size = UDim2.new(1, 0, 0, 24)
+            nameLabel.Position = UDim2.new(0, 0, 0, 32)
+            nameLabel.BackgroundTransparency = 1
+            nameLabel.Font = Enum.Font.GothamBold
+            nameLabel.TextSize = 16
+            nameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+            nameLabel.TextStrokeTransparency = 0
+            nameLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+            nameLabel.TextXAlignment = Enum.TextXAlignment.Center
+            nameLabel.TextYAlignment = Enum.TextYAlignment.Center
+            nameLabel.Parent = bb
+
+            -- ユーザー名
+            local userLabel = Instance.new("TextLabel")
+            userLabel.Name = "Username"
+            userLabel.Size = UDim2.new(1, 0, 0, 20)
+            userLabel.Position = UDim2.new(0, 0, 0, 56)
+            userLabel.BackgroundTransparency = 1
+            userLabel.Font = Enum.Font.Gotham
+            userLabel.TextSize = 13
+            userLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+            userLabel.TextStrokeTransparency = 0
+            userLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+            userLabel.TextXAlignment = Enum.TextXAlignment.Center
+            userLabel.TextYAlignment = Enum.TextYAlignment.Center
+            userLabel.Parent = bb
+
+            data.billboard, data.imgLabel = bb, img
+            data.nameLabel, data.userLabel = nameLabel, userLabel
+            bb.Parent = ESPFolder
+
+            task.spawn(function()
+                local ok, content = pcall(function()
+                    return Players:GetUserThumbnailAsync(player.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size48x48)
+                end)
+                if ok and img.Parent then img.Image = content end
+            end)
+        end
+        data.billboard.Adornee = head
+        data.billboard.Enabled = true
+        data.nameLabel.Text = player.DisplayName
+        data.userLabel.Text = "@" .. player.Name
+        data.nameLabel.TextColor3 = col -- 表示名はESPカラーに追従
+    elseif data.billboard then
+        data.billboard.Enabled = false
+    end
+
+    local rootPos, rootOn = Camera:WorldToViewportPoint(hrp.Position)
+    local inFront = rootPos.Z > 0
+
+    -- 2. Tracer
+    if Toggles.TracerESPToggle.Value and inFront then
+        local vs = Camera.ViewportSize
+        local origin = Vector2.new(vs.X / 2, vs.Y) -- 一人称: 画面下部中央
+        local zoom = (Camera.CFrame.Position - Camera.Focus.Position).Magnitude
+        if zoom > 1 then -- 少しでもズームしたら自分のHRPから
+            local lchar = LocalPlayer.Character
+            local lhrp = lchar and lchar:FindFirstChild("HumanoidRootPart")
+            if lhrp then
+                local lp = Camera:WorldToViewportPoint(lhrp.Position)
+                if lp.Z > 0 then origin = Vector2.new(lp.X, lp.Y) end
+            end
+        end
+        setLine(data.tracerLine, origin, Vector2.new(rootPos.X, rootPos.Y), col)
+    else
+        data.tracerLine.Visible = false
+    end
+
+    -- 3. Box
+    if Toggles.BoxESPToggle.Value then
+        if #data.boxLines == 0 then
+            for i = 1, 4 do data.boxLines[i] = newLine() end
+        end
+        local topPos = Camera:WorldToViewportPoint(head.Position + Vector3.new(0, 0.8, 0))
+        local botPos = Camera:WorldToViewportPoint(hrp.Position - Vector3.new(0, 3, 0))
+        if inFront and topPos.Z > 0 and botPos.Z > 0 then
+            local height = math.abs(botPos.Y - topPos.Y)
+            local width = height / 2
+            local cx = rootPos.X
+            local tl = Vector2.new(cx - width / 2, topPos.Y)
+            local tr = Vector2.new(cx + width / 2, topPos.Y)
+            local bl = Vector2.new(cx - width / 2, botPos.Y)
+            local br = Vector2.new(cx + width / 2, botPos.Y)
+            local b = data.boxLines
+            setLine(b[1], tl, tr, col)
+            setLine(b[2], tr, br, col)
+            setLine(b[3], br, bl, col)
+            setLine(b[4], bl, tl, col)
+        else
+            for _, l in ipairs(data.boxLines) do l.Visible = false end
+        end
+    else
+        for _, l in ipairs(data.boxLines) do l.Visible = false end
+    end
+
+    -- 4. Skeleton
+    if Toggles.SkeletonESPToggle.Value then
+        local joints = character:FindFirstChild("UpperTorso") and R15Joints or R6Joints
+        for i = #data.lines + 1, #R15Joints do data.lines[i] = newLine() end
+
+        for i, line in ipairs(data.lines) do
+            local j = joints[i]
+            local p1 = j and character:FindFirstChild(j[1])
+            local p2 = j and character:FindFirstChild(j[2])
+            if p1 and p2 then
+                local v1 = Camera:WorldToViewportPoint(p1.Position)
+                local v2 = Camera:WorldToViewportPoint(p2.Position)
+                if v1.Z > 0 and v2.Z > 0 then
+                    setLine(line, Vector2.new(v1.X, v1.Y), Vector2.new(v2.X, v2.Y), col)
+                else
+                    line.Visible = false
+                end
+            else
+                line.Visible = false
+            end
+        end
+    else
+        for _, l in ipairs(data.lines) do l.Visible = false end
+    end
+end
+
+RunService.RenderStepped:Connect(function()
+    Camera = workspace.CurrentCamera
+    local idx = 0
+    for player, data in pairs(espCache) do
+        idx = idx + 1
+        local ok, err = pcall(updatePlayerESP, player, data, getDynamicColor(idx))
+        if not ok then warn("ESP error:", err) end
+    end
+end)
+
+-- [Player機能]
+
+-- 1. CFrame Walk Speed
+RunService.Heartbeat:Connect(function(delta)
+    local character = LocalPlayer.Character
+    local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+    local hrp = character and character:FindFirstChild("HumanoidRootPart")
+    if not humanoid or not hrp then return end
+
+    local isSeatedState = (humanoid:GetState() == Enum.HumanoidStateType.Seated) or (humanoid.SeatPart ~= nil)
+    local isSpinOn = Toggles.SpinToggle and Toggles.SpinToggle.Value
+    local isUserWalkSpeedOn = Toggles.WalkSpeedToggle and Toggles.WalkSpeedToggle.Value
+    local shouldApplySecretSpeed = isSpinOn and isSeatedState and not isUserWalkSpeedOn
+
+    if isUserWalkSpeedOn then
+        local moveDirection = humanoid.MoveDirection
+        if moveDirection.Magnitude > 0 then
+            hrp.CFrame = hrp.CFrame + (moveDirection * Options.WalkSpeedSlider.Value * delta)
+        end
+    elseif shouldApplySecretSpeed then
+        local moveDirection = humanoid.MoveDirection
+        if moveDirection.Magnitude > 0 then
+            hrp.CFrame = hrp.CFrame + (moveDirection * 16 * delta)
+        end
+    end
+end)
+
+-- 2. JumpPower
+RunService.Heartbeat:Connect(function()
+    local character = LocalPlayer.Character
+    local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+    if humanoid then
+        pcall(function() humanoid.UseJumpPower = true end)
+        if Toggles.JumpPowerToggle and Toggles.JumpPowerToggle.Value then
+            humanoid.JumpPower = Options.JumpPowerSlider.Value
+        else
+            humanoid.JumpPower = 24
+        end
+    end
+end)
+
+-- 3. Infinity Jump
+UserInputService.JumpRequest:Connect(function()
+    if Toggles.InfinityJumpToggle and Toggles.InfinityJumpToggle.Value then
+        local character = LocalPlayer.Character
+        local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+        if humanoid then humanoid:ChangeState(Enum.HumanoidStateType.Jumping) end
+    end
+end)
+
+-- 4. Noclip
+local lastVehicle = nil
+RunService.Stepped:Connect(function()
+    local character = LocalPlayer.Character
+    local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+    local currentVehicle = humanoid and humanoid.SeatPart and humanoid.SeatPart.Parent or nil
+
+    if Toggles.NoclipToggle and Toggles.NoclipToggle.Value then
+        if character then
+            for _, part in ipairs(character:GetDescendants()) do
+                if part:IsA("BasePart") and part.CanCollide then
+                    part.CanCollide = false
+                end
+            end
+            if currentVehicle then
+                lastVehicle = currentVehicle
+                for _, part in ipairs(currentVehicle:GetDescendants()) do
+                    if part:IsA("BasePart") then part.CanCollide = false end
+                end
+            end
+        end
+    end
+
+    if lastVehicle and (not currentVehicle or currentVehicle ~= lastVehicle) then
+        for _, part in ipairs(lastVehicle:GetDescendants()) do
+            if part:IsA("BasePart") then part.CanCollide = true end
+        end
+        lastVehicle = nil
+    end
+    if currentVehicle then lastVehicle = currentVehicle end
+end)
+
+-- 5. Spin
+RunService.RenderStepped:Connect(function()
+    if Toggles.SpinToggle and Toggles.SpinToggle.Value then
+        local character = LocalPlayer.Character
+        local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+        local hrp = character and character:FindFirstChild("HumanoidRootPart")
+        if hrp and humanoid then
+            local spinSpeed = Options.SpinSpeedSlider.Value
+            if humanoid.SeatPart then
+                local vehicleModel = humanoid.SeatPart.Parent
+                if vehicleModel and vehicleModel:IsA("Model") and vehicleModel.PrimaryPart then
+                    vehicleModel:SetPrimaryPartCFrame(vehicleModel.PrimaryPart.CFrame * CFrame.Angles(0, math.rad(spinSpeed * 0.5), 0))
+                else
+                    humanoid.SeatPart.CFrame = humanoid.SeatPart.CFrame * CFrame.Angles(0, math.rad(spinSpeed * 0.5), 0)
+                end
+            else
+                hrp.CFrame = hrp.CFrame * CFrame.Angles(0, math.rad(spinSpeed * 0.5), 0)
+            end
+        end
+    end
+end)
+
+-- 6. Third Person
+local thirdPersonInitialized = false
+RunService.Heartbeat:Connect(function()
+    if Toggles.ThirdPersonToggle and Toggles.ThirdPersonToggle.Value then
+        pcall(function()
+            LocalPlayer.CameraMaxZoomDistance = 999999999
+            LocalPlayer.CameraMode = Enum.CameraMode.Classic
+        end)
+        if not thirdPersonInitialized then
+            thirdPersonInitialized = true
+            pcall(function()
+                local PopperClient = LocalPlayer:WaitForChild("PlayerScripts").PlayerModule.CameraModule.ZoomController.Popper
+                for _, v in next, getgc() do
+                    if getfenv(v).script == PopperClient and typeof(v) == "function" then
+                        for i2, v2 in next, debug.getconstants(v) do
+                            if tonumber(v2) == 0.25 then
+                                debug.setconstant(v, i2, 0)
+                            elseif tonumber(v2) == 0 then
+                                debug.setconstant(v, i2, 0.25)
+                            end
+                        end
+                    end
+                end
+            end)
+        end
+    elseif thirdPersonInitialized then
+        -- オフにした時に一回だけ実行
+        thirdPersonInitialized = false
+        pcall(function() LocalPlayer.CameraMaxZoomDistance = 0 end)
+    end
+end)
+
+-- 7. FOV
+RunService.Heartbeat:Connect(function()
+    local camera = workspace.CurrentCamera
+    if camera then
+        if Toggles.FOVToggle and Toggles.FOVToggle.Value then
+            camera.FieldOfView = Options.FOVSlider.Value
+        else
+            camera.FieldOfView = 70
+        end
+    end
+end)
+
+ThemeManager:SetLibrary(Library)
+SaveManager:SetLibrary(Library)
+SaveManager:IgnoreThemeSettings()
+SaveManager:SetIgnoreIndexes({ 'MenuKeybind' })
+ThemeManager:SetFolder('MyScriptHub')
+SaveManager:SetFolder('MyScriptHub/configs')
+SaveManager:BuildConfigSection(Tabs.Player)
+ThemeManager:ApplyToTab(Tabs.Player)
