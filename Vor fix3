@@ -2644,7 +2644,7 @@ function PlayerPicker.Refresh(obj)
             local img = Instance.new("ImageLabel")
             img.Name = "PlayerIcon"
             img.AnchorPoint = Vector2.new(0, 0.5)
-            img.Position = UDim2.new(0, state.base - 22, 0.5, 0)
+            img.Position = UDim2.new(0, state.base - 30, 0.5, 0)
             img.Size = UDim2.fromOffset(16, 16)
             img.BackgroundTransparency = 1
             img.ZIndex = obj.ZIndex + 1
@@ -2653,7 +2653,7 @@ function PlayerPicker.Refresh(obj)
         end
         if not state.on then
             state.on = true
-            state.pad.PaddingLeft = UDim.new(state.pad.PaddingLeft.Scale, state.base + 22)
+            state.pad.PaddingLeft = UDim.new(state.pad.PaddingLeft.Scale, state.base + 18)
         end
         state.img.Visible = true
         local thumb = PlayerPicker.Thumbs[userId]
