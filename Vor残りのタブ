@@ -368,6 +368,43 @@ local function makePCLDName(proxy)
     return bb, label, grad
 end
 
+-- Player ESPのテキストと重ならないよう、PCLD NAMEの高さを毎フレーム自動調整する
+local PLAYER_LABEL_H = 80   -- Player ESPのBillboardの高さ(px)
+local PCLD_LABEL_H = 44     -- PCLD NAMEのBillboardの高さ(px)
+local PCLD_BASE_OFFSET = 3  -- PCLD NAMEの基本の高さ(studs)
+
+local function adjustPCLDName(e)
+    local base = Vector3.new(0, PCLD_BASE_OFFSET, 0)
+    local cp = Camera:WorldToViewportPoint(e.proxy.Position + base)
+    if cp.Z <= 0 then
+        e.nameBB.StudsOffset = base
+        return
+    end
+
+    local studsPerPx = 2 * cp.Z * math.tan(math.rad(Camera.FieldOfView / 2)) / Camera.ViewportSize.Y
+    local need = (PLAYER_LABEL_H + PCLD_LABEL_H) / 2 + 6
+
+    local shiftPx, dir = 0, 1
+    for _, data in pairs(espCache) do
+        local bb = data.billboard
+        if bb and bb.Enabled and bb.Adornee then
+            local pp = Camera:WorldToViewportPoint(bb.Adornee.Position + bb.StudsOffset)
+            if pp.Z > 0 and math.abs(pp.X - cp.X) < 220 then
+                local dy = cp.Y - pp.Y
+                if math.abs(dy) < need then
+                    local s = need - math.abs(dy)
+                    if s > shiftPx then
+                        shiftPx = s
+                        dir = (dy <= 0) and 1 or -1 -- 画面上で上にある方へ押し出す
+                    end
+                end
+            end
+        end
+    end
+
+    e.nameBB.StudsOffset = base + Vector3.new(0, dir * shiftPx * studsPerPx, 0)
+end
+
 local function removePCLD(inst)
     local e = pcldCache[inst]
     if not e then return end
@@ -469,6 +506,7 @@ RunService.RenderStepped:Connect(function(dt)
                     local txt = string.format("%s\n(@%s)", owner.DisplayName, owner.Name)
                     if e.nameLabel.Text ~= txt then e.nameLabel.Text = txt end
                     e.nameGrad.Offset = Vector2.new(math.sin(tick() * 1.5) * 0.5, 0)
+                    adjustPCLDName(e)
                 elseif e.nameBB then
                     e.nameBB.Enabled = false
                 end
