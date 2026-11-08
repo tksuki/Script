@@ -46,6 +46,7 @@ ESPGroup:AddToggle('PCLDESPToggle', { Text = 'PCLD ESP', Default = false })
 ESPGroup:AddToggle('PCLDNameESPToggle', { Text = 'PCLD NAME ESP', Default = false })
 ESPGroup:AddToggle('StickyESPToggle', { Text = 'Sticky ESP', Default = false })
 ESPGroup:AddToggle('BlobmanESPToggle', { Text = 'Blobman ESP', Default = false })
+ESPGroup:AddToggle('BlackHoleESPToggle', { Text = 'Black Hole ESP', Default = false })
 
 -- [ESP Color] 別グループ
 local ColorGroup = Tabs.ESP:AddRightGroupbox('ESP Color')
@@ -685,6 +686,7 @@ end)
 
 -- [Blobman ESP] CreatureBlobman を探して可視化（Highlightを使わないので31個制限なし）
 local BLOB_NAME = "CreatureBlobman"
+local BLOB_HIDDEN_MIN = 0.9 -- 透明度がこの値以上のPart(見えない中のPart)だけを発光。0にすると全Part対象
 local blobFound = {} -- [instance] = { parts = { [part] = {adorn, box} }, last = 0, mine = false }
 
 local function removeBlob(inst)
@@ -747,10 +749,10 @@ RunService.RenderStepped:Connect(function()
             end
             d.mine = isMine(inst)
 
-            -- CreatureBlobman自体は対象外、中の「見えているPart」だけを発光させる
+            -- 見えているボディは対象外、中の見えないPartだけを発光させる
             local seen = {}
             for _, desc in ipairs(inst:GetDescendants()) do
-                if desc:IsA("BasePart") and desc.Name ~= BLOB_NAME and desc.Transparency < 0.9 then
+                if desc:IsA("BasePart") and desc.Name ~= BLOB_NAME and desc.Transparency >= BLOB_HIDDEN_MIN then
                     seen[desc] = true
                     if not d.parts[desc] then
                         local adorn = Instance.new("BoxHandleAdornment")
@@ -781,6 +783,122 @@ RunService.RenderStepped:Connect(function()
             e.adorn.Size = part.Size
             e.adorn.Color3 = c
             e.box.Color3 = c
+        end
+    end
+end)
+
+-- [Black Hole ESP] BlackHoleKick の検知・キック通知・紫トレーサー
+local BH_NAME = "BlackHoleKick"
+local BH_COLOR = Color3.fromRGB(170, 0, 255)
+local BH_WINDOW = 3 -- ブラックホール出現と「同時」とみなす秒数
+
+local bhFound = {}   -- [obj] = Frame(トレーサー) or true
+local leaveLog = {}  -- { {t, text, notified} }
+local lastBHSpawn = -math.huge
+
+local function bhNotify(title, desc)
+    local ok = pcall(function()
+        Library:Notify({ Title = title, Description = desc, Time = 5 })
+    end)
+    if not ok then
+        pcall(function() Library:Notify(title .. ": " .. desc, 5) end)
+    end
+end
+
+local function bhEnabled()
+    return Toggles.BlackHoleESPToggle and Toggles.BlackHoleESPToggle.Value
+end
+
+local function removeBH(obj)
+    local line = bhFound[obj]
+    if typeof(line) == "Instance" then line:Destroy() end
+    bhFound[obj] = nil
+end
+
+local function onBlackHoleSpawn(obj)
+    if obj.Name ~= BH_NAME or bhFound[obj] then return end
+    bhFound[obj] = true
+
+    if bhEnabled() then
+        local now = tick()
+        lastBHSpawn = now
+        -- 出現直前に抜けたプレイヤーも「同時」として通知
+        for _, entry in ipairs(leaveLog) do
+            if not entry.notified and now - entry.t <= BH_WINDOW then
+                entry.notified = true
+                bhNotify("BlackHoleKick", entry.text .. " was kicked.")
+            end
+        end
+    end
+end
+
+-- 常時：退出したプレイヤーを記憶し、ブラックホールと同時なら通知
+Players.PlayerRemoving:Connect(function(plr)
+    local now = tick()
+    local entry = {
+        t = now,
+        text = string.format("%s (@%s)", plr.DisplayName, plr.Name),
+        notified = false,
+    }
+    table.insert(leaveLog, entry)
+
+    -- 古い記録を削除
+    for i = #leaveLog, 1, -1 do
+        if now - leaveLog[i].t > 10 then table.remove(leaveLog, i) end
+    end
+
+    if bhEnabled() and now - lastBHSpawn <= BH_WINDOW then
+        entry.notified = true
+        bhNotify("BlackHoleKick", entry.text .. " was kicked.")
+    end
+end)
+
+for _, obj in ipairs(workspace:GetChildren()) do
+    if obj.Name == BH_NAME then bhFound[obj] = true end -- 既存分は通知せず追跡のみ
+end
+workspace.ChildAdded:Connect(onBlackHoleSpawn)
+workspace.ChildRemoved:Connect(removeBH)
+
+-- ブラックホールがある限り、自分から紫のトレーサーを出す
+RunService.RenderStepped:Connect(function()
+    if not bhEnabled() then
+        for obj, line in pairs(bhFound) do
+            if typeof(line) == "Instance" then line.Visible = false end
+        end
+        return
+    end
+
+    local vs = Camera.ViewportSize
+    local origin = Vector2.new(vs.X / 2, vs.Y)
+    local zoom = (Camera.CFrame.Position - Camera.Focus.Position).Magnitude
+    if zoom > 1 then
+        local lchar = LocalPlayer.Character
+        local lhrp = lchar and lchar:FindFirstChild("HumanoidRootPart")
+        if lhrp then
+            local lp = Camera:WorldToViewportPoint(lhrp.Position)
+            if lp.Z > 0 then origin = Vector2.new(lp.X, lp.Y) end
+        end
+    end
+
+    for obj, line in pairs(bhFound) do
+        if not obj:IsDescendantOf(workspace) then
+            removeBH(obj)
+        else
+            if typeof(line) ~= "Instance" then
+                line = newLine()
+                bhFound[obj] = line
+            end
+            local ok, pivot = pcall(function() return obj:GetPivot() end)
+            if ok then
+                local p = Camera:WorldToViewportPoint(pivot.Position)
+                if p.Z > 0 then
+                    setLine(line, origin, Vector2.new(p.X, p.Y), BH_COLOR)
+                else
+                    line.Visible = false
+                end
+            else
+                line.Visible = false
+            end
         end
     end
 end)
