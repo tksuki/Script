@@ -2643,8 +2643,8 @@ function PlayerPicker.Refresh(obj)
             state.base = pad.PaddingLeft.Offset
             local img = Instance.new("ImageLabel")
             img.Name = "PlayerIcon"
-            img.AnchorPoint = Vector2.new(0, 3)
-            img.Position = UDim2.new(0, state.base, 0.5, 0)
+            img.AnchorPoint = Vector2.new(0, 0.5)
+            img.Position = UDim2.new(0, state.base - 4, 0.5, 0)
             img.Size = UDim2.fromOffset(16, 16)
             img.BackgroundTransparency = 1
             img.ZIndex = obj.ZIndex + 1
