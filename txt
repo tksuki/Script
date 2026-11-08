@@ -1,1 +1,5 @@
-https://xgf.nu/hE2kv
+local lbl
+for _, d in ipairs(game:GetService("CoreGui"):GetDescendants()) do
+    if d.Name == "DisplayName" and d:IsA("TextLabel") then lbl = d break end
+end
+print("見つかった:", lbl, "| フォント:", lbl and lbl.FontFace.Family, "| AllFont:", Toggles.AllFont and Toggles.AllFont.Value)
