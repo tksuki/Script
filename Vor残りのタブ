@@ -42,6 +42,10 @@ ESPGroup:AddToggle('PlayerESPToggle', { Text = 'Player ESP (Name & Icon)', Defau
 ESPGroup:AddToggle('SkeletonESPToggle', { Text = 'Skeleton ESP', Default = false })
 ESPGroup:AddToggle('BoxESPToggle', { Text = 'Box ESP', Default = false })
 ESPGroup:AddToggle('TracerESPToggle', { Text = 'Tracer ESP', Default = false })
+ESPGroup:AddToggle('PCLDESPToggle', { Text = 'PCLD ESP', Default = false })
+ESPGroup:AddToggle('PCLDNameESPToggle', { Text = 'PCLD NAME ESP', Default = false })
+ESPGroup:AddToggle('StickyESPToggle', { Text = 'Sticky ESP', Default = false })
+ESPGroup:AddToggle('BlobmanESPToggle', { Text = 'Blobman ESP', Default = false })
 
 -- [ESP Color] 別グループ
 local ColorGroup = Tabs.ESP:AddRightGroupbox('ESP Color')
@@ -92,7 +96,7 @@ local espCache = {}
 local function getDynamicColor(index)
     local mode = Options.ESPColorMode.Value
     if mode == 'Rainbow' then
-        return Color3.fromHSV(((tick() + index * 0.2) % 5) / 5, 1, 1)
+        return Color3.fromHSV((tick() % 5) / 5, 1, 1) -- 全員同じ色で一括変化
     elseif mode == 'Gradient' then
         local alpha = (math.sin(tick() * 2 + index * 0.5) + 1) / 2
         return Options.ESPSolidColor.Value:Lerp(Options.ESPGradientColor.Value, alpha)
@@ -176,7 +180,7 @@ local function updatePlayerESP(player, data, col)
             local bb = Instance.new("BillboardGui")
             bb.Name = "PlayerESP"
             bb.Size = UDim2.new(0, 220, 0, 80)
-            bb.StudsOffset = Vector3.new(0, 3.2, 0)
+            bb.StudsOffset = Vector3.new(0, 9, 0)
             bb.AlwaysOnTop = true
             bb.ResetOnSpawn = false
             bb.LightInfluence = 0
@@ -319,6 +323,465 @@ RunService.RenderStepped:Connect(function()
         idx = idx + 1
         local ok, err = pcall(updatePlayerESP, player, data, getDynamicColor(idx))
         if not ok then warn("ESP error:", err) end
+    end
+end)
+
+-- [PCLD ESP] PlayerCharacterLocationDetector の可視化（スムーズ移動＋少し遅延）
+local PCLD_NAME = "PlayerCharacterLocationDetector"
+local PCLD_SMOOTH_SPEED = 8 -- 遅らせスピード（固定）
+local pcldFound = {}  -- [instance] = true
+local pcldCache = {}  -- [instance] = { proxy, adorn }
+local pcldTrack = {}  -- [instance] = { scores, lastPos, owner }
+
+-- PCLD NAME ESP専用の特別グラデーション（Player ESPの色とは無関係）
+local NAME_GRADIENT = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 80, 200)),
+    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(255, 220, 80)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(80, 220, 255)),
+})
+
+local function makePCLDName(proxy)
+    local bb = Instance.new("BillboardGui")
+    bb.Name = "PCLDName"
+    bb.Size = UDim2.new(0, 220, 0, 44)
+    bb.StudsOffset = Vector3.new(0, 3, 0)
+    bb.AlwaysOnTop = true
+    bb.LightInfluence = 0
+    bb.Adornee = proxy
+    bb.Parent = ESPFolder
+
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1, 0, 1, 0)
+    label.BackgroundTransparency = 1
+    label.Font = Enum.Font.GothamBold
+    label.TextSize = 15
+    label.TextColor3 = Color3.fromRGB(255, 255, 255)
+    label.TextStrokeTransparency = 0
+    label.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+    label.Parent = bb
+
+    local grad = Instance.new("UIGradient")
+    grad.Color = NAME_GRADIENT
+    grad.Parent = label
+
+    return bb, label, grad
+end
+
+local function removePCLD(inst)
+    local e = pcldCache[inst]
+    if not e then return end
+    if e.adorn then e.adorn:Destroy() end
+    if e.box then e.box:Destroy() end
+    if e.nameBB then e.nameBB:Destroy() end
+    if e.proxy then e.proxy:Destroy() end
+    pcldCache[inst] = nil
+end
+
+local function trackPCLD(inst)
+    if inst.Name == PCLD_NAME and (inst:IsA("BasePart") or inst:IsA("Model")) then
+        pcldFound[inst] = true
+    end
+end
+
+for _, d in ipairs(workspace:GetDescendants()) do trackPCLD(d) end
+workspace.DescendantAdded:Connect(trackPCLD)
+workspace.DescendantRemoving:Connect(function(inst)
+    pcldFound[inst] = nil
+    removePCLD(inst)
+end)
+
+local function getPCLDTarget(inst)
+    if inst:IsA("BasePart") then
+        return inst.CFrame, inst.Size
+    end
+    local ok, cf, size = pcall(function() return inst:GetBoundingBox() end)
+    if ok then return cf, size end
+    return nil
+end
+
+RunService.RenderStepped:Connect(function(dt)
+    if not (Toggles.PCLDESPToggle and Toggles.PCLDESPToggle.Value) then
+        for inst in pairs(pcldCache) do removePCLD(inst) end
+        return
+    end
+
+    local alpha = 1 - math.exp(-PCLD_SMOOTH_SPEED * dt)
+    local col = getDynamicColor(0)
+
+    for inst in pairs(pcldFound) do
+        if not inst:IsDescendantOf(workspace) then
+            pcldFound[inst] = nil
+            removePCLD(inst)
+        else
+            local cf, size = getPCLDTarget(inst)
+            if cf then
+                local e = pcldCache[inst]
+                if not e then
+                    local proxy = Instance.new("Part")
+                    proxy.Name = "PCLDProxy"
+                    proxy.Anchored = true
+                    proxy.CanCollide = false
+                    proxy.CanQuery = false
+                    proxy.CanTouch = false
+                    proxy.Transparency = 1
+                    proxy.Size = size
+                    proxy.CFrame = cf
+                    proxy.Parent = workspace.CurrentCamera
+
+                    local adorn = Instance.new("BoxHandleAdornment")
+                    adorn.Adornee = proxy
+                    adorn.AlwaysOnTop = true
+                    adorn.ZIndex = 1
+                    adorn.Transparency = 0.6
+                    adorn.Size = size
+                    adorn.Parent = ESPFolder
+
+                    local box = Instance.new("SelectionBox")
+                    box.Adornee = proxy
+                    box.LineThickness = 0.05
+                    box.SurfaceTransparency = 1
+                    box.Parent = ESPFolder
+
+                    e = { proxy = proxy, adorn = adorn, box = box }
+                    pcldCache[inst] = e
+                end
+
+                if (e.proxy.Position - cf.Position).Magnitude > 100 then
+                    e.proxy.CFrame = cf -- テレポート時は即追従
+                else
+                    e.proxy.CFrame = e.proxy.CFrame:Lerp(cf, alpha)
+                end
+                e.proxy.Size = size
+                e.adorn.Size = size
+                e.adorn.Color3 = col
+                e.box.Color3 = col
+
+                -- PCLD NAME ESP（PCLD ESPがオンの時だけここに到達する）
+                local tr = pcldTrack[inst]
+                local owner = tr and tr.owner
+                if Toggles.PCLDNameESPToggle and Toggles.PCLDNameESPToggle.Value
+                    and owner and owner.Parent == Players then
+                    if not e.nameBB then
+                        e.nameBB, e.nameLabel, e.nameGrad = makePCLDName(e.proxy)
+                    end
+                    e.nameBB.Enabled = true
+                    local txt = string.format("%s\n(@%s)", owner.DisplayName, owner.Name)
+                    if e.nameLabel.Text ~= txt then e.nameLabel.Text = txt end
+                    e.nameGrad.Offset = Vector2.new(math.sin(tick() * 1.5) * 0.5, 0)
+                elseif e.nameBB then
+                    e.nameBB.Enabled = false
+                end
+            end
+        end
+    end
+end)
+
+-- [PCLD NAME] スクリプト起動直後からPCLDを常時監視し、どのプレイヤーを追っているか推定する
+local playerHist = {} -- [player] = { {t, p}, ... } 直近1.2秒の位置履歴
+
+Players.PlayerRemoving:Connect(function(plr)
+    playerHist[plr] = nil
+    for _, tr in pairs(pcldTrack) do
+        tr.scores[plr] = nil
+        if tr.owner == plr then tr.owner = nil end
+    end
+end)
+
+RunService.Heartbeat:Connect(function()
+    local now = tick()
+
+    -- プレイヤー位置の履歴を記録（0.05秒間隔）
+    for _, plr in ipairs(Players:GetPlayers()) do
+        local ch = plr.Character
+        local hrp = ch and ch:FindFirstChild("HumanoidRootPart")
+        if hrp then
+            local h = playerHist[plr]
+            if not h then h = {}; playerHist[plr] = h end
+            local last = h[#h]
+            if not last or now - last.t >= 0.05 then
+                h[#h + 1] = { t = now, p = hrp.Position }
+            end
+        end
+    end
+    for plr, h in pairs(playerHist) do
+        while h[1] and now - h[1].t > 1.2 do table.remove(h, 1) end
+        if #h == 0 then playerHist[plr] = nil end
+    end
+
+    -- 各PCLDについて「誰の過去位置を追っているか」のスコアを更新
+    for inst in pairs(pcldFound) do
+        local cf = getPCLDTarget(inst)
+        if cf then
+            local pos = cf.Position
+            local tr = pcldTrack[inst]
+            if not tr then
+                tr = { scores = {}, lastPos = pos, owner = nil }
+                pcldTrack[inst] = tr
+            end
+
+            local moved = (pos - tr.lastPos).Magnitude > 0.02
+            tr.lastPos = pos
+            local weight = moved and 1 or 0.2 -- 動いている時の一致を重視
+
+            for plr, h in pairs(playerHist) do
+                local best = math.huge
+                for i = 1, #h do
+                    local d = (h[i].p - pos).Magnitude
+                    if d < best then best = d end
+                end
+                tr.scores[plr] = (tr.scores[plr] or 0) * 0.97 + (1 / (1 + best)) * weight
+            end
+
+            local bestP, bestS, second = nil, 0, 0
+            for plr, sc in pairs(tr.scores) do
+                if sc > bestS then
+                    second = bestS
+                    bestS = sc
+                    bestP = plr
+                elseif sc > second then
+                    second = sc
+                end
+            end
+            -- はっきり1人に絞れた時だけ持ち主を更新（曖昧な時は前の持ち主を維持）
+            if bestP and bestS > 2 and bestS > second * 1.1 then
+                tr.owner = bestP
+            end
+        end
+    end
+
+    for inst in pairs(pcldTrack) do
+        if not pcldFound[inst] then pcldTrack[inst] = nil end
+    end
+end)
+
+-- 自分のSpawnedInToysフォルダ内のものは緑色で表示
+local MINE_COLOR = Color3.fromRGB(0, 255, 0)
+local function isMine(inst)
+    local p = inst.Parent
+    while p and p ~= workspace do
+        if p:IsA("Folder") and string.find(p.Name, "SpawnedInToys", 1, true)
+            and string.find(p.Name, LocalPlayer.Name, 1, true) then
+            return true
+        end
+        p = p.Parent
+    end
+    return false
+end
+
+-- [Sticky ESP] SpawnedInToysフォルダ内で、StickyPartを含むオブジェクトのPartを発光＋枠付きで可視化
+local STICKY_NAME = "StickyPart"
+local TOYS_FOLDER_KEY = "SpawnedInToys"
+local stickyToys = {} -- [toyオブジェクト] = { parts = { [part] = {adorn, box} }, last = 0 }
+
+-- StickyPartが入っているオブジェクト（SpawnedInToysフォルダの直下の子）を探す
+local function findToy(inst)
+    local p = inst
+    while p and p.Parent and p.Parent ~= workspace do
+        local par = p.Parent
+        if par:IsA("Folder") and string.find(par.Name, TOYS_FOLDER_KEY, 1, true) then
+            return p
+        end
+        p = par
+    end
+    return nil
+end
+
+local function removePartESP(d, part)
+    local e = d.parts[part]
+    if not e then return end
+    e.adorn:Destroy()
+    e.box:Destroy()
+    d.parts[part] = nil
+end
+
+local function clearToyVisuals(d)
+    for part in pairs(d.parts) do removePartESP(d, part) end
+    d.last = 0
+end
+
+local function removeToy(toy)
+    local d = stickyToys[toy]
+    if not d then return end
+    clearToyVisuals(d)
+    stickyToys[toy] = nil
+end
+
+local function trackSticky(inst)
+    if inst.Name == STICKY_NAME then
+        local toy = findToy(inst)
+        if toy and toy ~= inst and toy.Name ~= "CreatureBlobman" and not stickyToys[toy] then
+            stickyToys[toy] = { parts = {}, last = 0 }
+        end
+    end
+end
+
+for _, d in ipairs(workspace:GetDescendants()) do trackSticky(d) end
+workspace.DescendantAdded:Connect(trackSticky)
+workspace.DescendantRemoving:Connect(function(inst)
+    if stickyToys[inst] then
+        removeToy(inst)
+        return
+    end
+    for _, d in pairs(stickyToys) do
+        if d.parts[inst] then removePartESP(d, inst) end
+    end
+end)
+
+RunService.RenderStepped:Connect(function()
+    if not (Toggles.StickyESPToggle and Toggles.StickyESPToggle.Value) then
+        for _, d in pairs(stickyToys) do clearToyVisuals(d) end
+        return
+    end
+
+    local now = tick()
+    local col = getDynamicColor(0)
+
+    for toy, d in pairs(stickyToys) do
+        -- 0.5秒ごとにPart一覧を更新
+        if now - d.last > 0.5 then
+            d.last = now
+            if not toy:IsDescendantOf(workspace) or not toy:FindFirstChild(STICKY_NAME, true) then
+                removeToy(toy)
+                continue
+            end
+
+            d.mine = isMine(toy)
+            local seen = {}
+            for _, desc in ipairs(toy:GetDescendants()) do
+                if desc:IsA("BasePart") and desc.Name ~= STICKY_NAME then
+                    seen[desc] = true
+                    if not d.parts[desc] then
+                        local adorn = Instance.new("BoxHandleAdornment")
+                        adorn.Adornee = desc
+                        adorn.AlwaysOnTop = true
+                        adorn.ZIndex = 1
+                        adorn.Transparency = 0.35 -- 発光した見た目
+                        adorn.Size = desc.Size
+                        adorn.Parent = ESPFolder
+
+                        local box = Instance.new("SelectionBox")
+                        box.Adornee = desc
+                        box.LineThickness = 0.04
+                        box.SurfaceTransparency = 1
+                        box.Parent = ESPFolder
+
+                        d.parts[desc] = { adorn = adorn, box = box }
+                    end
+                end
+            end
+            for part in pairs(d.parts) do
+                if not seen[part] then removePartESP(d, part) end
+            end
+        end
+
+        local c = d.mine and MINE_COLOR or col
+        for part, e in pairs(d.parts) do
+            e.adorn.Size = part.Size
+            e.adorn.Color3 = c
+            e.box.Color3 = c
+        end
+    end
+end)
+
+-- [Blobman ESP] CreatureBlobman を探して可視化（Highlightを使わないので31個制限なし）
+local BLOB_NAME = "CreatureBlobman"
+local blobFound = {} -- [instance] = { parts = { [part] = {adorn, box} }, last = 0, mine = false }
+
+local function removeBlob(inst)
+    local d = blobFound[inst]
+    if not d then return end
+    for part in pairs(d.parts) do removePartESP(d, part) end
+    blobFound[inst] = nil
+end
+
+local function hasBlobAncestor(inst)
+    local p = inst.Parent
+    while p and p ~= workspace do
+        if p.Name == BLOB_NAME then return true end
+        p = p.Parent
+    end
+    return false
+end
+
+local function trackBlob(inst)
+    if inst.Name == BLOB_NAME and (inst:IsA("Model") or inst:IsA("BasePart"))
+        and not blobFound[inst] and not hasBlobAncestor(inst) then
+        blobFound[inst] = { parts = {}, last = 0, mine = false }
+    end
+end
+
+for _, d in ipairs(workspace:GetDescendants()) do trackBlob(d) end
+workspace.DescendantAdded:Connect(trackBlob)
+workspace.DescendantRemoving:Connect(function(inst)
+    if blobFound[inst] then
+        removeBlob(inst)
+        return
+    end
+    for _, d in pairs(blobFound) do
+        if d.parts[inst] then removePartESP(d, inst) end
+    end
+end)
+
+RunService.RenderStepped:Connect(function()
+    if not (Toggles.BlobmanESPToggle and Toggles.BlobmanESPToggle.Value) then
+        for _, d in pairs(blobFound) do
+            for part in pairs(d.parts) do removePartESP(d, part) end
+            d.last = 0
+        end
+        return
+    end
+
+    local now = tick()
+    local col = getDynamicColor(0)
+
+    for inst, d in pairs(blobFound) do
+        if now - d.last > 0.5 then
+            d.last = now
+            if not inst:IsDescendantOf(workspace) then
+                removeBlob(inst)
+                continue
+            end
+            if hasBlobAncestor(inst) then
+                removeBlob(inst)
+                continue
+            end
+            d.mine = isMine(inst)
+
+            -- CreatureBlobman自体は対象外、中の「見えているPart」だけを発光させる
+            local seen = {}
+            for _, desc in ipairs(inst:GetDescendants()) do
+                if desc:IsA("BasePart") and desc.Name ~= BLOB_NAME and desc.Transparency < 0.9 then
+                    seen[desc] = true
+                    if not d.parts[desc] then
+                        local adorn = Instance.new("BoxHandleAdornment")
+                        adorn.Adornee = desc
+                        adorn.AlwaysOnTop = true
+                        adorn.ZIndex = 1
+                        adorn.Transparency = 0.35
+                        adorn.Size = desc.Size
+                        adorn.Parent = ESPFolder
+
+                        local box = Instance.new("SelectionBox")
+                        box.Adornee = desc
+                        box.LineThickness = 0.04
+                        box.SurfaceTransparency = 1
+                        box.Parent = ESPFolder
+
+                        d.parts[desc] = { adorn = adorn, box = box }
+                    end
+                end
+            end
+            for part in pairs(d.parts) do
+                if not seen[part] then removePartESP(d, part) end
+            end
+        end
+
+        local c = d.mine and MINE_COLOR or col
+        for part, e in pairs(d.parts) do
+            e.adorn.Size = part.Size
+            e.adorn.Color3 = c
+            e.box.Color3 = c
+        end
     end
 end)
 
