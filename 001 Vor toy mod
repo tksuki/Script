@@ -1,5 +1,8 @@
--- ==== YAJU HUB / Toy mod tab ====
--- Whole Toy mod block (original hub lines 5226-7318), self-contained do ... end
+-- ==== YAJU HUB / Toy mod tab (完全版) ====
+-- 変更点:
+--   1) セーブプロット(Toggles.SavePlot) = SAVITAR "Auto Preserve House Time" の処理に置き換え
+--   2) プレイヤー項目に「バリアブレイク」(Toggles.BarrierBreak) を追加
+--      = SAVITAR "Auto Break House Barrier" の処理
 -- The tab itself is created in the Tabs table: ToyMod = Window:AddTab("Toy mod", "sparkles")
 -- Uses PlayerPicker from the Target tab section (for player icons) and safe from the top of the hub
 
@@ -933,111 +936,316 @@ pcall(function()
 Players.PlayerRemoving:Connect(safe(function(plr) refreshPlayerList(plr) end))
 end)
 
-local SAVE_PLOT_WAIT = 80
-local SAVE_PLOT_SPAM = 15
-local SAVE_PLOT_SPAM_INTERVAL = 0.05
-local savePlotRunning = false
+-- =====================================================================
+-- セーブプロット (= SAVITAR "Auto Preserve House Time")
+-- バリアブレイク (= SAVITAR "Auto Break House Barrier")
+-- ローカル変数の上限(200)対策のため do ... end で囲んでいる
+-- =====================================================================
+do
+    local function getEnv()
+        local ok, env = pcall(function() return getgenv and getgenv() end)
+        return ok and env or nil
+    end
 
-local function startSavePlot()
-    if savePlotRunning then return end
-    savePlotRunning = true
+    local function getDesync()
+        local env = getEnv()
+        return env and env._DESYNC or nil
+    end
 
-    task.spawn(function()
-        local wasPlot = nil
-        local savedPlot = nil
-        local plotPos = nil
-        local sum, cnt = Vector3.zero, 0
-        local lastRot = nil
-        local leaveTime = nil
-        local lastLog = 0
+    local function getMyRoot()
+        local char = LocalPlayer.Character
+        if not char then return nil end
+        return char:FindFirstChild("saviHRP") or char:FindFirstChild("HumanoidRootPart")
+    end
 
-        print("[セーブプロット] 監視開始 / 現在のプロット: " .. tostring(getMyPlotName()))
+    local function getPlotsFolder()
+        return workspace:FindFirstChild("Plots")
+    end
 
-        while Toggles.SavePlot and Toggles.SavePlot.Value do
-            local char = LocalPlayer.Character
-            local root = char and char:FindFirstChild("HumanoidRootPart")
-            local plot = getMyPlotName()
-            local now = os.clock()
+    -- 自分のプロットと、自分の名前が入っているOwners値を返す
+    local function findMyPlotAndOwner()
+        local plots = getPlotsFolder()
+        if not plots then return nil, nil end
 
-            if plot then
-                if plot ~= wasPlot then
-                    print(("[セーブプロット] %s に入った (タイマーリセット)"):format(plot))
-                end
-                if plot ~= savedPlot then
-                    sum, cnt = Vector3.zero, 0
-                end
-                if root then
-                    sum = sum + root.Position
-                    cnt = cnt + 1
-                    if cnt > 600 then sum, cnt = sum / 2, cnt / 2 end
-                    plotPos = sum / cnt
-                    lastRot = root.CFrame - root.CFrame.Position
-                end
-                savedPlot = plot
-                leaveTime = nil
-            else
-                if wasPlot and savedPlot then
-                    leaveTime = now
-                    print(("[セーブプロット] %s から出た → %d秒タイマー開始"):format(savedPlot, SAVE_PLOT_WAIT))
-                end
-
-                if leaveTime then
-                    local elapsed = now - leaveTime
-                    if now - lastLog >= 10 then
-                        lastLog = now
-                        print(("[セーブプロット] 経過 %d / %d 秒"):format(elapsed, SAVE_PLOT_WAIT))
-                    end
-
-                    if elapsed >= SAVE_PLOT_WAIT and root and plotPos then
-                        print(("[セーブプロット] %s にtp連打開始"):format(savedPlot))
-                        local back = root.CFrame
-                        local target = CFrame.new(plotPos) * (lastRot or CFrame.new())
-
-                        for _ = 1, SAVE_PLOT_SPAM do
-                            if not Toggles.SavePlot.Value then break end
-                            local c = LocalPlayer.Character
-                            local r = c and c:FindFirstChild("HumanoidRootPart")
-                            if r then
-                                r.CFrame = target
-                                r.AssemblyLinearVelocity = Vector3.zero
-                            end
-                            task.wait(SAVE_PLOT_SPAM_INTERVAL)
-                        end
-
-                        local c = LocalPlayer.Character
-                        local r = c and c:FindFirstChild("HumanoidRootPart")
-                        if r then
-                            r.CFrame = back
-                            r.AssemblyLinearVelocity = Vector3.zero
-                        end
-                        print("[セーブプロット] 元の座標へ戻った")
-
-                        leaveTime = os.clock()
-                        plot = nil
+        for i = 1, 5 do
+            local plot = plots:FindFirstChild("Plot" .. i)
+            local sign = plot and plot:FindFirstChild("PlotSign")
+            local owners = sign and sign:FindFirstChild("ThisPlotsOwners")
+            if owners then
+                for _, child in ipairs(owners:GetChildren()) do
+                    if child.Value == LocalPlayer.Name then
+                        return plot, child
                     end
                 end
             end
+        end
+        return nil, nil
+    end
 
-            wasPlot = plot
-            task.wait(0.1)
+    ----------------------------------------------------------------
+    -- セーブプロット (Auto Preserve House Time)
+    ----------------------------------------------------------------
+    local savePlotRunning = false
+
+    local function startSavePlot()
+        if savePlotRunning then return end
+        savePlotRunning = true
+
+        task.spawn(function()
+            local plot, owner = nil, nil
+
+            while Toggles.SavePlot and Toggles.SavePlot.Value do
+                if not plot or not plot.Parent or not owner or not owner.Parent then
+                    plot, owner = findMyPlotAndOwner()
+                end
+
+                if plot and owner then
+                    local timeVal = owner:FindFirstChild("TimeRemainingNum")
+                        or owner:FindFirstChild("TimeRemaining")
+
+                    if timeVal and typeof(timeVal.Value) == "number" then
+                        if timeVal.Value <= 10 then
+                            local area = plot:FindFirstChild("PlotArea")
+                                or plot:FindFirstChildWhichIsA("BasePart")
+                                or (plot:FindFirstChild("PlotSign")
+                                    and plot.PlotSign:FindFirstChildWhichIsA("BasePart"))
+                            local cf = area and area.CFrame or plot:GetPivot()
+
+                            local desync = getDesync()
+                            if desync and desync.RequestDesync then
+                                desync:RequestDesync(function() return cf end, 1.5)
+                                task.wait(0.4)
+                                if desync.CancelRequest then desync:CancelRequest() end
+                            else
+                                local root = getMyRoot()
+                                if root then
+                                    local back = root.CFrame
+                                    root.CFrame = cf
+                                    task.wait(0.35)
+                                    if root.Parent then root.CFrame = back end
+                                end
+                            end
+
+                            task.wait(1)
+                        end
+                    else
+                        plot, owner = nil, nil
+                    end
+                end
+
+                task.wait(0.5)
+            end
+
+            local desync = getDesync()
+            if desync and desync.CancelRequest then
+                pcall(function() desync:CancelRequest() end)
+            end
+            savePlotRunning = false
+        end)
+    end
+
+    pcall(function()
+    PlayerGroup:AddToggle("SavePlot", {
+        Text = "セーブプロット",
+        Default = false,
+        Callback = safe(function(value)
+            if value then
+                startSavePlot()
+            end
+            -- OFF時はループ側が Toggles.SavePlot.Value を見て自動終了する
+        end),
+    })
+    end)
+
+    ----------------------------------------------------------------
+    -- バリアブレイク (Auto Break House Barrier)
+    ----------------------------------------------------------------
+    local MenuToysFolder
+    pcall(function()
+        MenuToysFolder = ReplicatedStorage:WaitForChild("MenuToys", 10)
+    end)
+
+    local function barrierSpawnToy(name, cf, vel)
+        local fn = MenuToysFolder and MenuToysFolder:FindFirstChild("SpawnToyRemoteFunction")
+        if fn then
+            pcall(function() fn:InvokeServer(name, cf, vel) end)
+        end
+    end
+
+    local function barrierDeleteToy(obj)
+        local ev = MenuToysFolder and MenuToysFolder:FindFirstChild("DestroyToy")
+        if ev then
+            pcall(function() ev:FireServer(obj) end)
+        end
+    end
+
+    local function findBarrierOf(plotModel)
+        return plotModel:FindFirstChild("Barrier")
+            or plotModel:FindFirstChild("PlotBarrier")
+            or plotModel:FindFirstChild("HouseBarrier")
+    end
+
+    -- バリアが壊れているか (true = 壊れている)
+    local function isBarrierBroken()
+        local plots = getPlotsFolder()
+        if not plots then return false end
+
+        local plotModels = {}
+        for _, child in ipairs(plots:GetChildren()) do
+            if child.Name:find("Plot") or child:FindFirstChild("PlotSign") or child:FindFirstChild("Barrier") then
+                table.insert(plotModels, child)
+            end
+        end
+        if #plotModels == 0 then return false end
+
+        local params = OverlapParams.new()
+        params.FilterType = Enum.RaycastFilterType.Include
+        params.FilterDescendantsInstances = { workspace:FindFirstChild("Map") or workspace, plots }
+
+        local parts = {}
+        pcall(function()
+            parts = workspace:GetPartBoundsInRadius(Vector3.new(304.06, 25.77, 488.54), 12, params)
+        end)
+
+        local hasAnchoredAbove = false
+        for _, p in ipairs(parts) do
+            if p:IsA("BasePart") and p.Anchored and p.Position.Y > 0 then
+                hasAnchoredAbove = true
+                break
+            end
+        end
+        if #parts == 0 or not hasAnchoredAbove then
+            return true
         end
 
-        savePlotRunning = false
-        print("[セーブプロット] 監視終了")
+        local brokenCount, intactCount = 0, 0
+        for _, plotModel in ipairs(plotModels) do
+            local barrier = findBarrierOf(plotModel)
+            if not barrier then
+                brokenCount += 1
+            else
+                local bparts = {}
+                for _, d in ipairs(barrier:GetDescendants()) do
+                    if d:IsA("BasePart") then table.insert(bparts, d) end
+                end
+                if #bparts == 0 then
+                    brokenCount += 1
+                else
+                    local center = plotModel:GetPivot().Position
+                    local broken = false
+                    for _, bp in ipairs(bparts) do
+                        if not bp.CanCollide
+                            or bp.Position.Y < -50
+                            or (bp.Position - center).Magnitude > 250 then
+                            broken = true
+                            break
+                        end
+                    end
+                    if broken then brokenCount += 1 else intactCount += 1 end
+                end
+            end
+        end
+
+        if brokenCount > 0 or intactCount == 0 then
+            return true
+        end
+        return false
+    end
+
+    local function breakBarrierOnce()
+        -- 6秒後にまだ壊れていなければトグルを入れ直してリトライ
+        task.spawn(function()
+            task.wait(6)
+            if not isBarrierBroken() and Toggles.BarrierBreak and Toggles.BarrierBreak.Value then
+                Toggles.BarrierBreak:SetValue(false)
+                task.wait(0.1)
+                Toggles.BarrierBreak:SetValue(true)
+            end
+        end)
+
+        local char = LocalPlayer.Character
+        local root = getMyRoot()
+        if not root then return end
+        local origin = root.CFrame
+
+        -- オカリナをスポーン
+        barrierSpawnToy(
+            "InstrumentWoodwindOcarina",
+            CFrame.new(
+                184.148834, -5.54824972, 498.136749,
+                0.829037189, -0.214714944, 0.516328275,
+                0, 0.923344612, 0.383972496,
+                -0.559193552, -0.318327487, 0.765486956
+            ),
+            Vector3.new(0, 34, 0)
+        )
+
+        task.wait(0.3)
+        local folder = getMySpawnedFolder()
+        local ocarina = folder and folder:FindFirstChild("InstrumentWoodwindOcarina")
+
+        -- 持つ
+        if ocarina and ocarina:FindFirstChild("HoldPart") and char then
+            pcall(function()
+                ocarina.HoldPart.HoldItemRemoteFunction:InvokeServer(ocarina, char)
+            end)
+        end
+
+        task.wait(0.3)
+        root.CFrame = CFrame.new(304.06, 25.77, 488.54)
+        task.wait(0.15)
+
+        if ocarina and ocarina.Parent then
+            barrierDeleteToy(ocarina)
+        end
+
+        task.wait(0.15)
+        root.CFrame = origin
+
+        -- バリアの当たり判定を切る
+        local plots = getPlotsFolder()
+        if plots then
+            for _, plotModel in ipairs(plots:GetChildren()) do
+                local barrier = plotModel:FindFirstChild("Barrier")
+                if barrier then
+                    for _, p in ipairs(barrier:GetChildren()) do
+                        if p:IsA("BasePart") then
+                            p.CanCollide = false
+                        end
+                    end
+                end
+            end
+        end
+
+        task.wait(0.5)
+
+        -- キャンプファイヤーで仕上げ
+        barrierSpawnToy("Campfire", root.CFrame, Vector3.zero)
+        task.wait(0.2)
+
+        folder = getMySpawnedFolder()
+        local campfire = folder and folder:FindFirstChild("Campfire")
+        if campfire and campfire:FindFirstChild("SoundPart") then
+            pcall(function()
+                campfire.SoundPart.CFrame = CFrame.new(304, 25, 488)
+            end)
+            task.wait(2)
+            barrierDeleteToy(campfire)
+        end
+    end
+
+    pcall(function()
+    PlayerGroup:AddToggle("BarrierBreak", {
+        Text = "バリアブレイク",
+        Default = false,
+        Callback = safe(function(value)
+            if value then
+                task.spawn(breakBarrierOnce)
+            end
+        end),
+    })
     end)
 end
-
-pcall(function()
-PlayerGroup:AddToggle("SavePlot", {
-    Text = "セーブプロット",
-    Default = false,
-    Callback = safe(function(value)
-        if value then
-            startSavePlot()
-        end
-    end),
-})
-end)
 
 local handledBalls = {}
 local spawningBall = false
