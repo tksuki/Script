@@ -1,0 +1,1417 @@
+-- ==== YAJU HUB / Defense tab ====
+-- Part 1: group boxes (original hub lines 1149-1164, right after Tabs is created)
+-- Part 2: all Defense UI + logic (original hub lines 1214-2607)
+-- Needs the hub top-level locals defined above it (Library, Options, Toggles, Tabs, Config, safe, ...)
+
+-- ---- Part 1: group boxes ----
+local LeftGroupBox
+pcall(function()
+LeftGroupBox = Tabs.AntiTab:AddLeftGroupbox("Main Defense")
+end)
+local RightGroupBox
+pcall(function()
+RightGroupBox = Tabs.AntiTab:AddRightGroupbox("Extra Defense")
+end)
+local dadadadad
+pcall(function()
+dadadadad = Tabs.AntiTab:AddLeftGroupbox("Target Defense")
+end)
+local antikick
+pcall(function()
+antikick = Tabs.AntiTab:AddRightGroupbox("Anti Kick")
+end)
+
+-- ---- Part 2: Defense UI and logic ----
+-- Main Defense
+pcall(function()
+LeftGroupBox:AddToggle("Antiragrag", {
+    Text = "Anti-Grab (Ragdoll)",
+    Default = false,
+    Callback = safe(function(Value)
+        Config.AntiGrabRag = Value
+        for k, v in pairs(Config.Contuuti) do
+            if v then v:Disconnect() end
+        end
+        table.clear(Config.Contuuti)
+        if Config.AntiGrabRag then
+            local function setupAntiGrab(char)
+                if not char or not Config.AntiGrabRag then return end
+                local hrp = char:WaitForChild("HumanoidRootPart", 5)
+                local hum = char:WaitForChild("Humanoid", 5)
+                local head = char:WaitForChild("Head", 5)
+                if not (hrp and hum and head) then return end
+                for _, v in pairs(char:GetChildren()) do
+                    if v:IsA("BasePart") and v:FindFirstChild("BallSocketConstraint") and v.Name ~= "Head" then
+                        v.BallSocketConstraint.Enabled = false
+                        if v:FindFirstChild("RagdollLimbPart") then
+                            v.RagdollLimbPart.WeldConstraint.Enabled = false
+                        end
+                    end
+                end
+                Config.Contuuti["AGHead"] = head.ChildAdded:Connect(safe(function(PartOwner)
+                    if PartOwner.Name == "PartOwner" then
+                        if not Config.AntigrabRGProc then
+                            Config.AntigrabRGProc = true
+                            hum.Sit = false
+                            Struggle:FireServer(localPlayer)
+                            
+                            task.spawn(function() 
+                                while (head and head:FindFirstChild("PartOwner")) or isHeld.Value do
+                                    Struggle:FireServer(localPlayer)
+                                    RagdollRemote:FireServer(hrp, 0)
+                                    task.wait()
+                                end
+                            end)
+                            hrp.Anchored = true
+                            if not Config.AntigrabragWalk then
+                                Config.AntigrabragWalk = true
+                                while isHeld.Value and task.wait() do
+                                    hrp.CFrame = hrp.CFrame + hum.MoveDirection * 0.43
+                                end
+                            end
+                            hrp.Anchored = false
+                            Config.AntigrabRGProc = false
+                            Config.AntigrabragWalk = false
+                        end
+                    end
+                end))
+                local ragdolled = hum:WaitForChild("Ragdolled", 5)
+                if ragdolled then
+                    Config.Contuuti["AGRagdoll"] = ragdolled.Changed:Connect(safe(function()
+                        if hum.Ragdolled.Value then
+                            for _, v in pairs(char:GetChildren()) do
+                                if v:IsA("BasePart") and v:FindFirstChild("BallSocketConstraint") and v.Name ~= "Head" then
+                                    v.BallSocketConstraint.Enabled = false
+                                    if v:FindFirstChild("RagdollLimbPart") then
+                                        v.RagdollLimbPart.WeldConstraint.Enabled = false
+                                    end
+                                end
+                            end
+                        end
+                    end))
+                end
+                local weldHRP = hrp:WaitForChild("WeldHRP", 5)
+                if weldHRP then
+                    Config.Contuuti["AGWeld"] = weldHRP.Changed:Connect(safe(function()
+                        if hrp.WeldHRP.Enabled then
+                            while not hum.Sit do task.wait() end
+                            hum.Sit = false
+                            hum.AutoRotate = true
+                            hum.HipHeight = 1
+                            while hrp.WeldHRP.Enabled and task.wait() do
+                                head.CFrame = hrp.CFrame + Vector3.new(0, 1.35, 0)
+                            end
+                            hum.HipHeight = 0
+                        end
+                    end))
+                end
+            end
+            setupAntiGrab(localPlayer.Character)
+            Config.Contuuti["AGChar"] = localPlayer.CharacterAdded:Connect(setupAntiGrab)
+        else
+            local char = localPlayer.Character
+            if char then
+                for _, v in pairs(char:GetChildren()) do
+                    if v:IsA("BasePart") and v:FindFirstChild("BallSocketConstraint") and v.Name ~= "Head" then
+                        v.BallSocketConstraint.Enabled = false
+                        if v:FindFirstChild("RagdollLimbPart") then
+                            v.RagdollLimbPart.WeldConstraint.Enabled = true
+                        end
+                    end
+                end
+            end
+        end
+    end)
+})
+end)
+
+pcall(function()
+LeftGroupBox:AddToggle("RagdollGucci", {
+    Text = "Anti-Gucci (Ragdoll)",
+    Default = false,
+    Callback = safe(function(Value)
+        if Value then
+            if Config.active then
+                Config.runId = Config.runId + 1
+                Config.active = false
+                Config.seatOccupied = false
+                Config.monitoring = false
+                Config.blobRef = nil
+                Config.ragdollLoopActive = false
+                if Config.ragdollTask then
+                    task.cancel(Config.ragdollTask)
+                    Config.ragdollTask = nil
+                end
+                Config.permRagActive = false
+                if Config.permRagTask then
+                    task.cancel(Config.permRagTask)
+                    Config.permRagTask = nil
+                end
+                local char = localPlayer.Character
+                local root = char and char:FindFirstChild("HumanoidRootPart")
+                if root then
+                    local remote = Config.remoteRef
+                    if not remote then
+                        local charEv = service.ReplicatedStorage:FindFirstChild("CharacterEvents")
+                        remote = (charEv and charEv:FindFirstChild("RagdollRemote")) 
+                                or service.ReplicatedStorage:FindFirstChild("RagdollRemote") 
+                                or game:FindFirstChild("RagdollRemote", true)
+                        if remote then Config.remoteRef = remote end
+                    end
+                    if remote and remote:IsA("RemoteEvent") then
+                        pcall(function() remote:FireServer(root, 0) end)
+                    end
+                end
+                local toyFolder = service.Workspace:FindFirstChild(localPlayer.Name .. 'SpawnedInToys')
+                if toyFolder then
+                    for _, child in pairs(toyFolder:GetChildren()) do
+                        if child.Name == "Gucci" or child.Name == "CreatureBlobman" then
+                            pcall(function() child:Destroy() end)
+                        end
+                    end
+                end
+                
+                task.wait(0.3)
+            end
+            Config.runId = Config.runId + 1
+            local currentRunId = Config.runId
+            Config.setupDone = false
+            Config.seatOccupied = false
+            Config.monitoring = false
+            local character = localPlayer.Character or localPlayer.CharacterAdded:Wait()
+            local humanoid = character:FindFirstChild("Humanoid") or character:WaitForChild("Humanoid", 3)
+            local rootPart = character:FindFirstChild("HumanoidRootPart") or character:WaitForChild("HumanoidRootPart", 3)
+            if not (humanoid and rootPart) then return end
+            pcall(function() humanoid:SetStateEnabled(Enum.HumanoidStateType.Dead, false) end)
+            task.spawn(function()
+                local startTime = tick()
+                while tick() - startTime < 0.8 and currentRunId == Config.runId do
+                    if rootPart and rootPart.Parent then
+                        pcall(function()
+                            rootPart.Velocity = Vector3.zero
+                            rootPart.RotVelocity = Vector3.zero
+                        end)
+                    end
+                    service.RunService.Heartbeat:Wait()
+                end
+            end)
+            local toyFolder = service.Workspace:FindFirstChild(localPlayer.Name .. 'SpawnedInToys')
+            local blob = nil
+            if toyFolder then
+                local connection
+                connection = toyFolder.ChildAdded:Connect(safe(function(child)
+                    if child.Name == "CreatureBlobman" then
+                        blob = child
+                        connection:Disconnect()
+                    end
+                end))
+                task.spawn(function()
+                    local menuToys = service.ReplicatedStorage:FindFirstChild("MenuToys")
+                    if menuToys and menuToys:FindFirstChild("SpawnToyRemoteFunction") then
+                        pcall(function()
+                            menuToys.SpawnToyRemoteFunction:InvokeServer(
+                                "CreatureBlobman", 
+                                rootPart.CFrame * CFrame.new(0, 0, -5), 
+                                Vector3.new(0, -15.716, 0)
+                            )
+                        end)
+                    end
+                end)
+                local spawnStart = tick()
+                while not blob and tick() - spawnStart < 4 do
+                    service.RunService.Heartbeat:Wait()
+                end
+                if connection then connection:Disconnect() end
+            end
+            if not blob then return end
+            local head = blob:FindFirstChild("Head") or blob:WaitForChild("Head", 3)
+            local hitbox = blob:FindFirstChild("GrabbableHitbox") or blob:WaitForChild("GrabbableHitbox", 3)
+            local seat = blob:FindFirstChild("VehicleSeat") or blob:WaitForChild("VehicleSeat", 3)
+            if seat and not Config.monitoring then
+                Config.monitoring = true
+                Config.blobRef = blob
+                task.spawn(function()
+                    while Config.active and seat and seat.Parent and blob and blob.Parent do
+                        local hum = localPlayer.Character and localPlayer.Character:FindFirstChild("Humanoid")
+                        if hum and seat.Occupant == hum then
+                            if not Config.seatOccupied then
+                                Config.seatOccupied = true
+                                if not Config.ragdollLoopActive then
+                                    Config.ragdollLoopActive = true
+                                    if Config.ragdollTask then task.cancel(Config.ragdollTask) end
+                                    Config.ragdollTask = task.spawn(function()
+                                        while Config.ragdollLoopActive do
+                                            local char = localPlayer.Character
+                                            if char then
+                                                local h = char:FindFirstChild("Humanoid")
+                                                local r = char:FindFirstChild("HumanoidRootPart")
+                                                if h and r and h.Health > 0 then
+                                                    pcall(function()
+                                                        h.Sit = true
+                                                        h:ChangeState(Enum.HumanoidStateType.Running)
+                                                    end)
+                                                    local cam = service.Workspace.CurrentCamera
+                                                    if cam then
+                                                        local look = cam.CFrame.LookVector
+                                                        pcall(function()
+                                                            r.CFrame = CFrame.new(r.Position, r.Position + Vector3.new(look.X, 0, look.Z))
+                                                        end)
+                                                    end
+                                                end
+                                            end
+                                            task.wait()
+                                        end
+                                    end)
+                                end
+                                if not Config.permRagActive then
+                                    Config.permRagActive = true
+                                    if Config.permRagTask then task.cancel(Config.permRagTask) end
+                                    Config.permRagTask = task.spawn(function()
+                                        while Config.permRagActive do
+                                            local char = localPlayer.Character
+                                            local r = char and char:FindFirstChild("HumanoidRootPart")
+                                            if r then
+                                                local remote = Config.remoteRef
+                                                if not remote then
+                                                    local charEv = service.ReplicatedStorage:FindFirstChild("CharacterEvents")
+                                                    remote = (charEv and charEv:FindFirstChild("RagdollRemote")) 
+                                                            or service.ReplicatedStorage:FindFirstChild("RagdollRemote") 
+                                                            or game:FindFirstChild("RagdollRemote", true)
+                                                    if remote then Config.remoteRef = remote end
+                                                end
+                                                if remote and remote:IsA("RemoteEvent") then
+                                                    pcall(function() remote:FireServer(r, 1) end)
+                                                end
+                                            end
+                                            task.wait(0.7)
+                                        end
+                                    end)
+                                end
+                                pcall(function()
+                                    seat.Disabled = true
+                                    seat.CanTouch = false
+                                    seat.CanQuery = false
+                                    for _, child in pairs(seat:GetChildren()) do
+                                        if child:IsA("Weld") or child.Name == "SeatWeld" then
+                                            child:Destroy()
+                                        end
+                                    end
+                                end)
+                                if blob then
+                                    for _, desc in pairs(blob:GetDescendants()) do
+                                        if desc:IsA("BasePart") then
+                                            pcall(function()
+                                                desc.CanCollide = false
+                                                desc.CanTouch = false
+                                                desc.CanQuery = false
+                                                desc.Massless = true
+                                            end)
+                                        end
+                                    end
+                                end
+                            end
+                        else
+                            if Config.seatOccupied then
+                                Config.seatOccupied = false
+                            end
+                        end
+                        task.wait(0.1)
+                    end
+                    Config.monitoring = false
+                    Config.seatOccupied = false
+                    Config.blobRef = nil
+                end)
+            end
+            task.spawn(function()
+                local grabEvents = service.ReplicatedStorage:FindFirstChild("GrabEvents")
+                local setNetOwner = function(part)
+                    if part and part:IsA("BasePart") and grabEvents and grabEvents:FindFirstChild("SetNetworkOwner") then
+                        pcall(function() grabEvents.SetNetworkOwner:FireServer(part, part.CFrame) end)
+                    end
+                end
+                local startTime = tick()
+                while currentRunId == Config.runId and not Config.setupDone and tick() - startTime < 1.2 do
+                    if hitbox and hitbox.Parent then setNetOwner(hitbox) end
+                    if head and head.Parent then setNetOwner(head) end
+                    if seat and seat.Parent and seat.Occupant ~= humanoid then
+                        pcall(function() seat:Sit(humanoid) end)
+                    end
+                    local characterEvents = service.ReplicatedStorage:FindFirstChild("CharacterEvents")
+                    if characterEvents and characterEvents:FindFirstChild("RagdollRemote") then
+                        pcall(function() characterEvents.RagdollRemote:FireServer(rootPart, 0.09) end)
+                    end
+                    service.RunService.Heartbeat:Wait()
+                end
+            end)
+            task.wait(0.45)
+            if currentRunId ~= Config.runId then
+                if blob and blob.Parent then blob:Destroy() end
+                return
+            end
+            Config.setupDone = true
+            pcall(function() humanoid.Sit = false end)
+            pcall(function() humanoid:ChangeState(Enum.HumanoidStateType.Jumping) end)
+            task.wait(0.05)
+            local characterEvents = service.ReplicatedStorage:FindFirstChild("CharacterEvents")
+            if characterEvents and characterEvents:FindFirstChild("RagdollRemote") then
+                pcall(function() characterEvents.RagdollRemote:FireServer(rootPart, false) end)
+            end
+            pcall(function() humanoid:ChangeState(Enum.HumanoidStateType.GettingUp) end)
+            blob.Name = "Gucci"
+            for _, desc in pairs(blob:GetDescendants()) do
+                if desc:IsA("BasePart") then
+                    pcall(function()
+                        desc.CanCollide = false
+                        desc.CanTouch = false
+                        desc.CanQuery = false
+                        desc.Massless = true
+                    end)
+                end
+            end
+            task.spawn(function()
+                while currentRunId == Config.runId and head and head.Parent do
+                    pcall(function()
+                        head.CFrame = CFrame.new(head.Position.X, 100000, head.Position.Z)
+                    end)
+                    service.RunService.Heartbeat:Wait()
+                end
+            end)
+            Config.active = true
+        else
+            Config.runId = Config.runId + 1
+            Config.active = false
+            Config.seatOccupied = false
+            Config.monitoring = false
+            Config.blobRef = nil
+            Config.ragdollLoopActive = false
+            if Config.ragdollTask then
+                task.cancel(Config.ragdollTask)
+                Config.ragdollTask = nil
+            end
+            Config.permRagActive = false
+            if Config.permRagTask then
+                task.cancel(Config.permRagTask)
+                Config.permRagTask = nil
+            end
+            local char = localPlayer.Character
+            local root = char and char:FindFirstChild("HumanoidRootPart")
+            if root then
+                local remote = Config.remoteRef
+                if not remote then
+                    local charEv = service.ReplicatedStorage:FindFirstChild("CharacterEvents")
+                    remote = (charEv and charEv:FindFirstChild("RagdollRemote")) 
+                            or service.ReplicatedStorage:FindFirstChild("RagdollRemote") 
+                            or game:FindFirstChild("RagdollRemote", true)
+                    if remote then Config.remoteRef = remote end
+                end
+                if remote and remote:IsA("RemoteEvent") then
+                    pcall(function() remote:FireServer(root, 0) end)
+                end
+            end
+            local toyFolder = service.Workspace:FindFirstChild(localPlayer.Name .. 'SpawnedInToys')
+            if toyFolder then
+                for _, child in pairs(toyFolder:GetChildren()) do
+                    if child.Name == "Gucci" or child.Name == "CreatureBlobman" then
+                        pcall(function() child:Destroy() end)
+                    end
+                end
+            end
+        end
+    end)
+})
+end)
+
+pcall(function()
+LeftGroupBox:AddToggle("AntikillB", {
+    Text = "Anti-Blob (Kill)",
+    CurrentValue = false,
+    Callback = safe(function(Value)
+        Config.Blobkilltest = Value
+        if Value then
+            Config.BlobkilltestCon = task.spawn(function()
+                while Config.Blobkilltest do
+                    local char = GetCharacter()
+                    if char then
+                        local hum = char:FindFirstChild("Humanoid")
+                        local hrp = char:FindFirstChild("HumanoidRootPart")
+                        if hum and hrp and hum.Health > 0 then
+                            hum.Sit = true
+                            pcall(function()
+                                hum:ChangeState(Enum.HumanoidStateType.Running)
+                            end)
+                            if Camera then
+                                local lookVec = Camera.CFrame.LookVector
+                                hrp.CFrame = CFrame.new(hrp.Position, hrp.Position + Vector3.new(lookVec.X, 0, lookVec.Z))
+                            end
+                        end
+                    end
+                    task.wait()
+                end
+            end)
+        else
+            if Config.BlobkilltestCon then
+                task.cancel(Config.BlobkilltestCon)
+                Config.BlobkilltestCon = nil
+            end
+            local char = GetCharacter()
+            local hum = char and char:FindFirstChild("Humanoid")
+            if hum and hum.Health > 0 then
+                hum.Sit = false
+                pcall(function()
+                    hum:ChangeState(Enum.HumanoidStateType.Running)
+                end)
+            end
+        end
+    end),
+})
+end)
+
+pcall(function()
+LeftGroupBox:AddToggle("ankiltp", {
+    Text = "Anti-Kill (House)",
+    Default = false,
+    Callback = safe(function(val)
+        Config.AntikillHouseT = val
+        if Config.AntiKillHouseCon then
+            Config.AntiKillHouseCon:Disconnect()
+            Config.AntiKillHouseCon = nil
+        end
+        if val then
+            Config.AntiKillHouseCon = service.RunService.Heartbeat:Connect(safe(function()
+                local char = localPlayer.Character
+                if char and char:FindFirstChild("HumanoidRootPart") then
+                    char.HumanoidRootPart.CFrame = CFrame.new(Config.antiKillHousePos)
+                end
+            end))
+        end
+    end)
+})
+end)
+
+pcall(function()
+LeftGroupBox:AddToggle("ankilby", {
+    Text = "Anti-Kill (Bypass)",
+    Default = false,
+    Callback = safe(function(state)
+        if state then
+            if Config.IsBypassRun then return end
+            Config.IsBypassRun = true
+            originalFallenHeight = service.Workspace.FallenPartsDestroyHeight
+            service.Workspace.FallenPartsDestroyHeight = 0 / 0
+            Camera = service.Workspace.CurrentCamera
+            if Camera then
+                if Config.cameraTargetPart then
+                    Config.cameraTargetPart:Destroy()
+                    Config.cameraTargetPart = nil
+                end
+                Config.cameraTargetPart = Instance.new("Part")
+                Config.cameraTargetPart.Name = "BypassCameraTarget"
+                Config.cameraTargetPart.Size = Vector3.new(1, 1, 1)
+                Config.cameraTargetPart.Transparency = 1
+                Config.cameraTargetPart.Anchored = true
+                Config.cameraTargetPart.CanCollide = false
+                local char = localPlayer.Character
+                local root = char and char:FindFirstChild("HumanoidRootPart")
+                if root then
+                    Config.cameraTargetPart.CFrame = root.CFrame
+                    Config.lastOriginalCFrame = root.CFrame
+                elseif Config.lastOriginalCFrame then
+                    Config.cameraTargetPart.CFrame = Config.lastOriginalCFrame
+                else
+                    Config.cameraTargetPart.CFrame = CFrame.new()
+                end
+                Config.cameraTargetPart.Parent = service.Workspace
+                Camera.CameraSubject = Config.cameraTargetPart
+                Camera.CameraType = Enum.CameraType.Custom
+            end
+            loopCoroutine = coroutine.wrap(safe(function()
+                while Config.IsBypassRun do
+                    if not localPlayer.Character then
+                        task.wait(0.5)
+                    else
+                        local char = localPlayer.Character
+                        if char then
+                            local root = char:FindFirstChild("HumanoidRootPart")
+                            if root then
+                                if Config.lastOriginalCFrame == nil then
+                                    Config.lastOriginalCFrame = root.CFrame
+                                end
+                                
+                                local original = root.CFrame
+                                local startTime = tick()
+                                local radius = 10000
+
+                                while tick() - startTime < 1 and Config.IsBypassRun do
+                                    if not localPlayer.Character or not root.Parent then
+                                        break
+                                    end
+                                    
+                                    local t = tick() * 12
+                                    local x = math.cos(t) * radius
+                                    local z = math.sin(t) * radius
+                                    root.CFrame = original + Vector3.new(x, -10000, z)
+                                    
+                                    service.RunService.RenderStepped:Wait()
+                                end
+
+                                if Config.IsBypassRun and root and root.Parent then
+                                    root.CFrame = original
+                                end
+                            end
+                        end
+                    end
+                    task.wait(0.0001)
+                end
+            end))
+            loopCoroutine()
+        else
+            Config.IsBypassRun = false
+            loopCoroutine = nil
+            local char = localPlayer.Character
+            if char and Config.lastOriginalCFrame then
+                local root = char:FindFirstChild("HumanoidRootPart")
+                if root then
+                    root.CFrame = Config.lastOriginalCFrame
+                end
+            end
+            if originalFallenHeight then
+                service.Workspace.FallenPartsDestroyHeight = originalFallenHeight
+            else
+                service.Workspace.FallenPartsDestroyHeight = -100
+            end
+            Camera = service.Workspace.CurrentCamera
+            if Camera then
+                local char = localPlayer.Character
+                if char then
+                    local humanoid = char:FindFirstChildOfClass("Humanoid")
+                    if humanoid then
+                        Camera.CameraSubject = humanoid
+                    end
+                end
+                Camera.CameraType = Enum.CameraType.Custom
+            end
+            if Config.cameraTargetPart then
+                Config.cameraTargetPart:Destroy()
+                Config.cameraTargetPart = nil
+            end
+        end
+    end)
+})
+end)
+
+pcall(function()
+LeftGroupBox:AddToggle("Antiragd", {
+    Text = "Anti-Ragdoll",
+    Default = false,
+    Callback = safe(function(Value)
+        Config.AntiragdollToggle = Value
+        if not Config.connections then Config.connections = {} end
+        if Config.AntiragdollToggle then
+            Config.onCharacter = function(char)
+                local humanoid = char:WaitForChild("Humanoid", 5)
+                if humanoid and Config.AntiragdollToggle then
+                    humanoid.BreakJointsOnDeath = false
+                    humanoid.AutoRotate = true
+                    humanoid.PlatformStand = false
+                    table.insert(Config.connections, humanoid.HealthChanged:Connect(safe(function(health)
+                        if Config.AntiragdollToggle and health <= 0 then
+                            humanoid.Health = 1
+                        end
+                    end)))
+                    table.insert(Config.connections, humanoid:GetPropertyChangedSignal("AutoRotate"):Connect(safe(function()
+                        if Config.AntiragdollToggle and humanoid.AutoRotate == false then
+                            humanoid.AutoRotate = true
+                        end
+                    end)))
+                    table.insert(Config.connections, humanoid:GetPropertyChangedSignal("PlatformStand"):Connect(safe(function()
+                        if Config.AntiragdollToggle and humanoid.PlatformStand == true then
+                            humanoid.PlatformStand = false
+                        end
+                    end)))
+                    table.insert(Config.connections, service.RunService.RenderStepped:Connect(safe(function()
+                        if Config.AntiragdollToggle then
+                            if humanoid.Sit and humanoid.SeatPart == nil then
+                                humanoid.Sit = false
+                            end
+                        end
+                    end)))
+                end
+            end
+            if localPlayer.Character then
+                Config.onCharacter(localPlayer.Character)
+            end
+            Config.charAddedConn = localPlayer.CharacterAdded:Connect(Config.onCharacter)
+        else
+            for _, conn in ipairs(Config.connections) do
+                if conn then conn:Disconnect() end
+            end
+            Config.connections = {}
+            if Config.charAddedConn then
+                Config.charAddedConn:Disconnect()
+                Config.charAddedConn = nil
+            end
+        end
+    end)
+})
+end)
+
+pcall(function()
+LeftGroupBox:AddToggle("AntilagAuto", {
+    Text = "Auto Anti-Lag",
+    Default = true,
+    Callback = safe(function(Value)
+        Config.AutoAntiLag = Value
+    end)
+})
+end)
+
+pcall(function()
+LeftGroupBox:AddDropdown("InputLagToySelect", {
+    Text = "Input Lag Toy",
+    Values = (function()
+        local toyList = {
+            "Coconut","Banana","Fries","MeatStick","Poop","Donut",
+            "Cake","Burger","Pizza","Hotdog","Mushroom","Banjo",
+            "Violin","Ukulele","Sax","Vuvuzela","Bongos","Mic",
+            "Pepperoni","Piano","Bread","Egg","Mayo","WhiteMug",
+            "Ocarina","SparklePoop","BrownMug","Trumpet","Snare","Lyre"
+        }
+        table.sort(toyList)
+        return toyList
+    end)(),
+    Default = "Burger",
+    Callback = safe(function(Value)
+        local ToyMap = {
+            Coconut="FoodCoconut",Banana="FoodBanana",Fries="FoodFrenchFries",
+            MeatStick="FoodMeatStick",Poop="PoopPile",Donut="FoodDonut",
+            Cake="FoodCakePink",Burger="FoodHamburger",Pizza="FoodPizzaCheese",
+            Hotdog="FoodHotdog",Mushroom="FoodMushroomPoison",Banjo="InstrumentGuitarBanjo",
+            Violin="InstrumentGuitarViolin",Ukulele="InstrumentGuitarUkulele",
+            Sax="InstrumentWoodwindSaxophone",Vuvuzela="InstrumentBrassVuvuzela",
+            Bongos="InstrumentDrumBongos",Mic="InstrumentVoiceMicrophone",
+            Pepperoni="FoodPizzaPepperoni",Piano="InstrumentPianoMelodica",
+            Bread="FoodBread",Egg="FoodDippyEgg",Mayo="FoodMayonnaise",
+            WhiteMug="CupMugWhite",Ocarina="InstrumentWoodwindOcarina",
+            SparklePoop="PoopPileSparkle",BrownMug="CupMugBrown",
+            Trumpet="InstrumentBrassTrumpet",Snare="InstrumentDrumSnare",
+            Lyre="InstrumentGuitarLyre"
+        }
+        Config.InputLagToyName = ToyMap[Value] or "FoodHamburger"
+    end),
+})
+end)
+
+pcall(function()
+LeftGroupBox:AddToggle("AntiInputLag", {
+    Text = "Anti Input Lag",
+    Default = false,
+    Callback = safe(function(Value)
+        Config.AntiInputLagActive = Value
+        if Config.AntiInputLagTask then
+            task.cancel(Config.AntiInputLagTask)
+            Config.AntiInputLagTask = nil
+        end
+
+        -- EndGrabEarlyをクライアント側で受け取るだけにして無効化
+        pcall(function()
+            local grabEvents = service.ReplicatedStorage:WaitForChild("GrabEvents")
+            local existing = grabEvents:FindFirstChild("EndGrabEarly")
+            if existing then existing:Destroy() end
+            local s = Instance.new("RemoteEvent")
+            s.Name = "EndGrabEarly"
+            s.Parent = grabEvents
+            s.OnClientEvent:Connect(safe(function() end))
+        end)
+
+        if Value then
+            Config.AntiInputLagTask = task.spawn(function()
+                local SpawnRemote = service.ReplicatedStorage:WaitForChild("MenuToys"):WaitForChild("SpawnToyRemoteFunction")
+                local DestroyToyR = service.ReplicatedStorage:WaitForChild("MenuToys"):WaitForChild("DestroyToy")
+                local SetNetOwner = service.ReplicatedStorage:WaitForChild("GrabEvents"):WaitForChild("SetNetworkOwner")
+
+                while Config.AntiInputLagActive do
+                    local char = localPlayer.Character
+                    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+                    if hrp then
+                        local toysFolder = service.Workspace:FindFirstChild(localPlayer.Name .. "SpawnedInToys")
+                        local name = Config.InputLagToyName or "FoodHamburger"
+                        local item = toysFolder and toysFolder:FindFirstChild(name)
+
+                        if not item or not item.Parent then
+                            pcall(function()
+                                SpawnRemote:InvokeServer(name, hrp.CFrame * CFrame.new(0, -12, 0), Vector3.zero)
+                            end)
+                            local newItem = toysFolder and toysFolder:FindFirstChild(name)
+                            if newItem then
+                                local holdPart = newItem:FindFirstChild("HoldPart")
+                                if holdPart then
+                                    for _, v in pairs(newItem:GetDescendants()) do
+                                        if v:IsA("BasePart") then
+                                            v.CanCollide = false
+                                            v.Massless = true
+                                        end
+                                    end
+                                    pcall(function()
+                                        holdPart.HoldItemRemoteFunction:InvokeServer(newItem, char)
+                                    end)
+                                end
+                            end
+                        else
+                            local holdPart = item:FindFirstChild("HoldPart")
+                            if holdPart then
+                                for _, v in pairs(item:GetDescendants()) do
+                                    if v:IsA("BasePart") then
+                                        v.CanCollide = false
+                                        v.Massless = true
+                                    end
+                                end
+                                task.spawn(function()
+                                    pcall(function()
+                                        holdPart.HoldItemRemoteFunction:InvokeServer(item, char)
+                                    end)
+                                end)
+                                task.spawn(function()
+                                    pcall(function()
+                                        holdPart.DropItemRemoteFunction:InvokeServer(item, CFrame.new(0, 5000, 0), Vector3.zero)
+                                    end)
+                                end)
+                            end
+                        end
+                    end
+                    task.wait(0)
+                end
+            end)
+        end
+    end),
+})
+end)
+
+-- Extra Defense
+pcall(function()
+RightGroupBox:AddToggle("Antivoid", {
+    Text = "Anti-Void",
+    Default = false,
+    Callback = safe(function(state)
+        if state then
+            if not originalVoidHeight then
+                originalVoidHeight = workspace.FallenPartsDestroyHeight
+            end
+            workspace.FallenPartsDestroyHeight = -1e95
+        else
+            workspace.FallenPartsDestroyHeight = originalVoidHeight or -100
+        end
+    end)
+})
+end)
+
+pcall(function()
+RightGroupBox:AddToggle("Antiburn", {
+    Text = "Anti-Burn",
+    Default = false,
+    Callback = safe(function(enabled)
+        local mapHole = workspace:WaitForChild("Map"):WaitForChild("Hole"):WaitForChild("PoisonBigHole")
+        local holePosition = mapHole:GetPivot().Position
+        local extPart = mapHole:FindFirstChild("ExtinguishPart")
+        if not extPart then
+            extPart = Instance.new("Part")
+            extPart.Name = "ExtinguishPart"
+            extPart.Size = Vector3.new(4, 1, 4)
+            extPart.Anchored = true
+            extPart.CanCollide = false
+            extPart.Transparency = 1
+            extPart.Position = holePosition
+            extPart.Parent = mapHole
+        end
+        if enabled then
+            if not Config.AntiBurnndada then
+                Config.AntiBurnndada = service.RunService.Heartbeat:Connect(safe(function()
+                    local char = localPlayer.Character
+                    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+                    if hrp then
+                        local fireLight = hrp:FindFirstChild("FireLight")
+                        local fireEmitter = hrp:FindFirstChild("FireParticleEmitter")
+
+                        if fireLight or fireEmitter then
+                            extPart.CFrame = hrp.CFrame
+                        else
+                            extPart.CFrame = CFrame.new(holePosition)
+                        end
+                    end
+                end))
+            end
+        else
+            if Config.AntiBurnndada then
+                Config.AntiBurnndada:Disconnect()
+                Config.AntiBurnndada = nil
+            end
+            if extPart then
+                extPart.CFrame = CFrame.new(holePosition)
+            end
+        end
+    end)
+})
+end)
+
+pcall(function()
+RightGroupBox:AddToggle("Antiexe", {
+    Text = "Anti-Explosion",
+    Default = false,
+    Callback = safe(function(Value)
+        Config.AntiExplosionActive = Value
+
+        if Value then
+            if Config.AntiExplosionConnection then
+                Config.AntiExplosionConnection:Disconnect()
+                Config.AntiExplosionConnection = nil
+            end
+            local char = GetCharacter()
+            if not char then return end
+            local hrp = char:WaitForChild("HumanoidRootPart")
+
+            Config.AntiExplosionConnection = workspace.ChildAdded:Connect(safe(function(model)
+                if model.Name == "Part" and Config.AntiExplosionActive then
+                    local mag = (model.Position - hrp.Position).Magnitude
+                    if mag <= 20 then
+                        hrp.Anchored = true
+                        task.wait(0.01)
+
+                        local rightArm = char:FindFirstChild("Right Arm")
+                        if rightArm then
+                            local ragdollPart = rightArm:FindFirstChild("RagdollLimbPart")
+                            if ragdollPart then
+                                while ragdollPart.CanCollide and Config.AntiExplosionActive do
+                                    task.wait(0.001)
+                                end
+                            end
+                        end
+
+                        if Config.AntiExplosionActive then
+                            hrp.Anchored = false
+                        end
+                    end
+                end
+            end))
+        else
+            if Config.AntiExplosionConnection then
+                Config.AntiExplosionConnection:Disconnect()
+                Config.AntiExplosionConnection = nil
+            end
+            local char = GetCharacter()
+            if char then
+                local hrp = char:FindFirstChild("HumanoidRootPart")
+                if hrp then
+                    hrp.Anchored = false
+                end
+            end
+        end
+    end)
+})
+end)
+
+-- Anti Kick
+pcall(function()
+antikick:AddToggle("BreakPCLD", {
+	Text = "Break Pcld",
+	Default = false,
+	Callback = safe(function(Value)
+		local hkExpectDeath = false
+		local hkSalmonList = {}
+		hkSalmonList[localPlayer.UserId] = true
+		local function hkApplySalmon(char)
+			if not char then return end
+			local newHum = char:WaitForChild("Humanoid", 5)
+			if not newHum then return end
+			if hkSalmonList[localPlayer.UserId] and not hkExpectDeath then
+				hkExpectDeath = true
+				newHum:ChangeState(Enum.HumanoidStateType.Dead)
+			else
+				hkExpectDeath = false
+			end
+		end
+		localPlayer.CharacterAdded:Connect(safe(function(char)
+			hkApplySalmon(char)
+		end))
+		hkSalmonList[localPlayer.UserId] = Value and true or nil
+		if Value then
+			hkExpectDeath = false
+			local char = localPlayer.Character
+			local hum = char and char:FindFirstChildOfClass("Humanoid")
+			if hum then hum.Health = 0 end
+		end
+	end)
+})
+end)
+
+pcall(function()
+antikick:AddDropdown("AntikickitemD", {
+    Text = "anti kick item",
+    Values = (function()
+        local list = {
+            ["Japanese Lantern"] = "JapaneseLantern",
+            ["Spray Can"]        = "SprayCanWD",
+            ["Spooky Candle"]    = "SpookyCandle1",
+        }
+        local values = {}
+        for shortName, _ in pairs(list) do
+            table.insert(values, shortName)
+        end
+        table.sort(values)
+        return values
+    end)(),
+    Default = "Spooky Candle", 
+    Callback = safe(function(Value)
+        local toyList = {
+            ["Japanese Lantern"] = "JapaneseLantern",
+            ["Spray Can"]        = "SprayCanWD",
+            ["Spooky Candle"]    = "SpookyCandle1",
+        }
+        SelectedToy = toyList[Value]
+    end)
+})
+end)
+
+pcall(function()
+antikick:AddToggle("Antikickitem", {
+    Text = "Anti-Kick [ITEM]",
+    Default = false,
+    Callback = safe(function(Val)
+        Config.kickitemToggle = Val 
+        if Val then
+            task.spawn(function()
+                local Item, SoundPart
+                while Config.kickitemToggle and task.wait() do 
+                    local char = localPlayer.Character
+                    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+                    local hum = char and char:FindFirstChild("Humanoid")
+                    local inPlot = localPlayer:FindFirstChild("InPlot")
+                    local inv = workspace:FindFirstChild(localPlayer.Name.."SpawnedInToys")
+                    if not hrp or not hum or hum.Health <= 0 or not inv then continue end  
+                    if inPlot and inPlot.Value then continue end 
+                    if not Config.kickitemPCLD and not Config.kickitemPCLDcon then
+                        if Config.kickitemPCLDcon then Config.kickitemPCLDcon:Disconnect() end
+                        Config.kickitemPCLD = nil
+                        Config.kickitemPCLDcon = service.RunService.Heartbeat:Connect(safe(function()
+                            if Config.kickitemPCLD or not hrp or not hrp.Parent then 
+                                if Config.kickitemPCLDcon then Config.kickitemPCLDcon:Disconnect() Config.kickitemPCLDcon = nil end
+                                return
+                            end
+                            for _, v in pairs(workspace:GetChildren()) do 
+                                if v.Name == "PlayerCharacterLocationDetector" and v:IsA("BasePart") then
+                                    if (v.Position - hrp.Position).Magnitude <= 2 then 
+                                        Config.kickitemPCLD = v
+                                        break
+                                    end
+                                end
+                            end
+                        end))
+                    end
+                    Item = inv:FindFirstChild("AntiKickItem") 
+                    SoundPart = Item and Item:FindFirstChild("Hitbox")
+                    if not Item or not SoundPart then
+                        for _,v in pairs(inv:GetChildren()) do 
+                            if v.Name == "AntiKickItem" then 
+                                pcall(function() DestroyToy:FireServer(v) end)
+                            end
+                        end
+                        local ToyName = SelectedToy
+                        local toyInv = workspace:FindFirstChild(localPlayer.Name.."SpawnedInToys")
+                        if InPlot and InPlot.Value and InOwnedPlot and not InOwnedPlot.Value then 
+                            InPlot:GetPropertyChangedSignal("Value"):Wait()
+                        end 
+                        if CanSpawnToy and not CanSpawnToy.Value then 
+                            CanSpawnToy:GetPropertyChangedSignal("Value"):Wait()
+                        end
+                        local currentHrp = localPlayer.Character and localPlayer.Character:FindFirstChild("HumanoidRootPart")
+                        if not currentHrp then 
+                            Item = nil 
+                        else
+                            local SpawnCF = (Config.kickitemPCLD or currentHrp).CFrame * CFrame.new(0, 14, 20)
+                            local homeContainer = nil
+                            local plotItems = workspace:FindFirstChild("PlotItems")
+                            local plots = workspace:FindFirstChild("Plots")
+                            if plots and plotItems then
+                                for i = 1, 5 do 
+                                    local Plot = plots:FindFirstChild("Plot"..i)
+                                    if Plot then
+                                        local sign = Plot:FindFirstChild("PlotSign")
+                                        local owners = sign and sign:FindFirstChild("ThisPlotsOwners")
+                                        if owners then
+                                            for _,v in pairs(owners:GetChildren()) do 
+                                                if v.Value == localPlayer.Name then 
+                                                    homeContainer = plotItems:FindFirstChild("Plot"..i)
+                                                    break
+                                                end
+                                            end
+                                        end
+                                    end
+                                    if homeContainer then break end
+                                end
+                            end
+                            local Container = (InOwnedPlot and InOwnedPlot.Value) and homeContainer or toyInv
+                            if not Container then 
+                                Item = nil 
+                            else
+                                local spawnedObject = nil
+                                local connection
+                                connection = Container.ChildAdded:Connect(safe(function(child)
+                                    if child.Name == ToyName then
+                                        spawnedObject = child
+                                    end
+                                end))
+                                task.spawn(function()
+                                    pcall(function()
+                                        SpawnToyRemoteFunction:InvokeServer(ToyName, SpawnCF, Vector3.zero)
+                                    end)
+                                end)
+                                local start = tick()
+                                repeat task.wait() until spawnedObject or (tick() - start) > 2.5
+                                if connection then connection:Disconnect() end
+                                Item = spawnedObject
+                            end
+                        end
+                        if not Item then continue end 
+                        SoundPart = Item and FWD(Item, "Hitbox", 0.5)
+                        if SoundPart then SetNetworkOwner:FireServer(SoundPart, SoundPart.CFrame) end
+                        for _,v in pairs(Item:GetChildren()) do 
+                            if v:IsA("BasePart") then 
+                                v.CanCollide = false 
+                                v.Transparency = 0.8
+                                v.Color = Color3.fromRGB(0, 255, 255)
+                            end
+                        end
+                        Item.Name = "AntiKickItem"
+                    end
+                    local isNotOwner = false
+                    if SoundPart then
+                        local po = SoundPart:FindFirstChild("PartOwner")
+                        if not (po and po.Value == localPlayer.Name) then
+                            isNotOwner = true
+                        end
+                    end
+                    if SoundPart and isNotOwner then 
+                        sno(SoundPart)
+                    end
+                    local targetPart = Config.kickitemPCLD or hrp:FindFirstChild("FirePlayerPart") or hrp
+                    if SoundPart and targetPart then
+                        SoundPart.CFrame = targetPart.CFrame
+                        SoundPart.AssemblyLinearVelocity = Vector3.zero
+                        SoundPart.AssemblyAngularVelocity = Vector3.zero
+                    end
+                end
+            end)
+        else
+            if Config.kickitemPCLDcon then Config.kickitemPCLDcon:Disconnect() Config.kickitemPCLDcon = nil end
+            Config.kickitemPCLD = nil
+            task.spawn(function()
+                local inv = workspace:FindFirstChild(localPlayer.Name.."SpawnedInToys")
+                if inv and DestroyToy then
+                    for _,v in pairs(inv:GetChildren()) do 
+                        if v.Name == "AntiKickItem" then 
+                            pcall(function() DestroyToy:FireServer(v) end)
+                        end
+                    end
+                end
+            end)
+        end
+    end)
+})
+end)
+
+pcall(function()
+antikick:AddToggle("AntikickPenc", {
+    Text = "Anti-Kick (Pencil ✏)",
+    Default = false,
+    Callback = safe(function(Value)
+        Config.Tinko = Value
+        if Config.Tinko then
+            while Config.Tinko do
+                local spawnedFolder = service.Workspace:FindFirstChild(localPlayer.Name .. "SpawnedInToys")
+                while Config.Tinko and spawnedFolder and not spawnedFolder:FindFirstChild("PencilDDD") do
+                    if localPlayer.Character and localPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                        local existingObjects = {}
+                        for _, child in pairs(spawnedFolder:GetChildren()) do
+                            existingObjects[child] = true
+                        end
+						spawntoy(
+							"ToolPencil",
+							CFrame.new(localPlayer.Character.HumanoidRootPart.CFrame.Position) + Vector3.new(0, 0, 15),
+							Vector3.new(0, 0, 0)
+						)                        local newPencil = nil
+                        local startTime = tick()
+                        repeat
+                            for _, child in pairs(spawnedFolder:GetChildren()) do
+                                if not existingObjects[child] and child.Name == "ToolPencil" then
+                                    newPencil = child
+                                    break
+                                end
+                            end
+                            task.wait()
+                        until newPencil or (tick() - startTime > 2) or not Config.Tinko
+                        if newPencil then
+                            newPencil.Name = "PencilDDD"
+                        end
+                    end
+                    task.wait()
+                end
+                if localPlayer.Character then
+                    if localPlayer.Character:FindFirstChild("Torso") and localPlayer.Character:FindFirstChild("HumanoidRootPart") and spawnedFolder and spawnedFolder:FindFirstChild("PencilDDD") then
+                        local pencil = spawnedFolder.PencilDDD
+                        if pencil:FindFirstChild("StickyPart") then
+                            if pencil.StickyPart:FindFirstChild("StickyWeld") then
+                                if pencil.StickyPart.StickyWeld.Part1 ~= localPlayer.Character.Torso then
+                                    local a = pencil.SoundPart.CFrame.Position
+                                    local b = localPlayer.Character.HumanoidRootPart.CFrame.Position
+                                    local distance = Vector3.new((a.X - b.X) ^ 2, (a.Y - b.Y) ^ 2, (a.Z - b.Z) ^ 2)
+                                    if math.sqrt(distance.X + distance.Y + distance.Z) > 20 then
+                                        DestroyToy:FireServer(pencil)
+                                    else
+                                        StickyPartEvent:FireServer(pencil.StickyPart, localPlayer.Character.Torso, CFrame.new(0, - 1, 0) * CFrame.Angles(0, math.pi, 0))
+                                        for _, prt in pairs(pencil:GetChildren()) do
+                                            if prt.ClassName == "Part" then
+                                                prt.CanQuery = false
+                                            end
+                                        end
+                                        task.wait(0.2)
+                                        if localPlayer.Character then
+                                            if localPlayer.Character:FindFirstChild("Torso") and localPlayer.Character:FindFirstChild("HumanoidRootPart") and spawnedFolder:FindFirstChild("PencilDDD") then
+                                                if pencil:FindFirstChild("StickyPart") then
+                                                    if pencil.StickyPart:FindFirstChild("StickyWeld") then
+                                                        if pencil.StickyPart.StickyWeld.Part1 ~= localPlayer.Character.Torso then
+                                                            if spawnedFolder:FindFirstChild("PencilDDD") then
+                                                                if pencil.StickyPart.StickyWeld.Part1 ~= localPlayer.Character.Torso then
+                                                                    SetNetworkOwner:FireServer(pencil.SoundPart, pencil.SoundPart.CFrame)
+                                                                end
+                                                            end
+                                                        end
+                                                    end
+                                                end
+                                            end
+                                        end
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+                task.wait()
+            end
+        else
+            local spawnedFolder = service.Workspace:FindFirstChild(localPlayer.Name .. "SpawnedInToys")
+            if spawnedFolder then
+                local dddPencil = spawnedFolder:FindFirstChild("PencilDDD")
+                if dddPencil then
+                    DestroyToy:FireServer(dddPencil)
+                end
+            end
+        end
+    end),
+})
+end)
+
+pcall(function()
+antikick:AddToggle("Antireset", {
+	Text = "Auto-Reset",
+    Default = true,
+    Callback = safe(function(Value)
+        Config.AntikickResetToggle = Value
+        if Config.AntikickResetToggle then
+            Config.Contuuti['GameNotify'] = GameCorrectionsNotify.OnClientEvent:Connect(safe(function(actionType)
+                if actionType == "Flying" then
+                    Struggle:FireServer(localPlayer)
+                    local parent = GetCharacter()
+                    local childName = "Humanoid"
+                    local humanoid = parent:FindFirstChild(childName) or parent:WaitForChild(childName, nil)
+                    if humanoid then
+                        humanoid.Health = 0
+                    end
+                end
+            end))
+        else
+            local playname = "GameNotify"
+            for connectionName, connection in Config.Contuuti do
+                if connectionName:find(playname) then
+                    connection:Disconnect()
+                    connection = nil
+                end
+            end
+        end
+    end)
+})
+end)
+
+-- Target Defense
+pcall(function()
+dadadadad:AddDropdown("Config.tpmode", {
+	Text = "Method",
+	Values = {"Grab", "Bring"},
+	Default = "Grab",
+	Callback = safe(function(v)
+		Config.tpmode = v
+	end)
+})
+end)
+
+pcall(function()
+dadadadad:AddToggle("TPPEnabled", {
+	Text = "Anti-Grab",
+	Default = false,
+	Callback = safe(function(v)
+		Config.TargetAntigrabtpT = v
+		if v then
+			runTPPLoop()
+		end
+	end)
+})
+end)
+
+pcall(function()
+dadadadad:AddToggle("TPPAntiKick", {
+	Text = "Anti-Kick",
+	Default = false,
+	Callback = safe(function(v)
+		if not v then
+			for _, targetName in ipairs(Config.PlayerListAnti) do
+				target = service.Players:FindFirstChild(targetName)
+				if target then
+					targetInv = service.Workspace:FindFirstChild(target.Name .. "SpawnedInToys")
+					if targetInv and targetInv:FindFirstChild("TPPShuriken_" .. targetName) then
+						pcall(function() DestroyToy:FireServer(targetInv["TPPShuriken_" .. targetName]) end)
+					end
+				end
+			end
+			return
+		end
+		task.spawn(function()
+			shurikens = {}
+			setupDone = {}
+			while Toggles.TPPAntiKick.Value do
+				service.RunService.RenderStepped:Wait()
+				if #Config.PlayerListAnti == 0 then
+					continue
+				end
+				for _, targetName in ipairs(Config.PlayerListAnti) do 
+					pcall(function()
+						target = service.Players:FindFirstChild(targetName)
+						if not target or not target.Character then
+							setupDone[targetName] = false
+							return
+						end
+						targetChar = target.Character
+						targetHRP = targetChar:FindFirstChild("HumanoidRootPart")
+						targetFirePart = targetHRP and targetHRP:FindFirstChild("FirePlayerPart")
+
+						if not targetHRP or not targetFirePart then
+							return
+						end
+						myChar = localPlayer.Character
+						myHRP = myChar and myChar:FindFirstChild("HumanoidRootPart")
+						if myHRP then
+							dist = (targetHRP.Position - myHRP.Position).Magnitude
+							if dist > 30 then
+								setupDone[targetName] = false
+								return
+							end
+						end
+						targetInv = service.Workspace:FindFirstChild(target.Name .. "SpawnedInToys")
+						if not targetInv then
+							return
+						end
+						shuName = "TPPShuriken_" .. targetName
+						shuData = shurikens[targetName]
+						shu = shuData and shuData.toy
+						part = shuData and shuData.part
+						shuExists = shu and shu.Parent ~= nil
+						partExists = part and part.Parent ~= nil
+						if setupDone[targetName] and (not shuExists or not partExists) then
+							setupDone[targetName] = false
+							shurikens[targetName] = nil
+						end
+						if not setupDone[targetName] then
+							if not target.CanSpawnToy or not target.CanSpawnToy.Value then
+								return
+							end
+							local function spawntoy(toy, cf)
+								if not localPlayer.CanSpawnToy.Value then
+									localPlayer.CanSpawnToy.Changed:Wait()
+								end
+								local t
+								local toyadded
+								inv = service.Workspace:FindFirstChild(localPlayer.Name .. "SpawnedInToys")
+								toyadded = inv.ChildAdded:Connect(safe(function(c)
+									if c.Name == toy then
+										t = c
+										toyadded:Disconnect()
+									end
+								end))
+								task.spawn(function()
+									SpawnToyRemoteFunction:InvokeServer(toy, cf, Vector3.new(0, 0, 0))
+								end)
+								time = tick() + 1
+								repeat task.wait() until t or tick() > time
+								if t then
+									return t
+								else
+									return nil
+								end
+							end
+							shu = spawntoy("NinjaShuriken", targetHRP.CFrame * CFrame.new(5, 10, 20))
+							if not shu then
+								return
+							end
+							shu.Name = shuName
+							part = shu:WaitForChild("StickyPart", 0.5)
+							if not part then
+								return
+							end
+							SetNetworkOwner:FireServer(part, part.CFrame)
+							task.wait(0.1)
+							StickyPartEvent:FireServer(part, targetFirePart, CFrame.new(0, 0, 0, 1, 0, 0, 0, 0, -1, 0, 1, 0))
+							shurikens[targetName] = {
+								toy = shu,
+								part = part,
+							}
+							setupDone[targetName] = true
+						end
+						if part and part:FindFirstChild("PartOwner") and part.PartOwner.Value ~= localPlayer.Name then
+							SetNetworkOwner:FireServer(part, part.CFrame)
+						end
+						for _, toy in ipairs(targetInv:GetChildren()) do
+							if toy:FindFirstChild("StickyPart") then
+								sp = toy.StickyPart
+								po = sp:FindFirstChild("PartOwner")
+								sw = sp:FindFirstChild("StickyWeld")
+								if po and po.Value ~= "" and po.Value ~= target.Name then
+									SetNetworkOwner:FireServer(sp, sp.CFrame)
+									task.wait()
+									if po.Value == localPlayer.Name then
+										sp.CFrame = CFrame.new(0, 0/0, 0)
+									end
+								end
+								if sw and sw.Part1 then
+									weldParent = sw.Part1.Parent
+									if weldParent and weldParent ~= targetChar then
+										SetNetworkOwner:FireServer(sp, sp.CFrame)
+										task.wait()
+										if po and po.Value == localPlayer.Name then
+											sp.CFrame = CFrame.new(0, 0/0, 0)
+										end
+									end
+								end
+							end
+						end
+					end)
+				end
+			end
+			for targetName, data in pairs(shurikens) do
+				pcall(function()
+					if data.toy then
+						DestroyToy:FireServer(data.toy)
+					end
+				end)
+			end
+			shurikens = {}
+			setupDone = {}
+		end)
+	end)
+})
+end)
