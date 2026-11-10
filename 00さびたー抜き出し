@@ -1,5 +1,5 @@
 --[[
-	SAVITAR - Defence + Miscellaneous tabs (standalone)
+	SAVITAR - Defence, Toy Mod, Grab, Aura, Target tabs (standalone)
 	Extracted from 00_Savitar.txt and wrapped with the minimum bootstrap it needs:
 	  * executor fallbacks
 	  * Obsidian UI library + a window containing only the "Defence" tab
@@ -52,7 +52,7 @@ local toggles = lib.Toggles
 
 local window = lib:CreateWindow({
 	Title = "<b>SAVITAR</b>",
-	Footer = "<b>SAVITAR | Defence + Misc</b>",
+	Footer = "<b>SAVITAR</b>",
 	Font = Enum.Font.Gotham,
 	NotifySide = "Right",
 	Center = true,
@@ -62,10 +62,13 @@ local window = lib:CreateWindow({
 	CornerRadius = 10,
 })
 
--- the extracted code only touches tbl15.Defence and tbl15.Combat (the Miscellaneous tab)
+-- tabs: Defence, Toy Mod (House Barrier), Grab (Line & Grabs), Aura (Auras), Target (Explosions)
 local tbl15 = {
 	Defence = window:AddTab("<b>Defence</b>", "shield", "Protection modules and counter measures"),
-	Combat = window:AddTab("<b>Miscellaneous</b>", "shuffle", "Additional misc features and extra utilities"),
+	ToyMod = window:AddTab("<b>Toy Mod</b>", "box", "Toy and house functions"),
+	Grab = window:AddTab("<b>Grab</b>", "hand", "Grab and line functions"),
+	Aura = window:AddTab("<b>Aura</b>", "zap", "Auras against players"),
+	Target = window:AddTab("<b>Target</b>", "crosshair", "Target and explosion functions"),
 }
 
 lib:OnUnload(function()
@@ -7097,11 +7100,11 @@ do -- ============================ Defence tab ============================
 	end
 end
 
-do -- ============================ Miscellaneous tab (Combat) ============================
+do -- ============================ Toy Mod / Grab / Aura / Target tabs ============================
 	-- ---- Line & Grabs / Auras / Explosions (Toy Auras removed) ----
 	do
 		do
-			local v60 = tbl15.Combat:AddLeftGroupbox(
+			local v60 = tbl15.Grab:AddLeftGroupbox(
 				"<b>Line & Grabs</b>",
 				"line-squiggle",
 				nil,
@@ -10380,7 +10383,7 @@ do -- ============================ Miscellaneous tab (Combat) ==================
 			local v61, v62
 
 			do
-				v61 = tbl15.Combat:AddRightGroupbox("<b>Auras</b>", "zap", nil, nil, nil, "Auras Against Players")
+				v61 = tbl15.Aura:AddRightGroupbox("<b>Auras</b>", "zap", nil, nil, nil, "Auras Against Players")
 
 				pcall(function()
 					v61:SetDescription("Auras Against Players")
@@ -11197,7 +11200,7 @@ do -- ============================ Miscellaneous tab (Combat) ==================
 									end
 								end
 
-								local v63 = tbl15.Combat:AddLeftGroupbox("<b>Explosions</b>", "flame")
+								local v63 = tbl15.Target:AddLeftGroupbox("<b>Explosions</b>", "flame")
 
 								v63:AddDropdown("ExplosionsTargetDD", {
 									Text = "Targets",
@@ -11771,7 +11774,7 @@ do -- ============================ Miscellaneous tab (Combat) ==================
 			end
 		end
 
-		HB_box = tbl15.Combat:AddRightGroupbox("<b>House Barrier</b>", "house", nil, nil, nil, "House Functions")
+		HB_box = tbl15.ToyMod:AddRightGroupbox("<b>House Barrier</b>", "house", nil, nil, nil, "House Functions")
 
 		pcall(function()
 			HB_box:SetDescription("House Functions")
