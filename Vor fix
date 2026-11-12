@@ -1142,6 +1142,7 @@ Tabs = {
     MiscTab = Window:AddTab("Misc", "package"),
     ToyMod = Window:AddTab("Toy mod", "sparkles"),
     ESP = Window:AddTab("ESP", "eye"),
+    Info = Window:AddTab("Info", "info"),
     UISettings = Window:AddTab("UISettings", "settings")
 }
 end)
@@ -2606,14 +2607,111 @@ dadadadad:AddToggle("TPPAntiKick", {
 end)
 
 -- Target Tab
-local function GetPlayerNames()
-    local names = {}
-    for _, p in ipairs(game:GetService("Players"):GetPlayers()) do
-        if p ~= game:GetService("Players").LocalPlayer then
-            table.insert(names, p.Name)
+local PlayerPicker = {
+    Icons = {},
+    Thumbs = {},
+    Pending = {},
+    Tracked = setmetatable({}, { __mode = "k" }),
+}
+
+function PlayerPicker.Build()
+    local Players = game:GetService("Players")
+    local list, map = {}, {}
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= Players.LocalPlayer then
+            local label = plr.DisplayName .. " (" .. plr.Name .. ")"
+            map[label] = plr
+            PlayerPicker.Icons[label] = plr.UserId
+            table.insert(list, label)
         end
     end
-    return names
+    table.sort(list)
+    return list, map
+end
+
+function PlayerPicker.Refresh(obj)
+    local state = PlayerPicker.Tracked[obj]
+    if not state then return end
+    local userId = PlayerPicker.Icons[obj.Text]
+    if userId then
+        if not state.img then
+            local pad = obj:FindFirstChildOfClass("UIPadding")
+            if not pad then
+                pad = Instance.new("UIPadding")
+                pad.Parent = obj
+            end
+            state.pad = pad
+            state.base = pad.PaddingLeft.Offset
+            local img = Instance.new("ImageLabel")
+            img.Name = "PlayerIcon"
+            img.AnchorPoint = Vector2.new(0, 0.5)
+            img.Position = UDim2.new(0, state.base, 0.5, 0)
+            img.Size = UDim2.fromOffset(16, 16)
+            img.BackgroundTransparency = 1
+            img.ZIndex = obj.ZIndex + 1
+            img.Parent = obj
+            state.img = img
+        end
+        if not state.on then
+            state.on = true
+            state.pad.PaddingLeft = UDim.new(state.pad.PaddingLeft.Scale, state.base + 22)
+        end
+        state.img.Visible = true
+        local thumb = PlayerPicker.Thumbs[userId]
+        if thumb then
+            state.img.Image = thumb
+        elseif not PlayerPicker.Pending[userId] then
+            PlayerPicker.Pending[userId] = true
+            task.spawn(function()
+                local ok, content = pcall(function()
+                    return game:GetService("Players"):GetUserThumbnailAsync(userId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size48x48)
+                end)
+                PlayerPicker.Pending[userId] = nil
+                if ok then
+                    PlayerPicker.Thumbs[userId] = content
+                    if state.img and PlayerPicker.Icons[obj.Text] == userId then
+                        state.img.Image = content
+                    end
+                end
+            end)
+        end
+    elseif state.on then
+        state.on = false
+        state.pad.PaddingLeft = UDim.new(state.pad.PaddingLeft.Scale, state.base)
+        state.img.Visible = false
+    end
+end
+
+function PlayerPicker.Decorate(obj)
+    if PlayerPicker.Tracked[obj] then return end
+    PlayerPicker.Tracked[obj] = { on = false }
+    obj:GetPropertyChangedSignal("Text"):Connect(safe(function()
+        PlayerPicker.Refresh(obj)
+    end))
+    PlayerPicker.Refresh(obj)
+end
+
+function PlayerPicker.Start()
+    local root = Library and Library.ScreenGui
+    if not root then return end
+    local function consider(d)
+        if d:IsA("TextLabel") or d:IsA("TextButton") then
+            PlayerPicker.Decorate(d)
+        end
+    end
+    for _, d in ipairs(root:GetDescendants()) do
+        pcall(consider, d)
+    end
+    root.DescendantAdded:Connect(safe(consider))
+end
+
+pcall(PlayerPicker.Start)
+
+local TargetPlayerMap = {}
+local function GetPlayerNames()
+    local list, map = PlayerPicker.Build()
+    TargetPlayerMap = map
+    return list
 end
 
 local TargetDropdown
@@ -2624,8 +2722,9 @@ TargetDropdown = Targ:AddDropdown("TargetSelect", {
     Multi = false,
     Default = nil,
     Callback = safe(function(playerName)
-        if playerName and playerName ~= "" then
-            Config.PlayerList = { playerName }
+        local targetPlr = playerName and TargetPlayerMap[playerName]
+        if targetPlr then
+            Config.PlayerList = { targetPlr.Name }
         else
             Config.PlayerList = {}
         end
@@ -6010,6 +6109,7 @@ local function buildPlayerList(leaving)
         if plr ~= LocalPlayer and plr ~= leaving then
             local label = plr.DisplayName .. " (" .. plr.Name .. ")"
             playerMap[label] = plr
+            PlayerPicker.Icons[label] = plr.UserId
             table.insert(list, label)
         end
     end
@@ -8447,6 +8547,168 @@ RunService.RenderStepped:Connect(safe(function()
         end
     end
 end))
+end)
+end)
+end
+
+do
+pcall(function()
+local Options = Library.Options
+local Toggles = Library.Toggles
+local targetUserId = 8719665247
+local contributorUserIds = {8554938265, 10015311958, 4390041515}
+
+local Players
+pcall(function()
+Players = game:GetService("Players")
+end)
+local UserService
+pcall(function()
+UserService = game:GetService("UserService")
+end)
+
+local displayName = "User"
+local username = "@User"
+
+pcall(function()
+    local userInfo = UserService:GetUserInfosByUserIdsAsync({targetUserId})
+    if userInfo and userInfo[1] then
+        displayName = userInfo[1].DisplayName
+        username = "@" .. userInfo[1].Username
+    end
+end)
+
+local contributorInfos = {}
+pcall(function()
+    local infos = UserService:GetUserInfosByUserIdsAsync(contributorUserIds)
+    for _, info in ipairs(infos or {}) do
+        contributorInfos[info.Id] = {
+            DisplayName = info.DisplayName,
+            Username = "@" .. info.Username
+        }
+    end
+end)
+
+local InfoTab
+pcall(function()
+InfoTab = Tabs.Info
+end)
+
+local OwnerGroup
+pcall(function()
+OwnerGroup = InfoTab:AddLeftGroupbox("SCRIPT OWNER")
+end)
+
+pcall(function()
+OwnerGroup:AddImage("UserAvatar", {
+    Image = "user:" .. tostring(targetUserId),
+    Height = 60
+})
+end)
+
+pcall(function()
+OwnerGroup:AddDivider()
+end)
+pcall(function()
+OwnerGroup:AddLabel("Display Name: " .. displayName)
+end)
+pcall(function()
+OwnerGroup:AddLabel("Username: " .. username)
+end)
+pcall(function()
+OwnerGroup:AddLabel("User ID: " .. tostring(targetUserId))
+end)
+
+local ContributorGroup
+pcall(function()
+ContributorGroup = InfoTab:AddLeftGroupbox("Source Code Contributor")
+end)
+
+pcall(function()
+for i, cId in ipairs(contributorUserIds) do
+    if i > 1 then
+        ContributorGroup:AddDivider()
+    end
+
+    local cData = contributorInfos[cId] or { DisplayName = "User", Username = "@User" }
+
+    ContributorGroup:AddImage("ContributorAvatar_" .. tostring(cId), {
+        Image = "user:" .. tostring(cId),
+        Height = 50
+    })
+
+    ContributorGroup:AddLabel("Display Name: " .. cData.DisplayName)
+    ContributorGroup:AddLabel("Username: " .. cData.Username)
+    ContributorGroup:AddLabel("User ID: " .. tostring(cId))
+end
+end)
+
+local UpdateGroup
+pcall(function()
+UpdateGroup = InfoTab:AddRightGroupbox("Script Update")
+end)
+
+pcall(function()
+UpdateGroup:AddLabel([[<b>11/10  大規模アップデート</b>
+・defence系やtarget系、toy mod系のバグ修正、新機能追加を行いました]], true)
+end)
+
+pcall(function()
+UpdateGroup:AddDivider()
+end)
+
+pcall(function()
+UpdateGroup:AddLabel([[<b>3,4,5,6,7,8,9,10月</b>
+スクリプトを1から作りだし、大体の機能を追加しました]], true)
+end)
+
+local AdminGroup
+pcall(function()
+AdminGroup = InfoTab:AddRightGroupbox("Admin list")
+end)
+
+pcall(function()
+AdminGroup:AddImage("AdminAvatar", {
+    Image = "user:" .. tostring(targetUserId),
+    Height = 60
+})
+end)
+
+pcall(function()
+AdminGroup:AddDivider()
+end)
+pcall(function()
+AdminGroup:AddLabel("Display Name: " .. displayName)
+end)
+pcall(function()
+AdminGroup:AddLabel("Username: " .. username)
+end)
+pcall(function()
+AdminGroup:AddLabel("User ID: " .. tostring(targetUserId))
+end)
+
+local adminId2 = 8554938265
+local adminData2 = { DisplayName = "User", Username = "@User" }
+pcall(function()
+adminData2 = contributorInfos[adminId2] or adminData2
+end)
+pcall(function()
+AdminGroup:AddDivider()
+end)
+pcall(function()
+AdminGroup:AddImage("AdminAvatar_" .. tostring(adminId2), {
+    Image = "user:" .. tostring(adminId2),
+    Height = 60
+})
+end)
+pcall(function()
+AdminGroup:AddLabel("Display Name: " .. adminData2.DisplayName)
+end)
+pcall(function()
+AdminGroup:AddLabel("Username: " .. adminData2.Username)
+end)
+pcall(function()
+AdminGroup:AddLabel("User ID: " .. tostring(adminId2))
 end)
 end)
 end
