@@ -1,0 +1,19 @@
+if isfunctionhooked(loadstring) then
+    restorefunction(loadstring)
+end
+
+getgenv().__cload = clonefunction(loadstring)
+
+if not isfile("dump.txt") then
+    writefile("dump.txt", "")
+end
+
+loadstring = newcclosure(function(src, ...)
+    if type(src) == "string" then
+        appendfile("dump.txt", "\n-- Source\n")
+        appendfile("dump.txt", src .. "\n")
+    end
+    return getgenv().__cload(src, ...)
+end)
+
+getgenv().loadstring = loadstring
