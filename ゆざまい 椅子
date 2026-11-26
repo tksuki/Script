@@ -1,0 +1,961 @@
+-- ToyBox Centipede / Mobile + Antenna Lift + Player Follow (camera untouched)
+-- Roblox Luau LocalScript. Camera and mouse controls are intentionally left untouched.
+
+local genv = getgenv and getgenv() or _G
+genv.__ToyBoxCentipede = genv.__ToyBoxCentipede or {}
+if genv.__ToyBoxCentipede.Unload then pcall(genv.__ToyBoxCentipede.Unload) end
+
+local shared = genv.__PoopHubShared or {}
+genv.__PoopHubShared = shared
+shared.Library = nil
+local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/uhfork/Obsidian/refs/heads/main/Library.lua"))()
+shared.Library = Library
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
+local UserInputService = game:GetService("UserInputService")
+local ContextActionService = game:GetService("ContextActionService")
+local localPlayer = Players.LocalPlayer
+local menuToys = ReplicatedStorage:WaitForChild("MenuToys")
+local destroyToyRemote = menuToys:WaitForChild("DestroyToy")
+local setNetworkOwnerRemote = ReplicatedStorage:WaitForChild("GrabEvents"):WaitForChild("SetNetworkOwner")
+
+----------------------------------------------------------------
+-- 設定
+----------------------------------------------------------------
+local PLATE = 10.2
+local PLATE_NAME = "PalletLightBrown"
+local LADDER_NAME = "LadderLightBrown"
+local LADDER_LEN = PLATE * 2
+local LADDER_FIX = CFrame.identity
+local SEARCH_RADIUS = 120
+local FOLLOW_SPEED = 60
+local SEG_COUNT = 15
+local SEG_SPACING = 0.9 * PLATE
+local BODY_H = 1.4 * PLATE
+local TRAIL_STEP = 2
+local STRIDE = PLATE * 1.2
+local ROT_RATE = math.rad(150)
+local GRAVITY = 80
+local FRONT_DIST = 40
+local APPROACH_SPEED = 30
+local APPROACH_STOP_DISTANCE = 7
+local ANTENNA_REACH_TIME = 0.8
+local ANTENNA_LIFT_TIME = 1.15
+local ANTENNA_PLACE_TIME = 0.65
+
+local moveSpeed = 30
+local turnRateDeg = 70
+local TRACK_DISTANCE = 20
+local TRACK_MAX_CATCHUP_SPEED = 30
+local rad = math.rad
+
+----------------------------------------------------------------
+-- レイアウト
+----------------------------------------------------------------
+local layout = {}
+local function scaleCF(cf)
+    local p = cf.Position * PLATE
+    return CFrame.new(p) * (cf - cf.Position)
+end
+local function plate(seg, x, y, z, rx, ry, rz)
+    local cf = CFrame.new(x, y, z) * CFrame.Angles(rad(rx or 0), rad(ry or 0), rad(rz or 0))
+    table.insert(layout, { kind = "plate", seg = seg, cf = scaleCF(cf) })
+end
+local function tube(seg)
+    plate(seg, 0, 0.5, 0)
+    plate(seg, 0, -0.5, 0)
+    plate(seg, -0.5, 0, 0, 0, 0, 90)
+    plate(seg, 0.5, 0, 0, 0, 0, 90)
+end
+for i = 0, SEG_COUNT - 1 do
+    tube(i)
+    if i >= 1 then
+        for _, s in ipairs({-1, 1}) do
+            table.insert(layout, {kind = "leg", seg = i, side = s, base = Vector3.new(s * 0.5, -0.1, 0)})
+        end
+    end
+    if i == 0 then
+        local a, p = 35, 0.1
+        plate(i, 0, 0.5-p, -0.9, -a)
+        plate(i, 0, -0.5+p, -0.9, a)
+        plate(i, -0.5+p, 0, -0.9, 0, -a, 90)
+        plate(i, 0.5-p, 0, -0.9, 0, a, 90)
+        for _, s in ipairs({-1, 1}) do
+            table.insert(layout, {kind = "antenna", seg = i, side = s, base = Vector3.new(s * 0.35, 0.5, -0.4)})
+        end
+    end
+    if i == SEG_COUNT - 1 then
+        local a, p = 35, 0.1
+        plate(i, 0, 0.5-p, 0.9, a)
+        plate(i, 0, -0.5+p, 0.9, -a)
+        plate(i, -0.5+p, 0, 0.9, 0, a, 90)
+        plate(i, 0.5-p, 0, 0.9, 0, -a, 90)
+        for _, s in ipairs({-1, 1}) do
+            table.insert(layout, {kind = "tailhorn", seg = i, side = s, base = Vector3.new(s * 0.2, 0, 0.8)})
+        end
+    end
+end
+local plateItems, ladderItems = {}, {}
+for _, item in ipairs(layout) do
+    table.insert(item.kind == "plate" and plateItems or ladderItems, item)
+end
+local NP, NL = #plateItems, #ladderItems
+
+local function ladderLocal(startPos, dir)
+    dir = dir.Unit
+    local center = startPos + dir * (LADDER_LEN / PLATE / 2)
+    local up = Vector3.yAxis
+    local axis = up:Cross(dir)
+    local rot
+    if axis.Magnitude < 1e-4 then
+        rot = dir.Y > 0 and CFrame.identity or CFrame.Angles(math.pi, 0, 0)
+    else
+        rot = CFrame.fromAxisAngle(axis.Unit, math.acos(math.clamp(up:Dot(dir), -1, 1)))
+    end
+    return scaleCF(CFrame.new(center) * rot) * LADDER_FIX
+end
+
+----------------------------------------------------------------
+-- 状態
+----------------------------------------------------------------
+local entries, filterModels, connections = {}, {}, {}
+local active, starting, unloaded = false, false, false
+local hp, hu, hf = Vector3.zero, Vector3.yAxis, Vector3.new(0, 0, -1)
+local trail, segFrames = {}, {}
+local curSpeed, curTurn, legPhase = 0, 0, 0
+local controlling = false
+local held = {}
+local tracking = false
+local selectedTargetName = nil
+local trackingSpeed = 0
+
+-- 操縦開始時にムカデがプレイヤーへ近づき、触角で持ち上げる状態
+local autoApproach = false
+local approachTarget = nil
+local pickupPhase = "idle" -- idle / reach / lift / place / riding
+local pickupClock = 0
+local pickupStartCFrame = nil
+local pickupRoot = nil
+
+local function getRootPart()
+    local character = localPlayer.Character
+    if not character then return nil end
+    return character:FindFirstChild("HumanoidRootPart") or character:FindFirstChild("Torso")
+end
+
+local function getPlayerList()
+    local list = {}
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= localPlayer then
+            table.insert(list, player.DisplayName .. " (" .. player.Name .. ")")
+        end
+    end
+    table.sort(list)
+    return list
+end
+
+local function getPlayerNameFromDisplay(display)
+    if not display or display == "" then return nil end
+    local startPos = string.find(display, "%(")
+    if startPos then return string.sub(display, startPos + 1, -2) end
+    return nil
+end
+
+local function getSelectedTarget()
+    if not selectedTargetName then return nil end
+    local player = Players:FindFirstChild(selectedTargetName)
+    if not player or player == localPlayer then return nil end
+    local character = player.Character
+    if not character then return nil end
+    local root = character:FindFirstChild("HumanoidRootPart") or character:FindFirstChild("Torso")
+    if not root then return nil end
+    return player, character, root
+end
+local function getMainPart(model)
+    return model:FindFirstChild("PyramidOctagon", true)
+        or model:FindFirstChild("SquareTaper", true)
+        or model:FindFirstChild("SoundPart", true)
+        or model:FindFirstChild("Handle", true)
+        or model:FindFirstChildWhichIsA("BasePart", true)
+end
+local function getModelByName(part, name)
+    local current = part
+    while current and current ~= Workspace do
+        if current:IsA("Model") and current.Name == name then return current end
+        current = current.Parent
+    end
+end
+
+----------------------------------------------------------------
+-- 軌跡と節フレーム
+----------------------------------------------------------------
+local function sampleTrail(d)
+    local prevP, prevU, acc = hp, hu, 0
+    for i = 1, #trail do
+        local pt = trail[i]
+        local len = (prevP - pt.p).Magnitude
+        if acc + len >= d then
+            local t = len > 1e-6 and (d - acc) / len or 0
+            local u = prevU:Lerp(pt.u, t)
+            return prevP:Lerp(pt.p, t), (u.Magnitude > 1e-3 and u.Unit or prevU)
+        end
+        acc += len
+        prevP, prevU = pt.p, pt.u
+    end
+    return prevP, prevU
+end
+local function computeFrames()
+    for i = 0, SEG_COUNT - 1 do
+        local pos, up, fwd
+        if i == 0 then
+            pos, up, fwd = hp, hu, hf
+        else
+            local d = i * SEG_SPACING
+            pos, up = sampleTrail(d)
+            local pf = sampleTrail(math.max(0, d - SEG_SPACING * 0.4))
+            local pb = sampleTrail(d + SEG_SPACING * 0.4)
+            fwd = pf - pb
+            fwd = fwd.Magnitude > 1e-3 and fwd.Unit or hf
+        end
+        local u = up - fwd * up:Dot(fwd)
+        u = u.Magnitude > 1e-3 and u.Unit or hu
+        local right = fwd:Cross(u).Unit
+        u = right:Cross(fwd)
+        segFrames[i] = CFrame.fromMatrix(pos, right, u)
+    end
+end
+
+----------------------------------------------------------------
+-- 触角・足アニメーション
+----------------------------------------------------------------
+local function pickupBlend()
+    if pickupPhase == "reach" then
+        return math.clamp(pickupClock / ANTENNA_REACH_TIME, 0, 1)
+    elseif pickupPhase == "lift" then
+        return 1
+    elseif pickupPhase == "place" or pickupPhase == "riding" then
+        return 0
+    end
+    return 0
+end
+local function ladderDir(item, t)
+    local s = item.side
+    if item.kind == "leg" then
+        local ph = legPhase - item.seg * 0.65 + (s > 0 and math.pi or 0)
+        local lift = math.max(0, math.cos(ph))
+        local a = rad(54 + 14 * lift)
+        return Vector3.new(s * math.sin(a), -math.cos(a), -0.45 * math.sin(ph))
+    elseif item.kind == "antenna" then
+        local base = Vector3.new(
+            s * (0.45 + 0.15 * math.sin(t * 2.3 + s)) - curTurn * 0.35,
+            0.6 + 0.18 * math.sin(t * 3.1 + s * 1.7),
+            -0.7 + 0.15 * math.sin(t * 1.7 + s)
+        )
+        if pickupPhase == "reach" or pickupPhase == "lift" then
+            local target = approachTarget or (hp + hf * 5)
+            local f = segFrames[0]
+            local basePos = (f * CFrame.new(item.base * PLATE)).Position
+            local toPlayer = target - basePos
+            if toPlayer.Magnitude > 0.1 then
+                local sideAxis = f.RightVector
+                local reachVector = toPlayer + sideAxis * (s * 5) + hu * 2 + hf * 1.5
+                local reachDir = reachVector.Unit
+                if pickupPhase == "lift" then
+                    local lift = math.clamp(pickupClock / ANTENNA_LIFT_TIME, 0, 1)
+                    reachDir = (reachVector + hu * (8 + lift * 12) + sideAxis * (s * 2)).Unit
+                end
+                local alpha = pickupBlend()
+                if pickupPhase == "lift" then alpha = 1 end
+                return base:Lerp(reachDir, alpha).Unit
+            end
+        elseif pickupPhase == "place" then
+            local returnAlpha = math.clamp(pickupClock / ANTENNA_PLACE_TIME, 0, 1)
+            local target = Vector3.new(s * 0.65, 0.95, -0.25)
+            return base:Lerp(target, returnAlpha).Unit
+        end
+        return base
+    else
+        return Vector3.new(s * 0.35 + 0.12 * math.sin(t * 2 + s) + curTurn * 0.2,
+            0.1 + 0.08 * math.sin(t * 2.7 + s), 0.9)
+    end
+end
+local function targetFor(item, t)
+    local f = segFrames[item.seg]
+    if item.kind == "plate" then return f * item.cf end
+    return f * ladderLocal(item.base, ladderDir(item, t))
+end
+
+----------------------------------------------------------------
+-- パーツ検知・物理
+----------------------------------------------------------------
+local function collect(needs, timeout)
+    local found, seen = {}, {}
+    for name in pairs(needs) do found[name] = {} end
+    local function done()
+        for name, n in pairs(needs) do if #found[name] < n then return false end end
+        return true
+    end
+    local deadline = os.clock() + (timeout or 20)
+    while os.clock() < deadline and not done() do
+        local root = getRootPart()
+        if root then
+            for _, part in ipairs(Workspace:GetPartBoundsInRadius(root.Position, SEARCH_RADIUS)) do
+                for name, n in pairs(needs) do
+                    if #found[name] < n then
+                        local model = getModelByName(part, name)
+                        if model and not seen[model] then
+                            local mainPart = getMainPart(model)
+                            if mainPart and mainPart:IsDescendantOf(Workspace) then
+                                seen[model] = true
+                                pcall(function() setNetworkOwnerRemote:FireServer(mainPart, mainPart.CFrame) end)
+                                table.insert(found[name], {model = model, part = mainPart})
+                            end
+                        end
+                    end
+                end
+            end
+        end
+        if not done() then task.wait(0.05) end
+    end
+    return found
+end
+local function setupPhysics(part)
+    part.CanCollide, part.CanTouch, part.CanQuery = false, false, true
+    local bv = part:FindFirstChild("ToyBoxForce") or Instance.new("BodyVelocity")
+    bv.Name = "ToyBoxForce"
+    bv.MaxForce = Vector3.new(1, 1, 1) * 1e8
+    bv.Parent = part
+    local bg = part:FindFirstChild("ToyBoxGyro") or Instance.new("BodyGyro")
+    bg.Name = "ToyBoxGyro"
+    bg.MaxTorque = Vector3.new(1, 1, 1) * 1e8
+    bg.P, bg.D = 200000, 2000
+    bg.Parent = part
+    return bv, bg
+end
+local function updateCentipede()
+    local t = os.clock()
+    for _, entry in ipairs(entries) do
+        local part = entry.part
+        if part and part.Parent then
+            local target = targetFor(entry.item, t)
+            if (target.Position - part.Position).Magnitude > 50 then
+                pcall(function()
+                    part.CFrame = target
+                    part.AssemblyLinearVelocity = Vector3.zero
+                    part.AssemblyAngularVelocity = Vector3.zero
+                end)
+            else
+                pcall(function()
+                    if entry.bv and entry.bv.Parent then entry.bv.Velocity = (target.Position - part.Position) * FOLLOW_SPEED end
+                    if entry.bg and entry.bg.Parent then entry.bg.CFrame = target end
+                end)
+            end
+        end
+    end
+end
+
+----------------------------------------------------------------
+-- 地形判定
+----------------------------------------------------------------
+local rayParams = RaycastParams.new()
+rayParams.FilterType = Enum.RaycastFilterType.Exclude
+rayParams.IgnoreWater = true
+rayParams.RespectCanCollide = true
+local function rebuildFilter()
+    local list = table.clone(filterModels)
+    for _, p in ipairs(Players:GetPlayers()) do if p.Character then table.insert(list, p.Character) end end
+    rayParams.FilterDescendantsInstances = list
+end
+local function ray(origin, dir) return Workspace:Raycast(origin, dir, rayParams) end
+local function alignTo(n, maxAngle)
+    local ang = math.acos(math.clamp(hu:Dot(n), -1, 1))
+    if ang < 1e-3 then return end
+    local axis = hu:Cross(n)
+    if axis.Magnitude < 1e-4 then axis = hf:Cross(hu) end
+    local rot = CFrame.fromAxisAngle(axis.Unit, math.min(ang, maxAngle))
+    hu = rot:VectorToWorldSpace(hu).Unit
+    hf = rot:VectorToWorldSpace(hf)
+    hf = (hf - hu * hf:Dot(hu)).Unit
+end
+local function isDown(...)
+    for _, k in ipairs({...}) do if held[k] then return true end end
+    return false
+end
+local function axisVal(pos, neg) return (pos and 1 or 0) - (neg and 1 or 0) end
+
+----------------------------------------------------------------
+-- 触角でプレイヤーを持ち上げて頭上へ移動
+----------------------------------------------------------------
+local function updatePickup(dt)
+    if pickupPhase == "idle" or pickupPhase == "riding" then return end
+    local root = pickupRoot or getRootPart()
+    if not root or not root.Parent then pickupPhase = "idle"; return end
+    pickupClock += dt
+
+    if pickupPhase == "reach" then
+        if pickupClock >= ANTENNA_REACH_TIME then
+            pickupPhase = "lift"
+            pickupClock = 0
+            pickupStartCFrame = root.CFrame
+        end
+    elseif pickupPhase == "lift" then
+        local alpha = math.clamp(pickupClock / ANTENNA_LIFT_TIME, 0, 1)
+        alpha = alpha * alpha * (3 - 2 * alpha)
+        local right = hf:Cross(hu).Unit
+        local targetPos = hp + hu * (PLATE * 0.5 + 4)
+        local targetCF = CFrame.fromMatrix(targetPos, right, hu)
+        if pickupStartCFrame then
+            root.CFrame = pickupStartCFrame:Lerp(targetCF, alpha)
+        else
+            root.CFrame = targetCF
+        end
+        root.AssemblyLinearVelocity = Vector3.zero
+        root.AssemblyAngularVelocity = Vector3.zero
+        if alpha >= 1 then
+            pickupPhase = "place"
+            pickupClock = 0
+        end
+    elseif pickupPhase == "place" then
+        local right = hf:Cross(hu).Unit
+        local targetPos = hp + hu * (PLATE * 0.5 + 4)
+        root.CFrame = CFrame.fromMatrix(targetPos, right, hu)
+        root.AssemblyLinearVelocity = Vector3.zero
+        root.AssemblyAngularVelocity = Vector3.zero
+        if pickupClock >= ANTENNA_PLACE_TIME then
+            pickupPhase = "riding"
+            pickupClock = 0
+            approachTarget = nil
+            autoApproach = false
+        end
+    end
+end
+
+local function stepHead(dt)
+    local KC = Enum.KeyCode
+    local fw = (isDown(KC.W, KC.Up) and 1 or 0) - (isDown(KC.S, KC.Down) and 1 or 0)
+    local brake = isDown(KC.S, KC.Down)
+    local turn = axisVal(isDown(KC.A, KC.Left), isDown(KC.D, KC.Right))
+    trackingSpeed = 0
+
+    if UserInputService.TouchEnabled and not tracking and not autoApproach and pickupPhase == "riding" then
+        local character = localPlayer.Character
+        local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+        if humanoid then
+            local md = humanoid.MoveDirection
+            md = md - hu * md:Dot(hu)
+            if md.Magnitude > 0.1 then
+                md = md.Unit
+                local right = hf:Cross(hu).Unit
+                fw = math.clamp(md:Dot(hf), -1, 1)
+                turn = math.clamp(-md:Dot(right), -1, 1)
+                brake = false
+            else
+                fw, turn = 0, 0
+            end
+        end
+    end
+
+    if not tracking then
+        if isDown(KC.E) then moveSpeed = math.clamp(moveSpeed + 60 * dt, 10, 200) end
+        if isDown(KC.Q) then moveSpeed = math.clamp(moveSpeed - 60 * dt, 10, 200) end
+    end
+
+    if tracking then
+        local targetPlayer, targetCharacter, targetRoot = getSelectedTarget()
+        if not targetRoot then
+            tracking = false
+            trackingSpeed = 0
+            curSpeed = 0
+            Library:Notify({Title = "ムカデ追跡", Description = "対象プレイヤーが見つからないため追跡を停止しました", Time = 3})
+        else
+            local followPosition = (targetRoot.CFrame * CFrame.new(0, 0, TRACK_DISTANCE)).Position
+            local delta = followPosition - hp
+            delta = delta - hu * delta:Dot(hu)
+            local distance = delta.Magnitude
+            local velocity = targetRoot.AssemblyLinearVelocity
+            local horizontalVelocityVector = Vector3.new(velocity.X, 0, velocity.Z)
+            local horizontalVelocity = horizontalVelocityVector.Magnitude
+            local targetHumanoid = targetCharacter:FindFirstChildOfClass("Humanoid")
+            local measuredSpeed = horizontalVelocity
+            if targetHumanoid and targetHumanoid.MoveDirection.Magnitude > 0.05 then
+                measuredSpeed = math.max(measuredSpeed, targetHumanoid.WalkSpeed * targetHumanoid.MoveDirection.Magnitude)
+                if horizontalVelocityVector.Magnitude < 0.1 then
+                    horizontalVelocityVector = targetHumanoid.MoveDirection * measuredSpeed
+                end
+            end
+            local direction = nil
+            if distance > 2.5 then
+                trackingSpeed = math.max(measuredSpeed, math.min(TRACK_MAX_CATCHUP_SPEED, distance * 2))
+                direction = delta.Unit
+            else
+                trackingSpeed = measuredSpeed
+                if horizontalVelocityVector.Magnitude > 0.1 then
+                    direction = horizontalVelocityVector.Unit
+                end
+            end
+            if direction then
+                local angle = math.atan2(hu:Dot(hf:Cross(direction)), hf:Dot(direction))
+                local rotation = math.clamp(angle, -ROT_RATE * dt, ROT_RATE * dt)
+                hf = CFrame.fromAxisAngle(hu, rotation):VectorToWorldSpace(hf)
+                fw, turn, brake = 1, 0, false
+            else
+                fw, turn, brake = 0, 0, true
+            end
+        end
+    elseif autoApproach and approachTarget then
+        local delta = approachTarget - hp
+        delta = delta - hu * delta:Dot(hu)
+        if delta.Magnitude <= APPROACH_STOP_DISTANCE then
+            autoApproach = false
+            pickupPhase = "reach"
+            pickupClock = 0
+            pickupRoot = getRootPart()
+            pickupStartCFrame = pickupRoot and pickupRoot.CFrame or nil
+            fw, turn, brake = 0, 0, true
+        else
+            local direction = delta.Unit
+            local angle = math.atan2(hu:Dot(hf:Cross(direction)), hf:Dot(direction))
+            local rotation = math.clamp(angle, -ROT_RATE * dt, ROT_RATE * dt)
+            hf = CFrame.fromAxisAngle(hu, rotation):VectorToWorldSpace(hf)
+            fw, turn, brake = 1, 0, false
+        end
+    end
+
+    local targetSpeed = tracking and trackingSpeed or (autoApproach and APPROACH_SPEED or (brake and 0 or fw * moveSpeed))
+    curSpeed += (targetSpeed - curSpeed) * math.clamp(dt * (brake and 8 or 3), 0, 1)
+    curTurn += (turn * rad(turnRateDeg) - curTurn) * math.clamp(dt * 6, 0, 1)
+    hf = CFrame.fromAxisAngle(hu, curTurn * dt):VectorToWorldSpace(hf)
+
+    rebuildFilter()
+    local H = BODY_H
+    local look = H + PLATE * 1.2
+    local targetN, stepLimit = nil, math.huge
+    local hitMid = ray(hp, hf * look)
+    local hitLow = ray(hp - hu * (H * 0.7), hf * look)
+    local hitF = hitMid
+    if hitMid and hitLow then hitF = hitMid.Distance < hitLow.Distance and hitMid or hitLow elseif hitLow then hitF = hitLow end
+    if hitF and hitF.Normal:Dot(hu) < 0.9 and hitF.Normal:Dot(hf) < -0.2 then
+        targetN = hitF.Normal
+        stepLimit = math.max(0, (hp - hitF.Position):Dot(hitF.Normal) - H)
+    end
+    local gDown = ray(hp + hu * 2, -hu * (H * 2.4))
+    local ahead = hp + hf * (H * 0.8)
+    local gAhead = ray(ahead + hu * 2, -hu * (H * 2.4))
+    if not targetN then
+        if gAhead then
+            targetN = gAhead.Normal
+            if gDown then
+                local sum = gAhead.Normal + gDown.Normal
+                if sum.Magnitude > 0.1 then targetN = sum.Unit end
+            end
+        elseif gDown then
+            local edge = ray(ahead - hu * (H * 1.2), -hf * (H * 1.5))
+            targetN = (edge and edge.Normal:Dot(hf) > 0.3) and edge.Normal or gDown.Normal
+        end
+    end
+    if targetN then alignTo(targetN, ROT_RATE * dt) end
+
+    local step = math.min(curSpeed * dt, stepLimit)
+    if step > 0 then hp += hf * step end
+    local gSnap = ray(hp + hu * 2, -hu * (H * 2.4))
+    if gSnap then
+        hp = hp:Lerp(gSnap.Position + hu * H, math.clamp(dt * 12, 0, 1))
+    else
+        hp += Vector3.new(0, -GRAVITY * dt, 0)
+        alignTo(Vector3.yAxis, ROT_RATE * dt * 0.5)
+    end
+
+    local last = trail[1]
+    if not last or (hp - last.p).Magnitude >= TRAIL_STEP then
+        table.insert(trail, 1, {p = hp, u = hu})
+        local maxN = math.ceil((SEG_COUNT * SEG_SPACING + SEG_SPACING * 2) / TRAIL_STEP) + 8
+        while #trail > maxN do table.remove(trail) end
+    end
+    legPhase += (math.abs(curSpeed) * dt / STRIDE) * 2 * math.pi
+
+    local root = getRootPart()
+    if root and not tracking then
+        if pickupPhase == "riding" then
+            local right = hf:Cross(hu).Unit
+            root.CFrame = CFrame.fromMatrix(hp + hu * (PLATE * 0.5 + 4), right, hu)
+            root.AssemblyLinearVelocity = Vector3.zero
+            root.AssemblyAngularVelocity = Vector3.zero
+        elseif pickupPhase == "idle" and not autoApproach then
+        end
+    end
+    updatePickup(dt)
+end
+
+----------------------------------------------------------------
+-- HUD
+----------------------------------------------------------------
+local function make(class, props, parent)
+    local inst = Instance.new(class)
+    for k, v in pairs(props) do inst[k] = v end
+    inst.Parent = parent
+    return inst
+end
+local gui = Instance.new("ScreenGui")
+gui.Name = "ToyBoxCentipedeHUD"
+gui.ResetOnSpawn = false
+gui.IgnoreGuiInset = true
+gui.Enabled = false
+pcall(function() gui.Parent = (gethui and gethui()) or localPlayer:WaitForChild("PlayerGui") end)
+if not gui.Parent then gui.Parent = localPlayer:WaitForChild("PlayerGui") end
+local HUD_COLOR = Color3.fromRGB(255, 200, 120)
+local statusLabel = make("TextLabel", {
+    Size = UDim2.fromOffset(700, 24), Position = UDim2.new(0, 20, 1, -50),
+    BackgroundTransparency = 1, Text = "", TextColor3 = HUD_COLOR,
+    Font = Enum.Font.Code, TextSize = 15, TextXAlignment = Enum.TextXAlignment.Left,
+}, gui)
+local helpLabel = make("TextLabel", {
+    Size = UDim2.fromOffset(540, 86), Position = UDim2.new(0, 20, 0, 20),
+    BackgroundColor3 = Color3.new(0, 0, 0), BackgroundTransparency = 0.6,
+    Text = "WASD/スマホスティック:移動  Q/E:速度\nT:操作ON/OFF  R:操作終了\n追跡ボタン:選択したプレイヤーの後方20スタッド",
+    TextColor3 = HUD_COLOR, Font = Enum.Font.Code, TextSize = 14,
+    TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Top,
+}, gui)
+make("UICorner", {CornerRadius = UDim.new(0, 6)}, helpLabel)
+make("UIPadding", {PaddingLeft = UDim.new(0, 8), PaddingTop = UDim.new(0, 6)}, helpLabel)
+
+----------------------------------------------------------------
+-- 操作（カメラ・マウス設定には一切触れない）
+----------------------------------------------------------------
+local function stopControl()
+    controlling = false
+    autoApproach = false
+    approachTarget = nil
+    pickupPhase = "idle"
+    pickupClock = 0
+    pickupRoot = nil
+    pickupStartCFrame = nil
+    table.clear(held)
+    curSpeed, curTurn = 0, 0
+    gui.Enabled = false
+end
+
+local function startControl()
+    if controlling then return end
+    if not active then
+        Library:Notify({Title = "ムカデ", Description = "先に『ムカデを有効化』で組み立ててください", Time = 3})
+        return
+    end
+    local root = getRootPart()
+    if not root then return end
+    tracking = false
+    approachTarget = root.Position
+    autoApproach = true
+    pickupPhase = "idle"
+    pickupClock = 0
+    pickupRoot = root
+    controlling = true
+    table.clear(held)
+    gui.Enabled = true
+    local char = localPlayer.Character
+    if char then
+        for _, d in ipairs(char:GetDescendants()) do
+            if d:IsA("BasePart") then d.CanCollide = false; d.CanTouch = false; d.CanQuery = false end
+        end
+    end
+end
+
+local function toggleControl()
+    if controlling then stopControl() else startControl() end
+end
+
+local function startTracking()
+    if not active then
+        Library:Notify({Title = "ムカデ追跡", Description = "先にムカデを組み立ててください", Time = 3})
+        return
+    end
+    local player = getSelectedTarget()
+    if not player then
+        Library:Notify({Title = "ムカデ追跡", Description = "先に追跡対象を選択してください", Time = 3})
+        return
+    end
+    stopControl()
+    tracking = true
+    autoApproach = false
+    approachTarget = nil
+    pickupPhase = "idle"
+    pickupClock = 0
+    pickupRoot = nil
+    curSpeed, curTurn, trackingSpeed = 0, 0, 0
+    Library:Notify({Title = "ムカデ追跡", Description = player.DisplayName .. " を20スタッド後方から追跡します", Time = 3})
+end
+
+local function stopTracking()
+    tracking = false
+    trackingSpeed = 0
+    curSpeed, curTurn = 0, 0
+end
+
+local function toggleTracking()
+    if tracking then
+        stopTracking()
+        Library:Notify({Title = "ムカデ追跡", Description = "追跡を停止しました", Time = 2})
+    else
+        startTracking()
+    end
+end
+
+----------------------------------------------------------------
+-- 崖上テレポート機能
+----------------------------------------------------------------
+local function teleportToCliff()
+    if not active then
+        Library:Notify({Title = "ムカデ", Description = "ムカデが有効化されていません", Time = 3})
+        return
+    end
+    stopControl()
+    stopTracking()
+
+    -- 指定された座標からX方向に20スタッド右へずらした位置にヘッドを設定
+    hp = Vector3.new(560.07, 163.34, 129.67)
+    hu = Vector3.yAxis
+    hf = Vector3.new(0, 0, -1)
+
+    -- 軌跡（trail）を再生成
+    table.clear(trail)
+    local n = math.ceil((SEG_COUNT * SEG_SPACING + SEG_SPACING * 2) / TRAIL_STEP) + 8
+    for k = 1, n do
+        local p = hp - hf * (TRAIL_STEP * k)
+        local gRay = ray(p + Vector3.new(0, 40, 0), Vector3.new(0, -400, 0))
+        if gRay then p = Vector3.new(p.X, gRay.Position.Y + BODY_H, p.Z) end
+        table.insert(trail, {p = p, u = Vector3.yAxis})
+    end
+
+    computeFrames()
+
+    -- 各パーツを即座に新しいターゲット位置へワープさせる
+    local t = os.clock()
+    for _, entry in ipairs(entries) do
+        local target = targetFor(entry.item, t)
+        pcall(function()
+            entry.part.CFrame = target
+            entry.part.AssemblyLinearVelocity = Vector3.zero
+            entry.part.AssemblyAngularVelocity = Vector3.zero
+            if entry.bv then entry.bv.Velocity = Vector3.zero end
+            if entry.bg then entry.bg.CFrame = target end
+        end)
+    end
+
+    Library:Notify({Title = "ムカデ", Description = "崖上の座標 (560.07, 163.34, 129.67) にテレポートしました", Time = 3})
+end
+
+----------------------------------------------------------------
+-- 入力
+----------------------------------------------------------------
+local ACTION_NAME = "ToyBoxCentipedeKeys"
+local moveKeySet = {
+    [Enum.KeyCode.W]=true, [Enum.KeyCode.A]=true, [Enum.KeyCode.S]=true, [Enum.KeyCode.D]=true,
+    [Enum.KeyCode.Up]=true, [Enum.KeyCode.Down]=true, [Enum.KeyCode.Left]=true, [Enum.KeyCode.Right]=true,
+    [Enum.KeyCode.Q]=true, [Enum.KeyCode.E]=true,
+}
+local function onAction(_, state, input)
+    local key = input.KeyCode
+    if key == Enum.KeyCode.T then if state == Enum.UserInputState.Begin then toggleControl() end; return Enum.ContextActionResult.Sink end
+    if key == Enum.KeyCode.R then
+        if state == Enum.UserInputState.Begin then
+            if controlling then stopControl() elseif tracking then stopTracking() end
+        end
+        return Enum.ContextActionResult.Sink
+    end
+    if not controlling then return Enum.ContextActionResult.Pass end
+    if moveKeySet[key] then
+        if state == Enum.UserInputState.Begin then held[key] = true
+        elseif state == Enum.UserInputState.End or state == Enum.UserInputState.Cancel then held[key] = nil end
+        return Enum.ContextActionResult.Sink
+    end
+    return Enum.ContextActionResult.Pass
+end
+local bindKeys = {Enum.KeyCode.T, Enum.KeyCode.R}
+for k in pairs(moveKeySet) do table.insert(bindKeys, k) end
+ContextActionService:BindActionAtPriority(ACTION_NAME, onAction, false, Enum.ContextActionPriority.High.Value, table.unpack(bindKeys))
+
+
+----------------------------------------------------------------
+-- メインループ
+----------------------------------------------------------------
+table.insert(connections, RunService.Heartbeat:Connect(function(dt)
+    if not active then return end
+    if controlling or tracking then stepHead(dt) end
+    computeFrames()
+    updateCentipede()
+    local tilt = math.deg(math.acos(math.clamp(hu.Y, -1, 1)))
+    local modeText = tracking and "追跡中" or (autoApproach and "接近中" or (pickupPhase == "reach" and "触角でつかむ" or (pickupPhase == "lift" and "持ち上げ中" or (pickupPhase == "place" and "頭上へ移動中" or (controlling and "操縦中" or "待機中")))))
+    statusLabel.Text = string.format("%s | SPD %d | 面の傾き %d° | 設定速度 %d", modeText, math.floor(math.abs(curSpeed)+0.5), math.floor(tilt+0.5), math.floor(moveSpeed+0.5))
+end))
+
+----------------------------------------------------------------
+-- 停止・削除・作成
+----------------------------------------------------------------
+local function stopHold()
+    stopControl()
+    stopTracking()
+    active = false
+    for _, entry in ipairs(entries) do
+        pcall(function()
+            local part = entry.part
+            if part and part.Parent then
+                part.CanCollide = true
+                part.CanTouch = true
+                part.CanQuery = true
+                part.AssemblyLinearVelocity = Vector3.zero
+                part.AssemblyAngularVelocity = Vector3.zero
+            end
+        end)
+        pcall(function() if entry.bv then entry.bv:Destroy() end; if entry.bg then entry.bg:Destroy() end end)
+    end
+    table.clear(entries)
+    table.clear(filterModels)
+end
+local function removeAll()
+    local models = {}
+    for _, entry in ipairs(entries) do table.insert(models, entry.model) end
+    stopHold()
+    for _, model in ipairs(models) do
+        if model and model.Parent then pcall(function() destroyToyRemote:FireServer(model) end); task.wait(0.03) end
+    end
+end
+local function initHead()
+    local root = getRootPart()
+    if not root then return false end
+    local _, yaw = root.CFrame:ToOrientation()
+    hf = CFrame.Angles(0, yaw, 0).LookVector
+    hu = Vector3.yAxis
+    hp = root.Position + hf * FRONT_DIST + Vector3.new(0, BODY_H, 0)
+    rebuildFilter()
+    local hit = ray(hp + Vector3.new(0, 40, 0), Vector3.new(0, -400, 0))
+    if hit then hp = hit.Position + Vector3.new(0, BODY_H, 0) end
+    table.clear(trail)
+    local n = math.ceil((SEG_COUNT * SEG_SPACING + SEG_SPACING * 2) / TRAIL_STEP) + 8
+    for k = 1, n do
+        local p = hp - hf * (TRAIL_STEP * k)
+        local g = ray(p + Vector3.new(0, 40, 0), Vector3.new(0, -400, 0))
+        if g then p = Vector3.new(p.X, g.Position.Y + BODY_H, p.Z) end
+        table.insert(trail, {p = p, u = Vector3.yAxis})
+    end
+    curSpeed, curTurn, legPhase = 0, 0, 0
+    pickupPhase, pickupClock, autoApproach, approachTarget = "idle", 0, false, nil
+    tracking, trackingSpeed = false, 0
+    return true
+end
+local function createAll()
+    stopHold()
+    if not getRootPart() then return false end
+    local found = collect({[PLATE_NAME]=NP, [LADDER_NAME]=NL}, 20)
+    local gotP, gotL = #found[PLATE_NAME], #found[LADDER_NAME]
+    if gotP < NP or gotL < NL then
+        Library:Notify({Title="ムカデ", Description=string.format("足りません 板 %d/%d 梯子 %d/%d", gotP, NP, gotL, NL), Time=4})
+        return false
+    end
+    for _, list in pairs(found) do for _, f in ipairs(list) do table.insert(filterModels, f.model) end end
+    if not initHead() then return false end
+    computeFrames()
+    local t = os.clock()
+    local function attach(list, items)
+        for index, f in ipairs(list) do
+            local item = items[index]
+            local target = targetFor(item, t)
+            pcall(function()
+                for _, d in ipairs(f.model:GetDescendants()) do
+                    if d:IsA("BasePart") then d.CanCollide=false; d.CanTouch=false; d.CanQuery=true end
+                end
+            end)
+            local bv, bg
+            pcall(function()
+                bv, bg = setupPhysics(f.part)
+                bv.Velocity = (target.Position - f.part.Position) * FOLLOW_SPEED
+                bg.CFrame = target
+            end)
+            table.insert(entries, {model=f.model, part=f.part, item=item, bv=bv, bg=bg})
+        end
+    end
+    attach(found[PLATE_NAME], plateItems)
+    attach(found[LADDER_NAME], ladderItems)
+    active = true
+    return true
+end
+local function startHold()
+    if starting then return false end
+    starting = true
+    local ok, result = pcall(createAll)
+    starting = false
+    return ok and result
+end
+local function unload()
+    if unloaded then return end
+    unloaded = true
+    stopHold()
+    for _, c in ipairs(connections) do pcall(function() c:Disconnect() end) end
+    table.clear(connections)
+    pcall(function() ContextActionService:UnbindAction(ACTION_NAME) end)
+    pcall(function() gui:Destroy() end)
+    genv.__ToyBoxCentipede.Unload = nil
+    pcall(function() if Library.Unload then Library:Unload() elseif Library.Destroy then Library:Destroy() end end)
+end
+genv.__ToyBoxCentipede.Unload = unload
+
+----------------------------------------------------------------
+-- UI
+----------------------------------------------------------------
+local Window = Library:CreateWindow({
+    Title = "ムカデ", SubTitle = string.format("板%d + 梯子%d / Tキーで操作", NP, NL),
+    Footer = "周囲120以内の板・梯子を検知", AutoShow = true,
+    NotifySide = "Right", ShowCustomCursor = false, EnableCompacting = false,
+})
+local Tab = Window:AddTab("ムカデ")
+local g = Tab:AddLeftGroupbox("操作")
+g:AddLabel(string.format("%sを%d枚 / %sを%d個 出してから有効化", PLATE_NAME, NP, LADDER_NAME, NL))
+g:AddLabel("PC: WASD / スマホ: 標準スティック / Q・E:速度")
+
+local targetDropdown = g:AddDropdown("TargetSelect", {
+    Text = "追跡対象を選択",
+    Default = "",
+    Values = getPlayerList(),
+    Callback = function(value)
+        selectedTargetName = getPlayerNameFromDisplay(value)
+    end,
+})
+
+local function updatePlayerList()
+    if targetDropdown then
+        targetDropdown:SetValues(getPlayerList())
+    end
+end
+table.insert(connections, Players.PlayerAdded:Connect(function()
+    task.wait(0.5)
+    updatePlayerList()
+end))
+table.insert(connections, Players.PlayerRemoving:Connect(function(player)
+    if selectedTargetName == player.Name then
+        selectedTargetName = nil
+        if tracking then stopTracking() end
+    end
+    task.wait(0.2)
+    updatePlayerList()
+end))
+task.spawn(function()
+    task.wait(1)
+    updatePlayerList()
+end)
+g:AddToggle("CentipedeToggle", {
+    Text = "ムカデを有効化（組み立て）", Default = false,
+    Callback = function(on)
+        if on then
+            local ok = startHold()
+            if not ok and Library.Toggles and Library.Toggles.CentipedeToggle then Library.Toggles.CentipedeToggle:SetValue(false) end
+        else stopHold() end
+    end,
+})
+g:AddButton({Text="操縦 ON/OFF（接近して触角で持ち上げる）", Func=function() toggleControl() end})
+g:AddButton({Text="選択プレイヤーを追跡 ON/OFF（後方20スタッド）", Func=function() toggleTracking() end})
+g:AddButton({Text="崖上", Func=function() teleportToCliff() end}) -- 追加した崖上ボタン
+g:AddButton({Text="今の位置で置き直す", Func=function() if active then stopControl(); initHead() end end})
+g:AddButton({Text="板と梯子を削除", Func=function() removeAll() end})
+g:AddButton({Text="UIをアンロード", Func=function() unload() end})
+Library:Notify({Title="ムカデ", Description=string.format("板%d枚・梯子%d個。操縦または選択プレイヤー追跡ができます。カメラ設定は変更しません", NP, NL), Time=5})
